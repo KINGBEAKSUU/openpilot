@@ -186,7 +186,7 @@ class CarInterface(CarInterfaceBase):
       ret.enableBsm = 0x142 in fingerprint[CanBus.POWERTRAIN]
 
       # softer long tune for ev table
-      if useEVTables: 
+      if useEVTables:
         ret.longitudinalTuning.kpBP = [0.]
         ret.longitudinalTuning.kpV = [1.75]
         ret.longitudinalTuning.kiBP = [0.]
@@ -280,6 +280,9 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.CHEVROLET_TRAX:
+      ret.stoppingDecelRate = 0.1  # reach brake quickly after enabling
+      ret.vEgoStopping = 0.1
+      ret.vEgoStarting = 0.1
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     if ret.enableGasInterceptor:
@@ -372,8 +375,8 @@ class CarInterface(CarInterfaceBase):
                                        (self.CP.networkLocation == NetworkLocation.fwdCamera and not self.CP.carFingerprint in SDGM_CAR)):
       events.add(EventName.belowEngageSpeed)
 
-    # kans: 정지 상태이면서, 자동재개 신호(self.CP.autoResumeSng)가 비활성화되어 있고, 
-    # resumeRequired 이벤트가 비활성화되어 있지 않으면, resumeRequired 이벤트를 활성화하고, 
+    # kans: 정지 상태이면서, 자동재개 신호(self.CP.autoResumeSng)가 비활성화되어 있고,
+    # resumeRequired 이벤트가 비활성화되어 있지 않으면, resumeRequired 이벤트를 활성화하고,
     # resumeRequired 이벤트를 한번 보여주게 한다.
     if ret.cruiseState.standstill and not (self.CP.autoResumeSng or self.CS.disable_resumeRequired):
       events.add(EventName.resumeRequired)
@@ -383,7 +386,7 @@ class CarInterface(CarInterfaceBase):
     if self.CS.resumeRequired_shown and not ret.cruiseState.standstill:
       self.CS.disable_resumeRequired = True
 
-    # kans: 속도가 최소조향속도 미만이고, belowSteerSpeed 이벤트가 비활성화되어 있지 않으면, 
+    # kans: 속도가 최소조향속도 미만이고, belowSteerSpeed 이벤트가 비활성화되어 있지 않으면,
     # belowSteerSpeed 이벤트를 활성화하고,
     # belowSteerSpeed이벤트를 한번 보여주게 한다.
     if ret.vEgo < self.CP.minSteerSpeed and not self.CS.disable_belowSteerSpeed:
