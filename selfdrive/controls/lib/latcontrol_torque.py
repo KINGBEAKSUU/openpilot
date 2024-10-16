@@ -62,6 +62,7 @@ class LatControlTorque(LatControl):
         self.torque_params.latAccelFactor = self.latAccelFactor_default
         self.torque_params.friction = self.friction_default
         self.torque_params.latAccelOffset = self.latAccelOffset_default
+      self.lateralTorqueCustom = lateralTorqueCustom
      
     pid_log = log.ControlsState.LateralTorqueState.new_message()
     if not active:
