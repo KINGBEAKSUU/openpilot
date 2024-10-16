@@ -172,7 +172,7 @@ class LongitudinalPlanner:
     self.v_model_error = get_speed_error(sm['modelV2'], v_ego)
     x, v, a, j, throttle_prob = self.parse_model(sm['modelV2'], self.v_model_error)
     # Don't clip at low speeds since throttle_prob doesn't account for creep
-    self.allow_throttle = throttle_prob > ALLOW_THROTTLE_THRESHOLD or v_ego <= 5.0
+    self.allow_throttle = throttle_prob > ALLOW_THROTTLE_THRESHOLD or v_ego <= 5.0  or self.mpc.mode == 'acc' # carrot: always allow
 
     if not self.allow_throttle:
       # MPC breaks when accel limits would cause negative velocity within the MPC horizon, so we clip the max accel limit at vEgo/T_MAX plus a bit of margin
