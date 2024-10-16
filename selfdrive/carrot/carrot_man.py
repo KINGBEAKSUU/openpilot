@@ -132,7 +132,6 @@ class CarrotMan:
     msg['CarrotRouteActive'] = False #self.params.get_bool("CarrotRouteActive")
     msg['ip'] = self.ip_address
     msg['port'] = self.carrot_man_port
-    msg['ssh'] = 8022
     self.controls_active = False
     self.xState = 0
     self.trafficState = 0
