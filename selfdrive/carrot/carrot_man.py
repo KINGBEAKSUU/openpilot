@@ -1025,7 +1025,7 @@ class CarrotServ:
     else:
       self.active = 0
 
-    if self.active <= 0:
+    if self.active <= 1:
       self.xSpdType = self.navType = self.xTurnInfo = self.xTurnInfoNext = -1
       self.nSdiType = self.nSdiBlockType = self.nSdiPlusBlockType = -1
       self.nTBTTurnType = self.nTBTTurnTypeNext = -1
@@ -1052,7 +1052,7 @@ class CarrotServ:
         sdi_speed = self.xSpdLimit
         self.active = 4
     elif CS is not None and CS.speedLimit > 0 and CS.speedLimitDistance > 0:
-      sdi_speed = min(sdi_speed, self.calculate_current_speed(CS.speedLimitDistance, CS.speedLimit, self.autoNaviSpeedCtrlEnd, self.autoNaviSpeedDecelRate))
+      sdi_speed = min(sdi_speed, self.calculate_current_speed(CS.speedLimitDistance, CS.speedLimit * self.autoNaviSpeedSafetyFactor, self.autoNaviSpeedCtrlEnd, self.autoNaviSpeedDecelRate))
       self.active = 6
 
     ### TBT 속도제어

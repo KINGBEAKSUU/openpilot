@@ -160,12 +160,14 @@ class CarState(CarStateBase):
     # as this seems to be standard over all cars, but is not the preferred method.
     if self.CP.flags & (HyundaiFlags.HYBRID | HyundaiFlags.EV):
       gear = cp.vl["ELECT_GEAR"]["Elect_Gear_Shifter"]
+      ret.gearStep = cp.vl["ELECT_GEAR"]["Elect_Gear_Step"]
     elif self.CP.flags & HyundaiFlags.CLUSTER_GEARS:
       gear = cp.vl["CLU15"]["CF_Clu_Gear"]
     elif self.CP.flags & HyundaiFlags.TCU_GEARS:
       gear = cp.vl["TCU12"]["CUR_GR"]
     else:
       gear = cp.vl["LVR12"]["CF_Lvr_Gear"]
+      ret.gearStep = cp.vl["LVR11"]["CF_Lvr_GearInf"]
 
     if not self.CP.carFingerprint in (CAR.HYUNDAI_NEXO):
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(gear))
@@ -462,6 +464,7 @@ class CarState(CarStateBase):
       messages.append(("TCU12", 100))
     else:
       messages.append(("LVR12", 100))
+      messages.append(("LVR11", 100))
       
     if CP.extFlags & HyundaiExtFlags.HAS_LFA_BUTTON.value:
       messages.append(("BCM_PO_11", 50))
