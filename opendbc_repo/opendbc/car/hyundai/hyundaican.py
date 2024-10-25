@@ -187,7 +187,7 @@ def create_acc_commands_scc(packer, enabled, accel, jerk, idx, hud_control, set_
     values["ComfortBandUpper"] = jerk.cb_upper
     values["ComfortBandLower"] = jerk.cb_lower
     values["JerkUpperLimit"] = jerk.jerk_u
-    values["JerkLowerLimit"] = jerk.jerk_l
+    values["JerkLowerLimit"] = jerk.jerk_l if long_enabled else 0 # for KONA test
     values["ACCMode"] = scc14_acc_mode #2 if enabled and long_override else 1 if long_enabled else 4 # stock will always be 4 instead of 0 after first disengage
     values["ObjGap"] = objGap #2 if hud_control.leadVisible else 0 # 5: >30, m, 4: 25-30 m, 3: 20-25 m, 2: < 20 m, 0: no lead
     values["ObjDistStat"] = objGap2
