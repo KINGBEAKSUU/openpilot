@@ -625,7 +625,7 @@ public:
             }
         }
         else draw_dist = true;
-        draw_dist = true;
+
         if (draw_dist) {
             //float dist = (getRadarDist() > 0.0) ? getRadarDist() : getVisionDist();
             //if (dist < 10.0) sprintf(str, "%.1f", dist);
