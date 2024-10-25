@@ -1837,7 +1837,7 @@ public:
         nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
 
         int x = 150;// 120;
-        int y = s->fb_h - 410;// 300;// 410;
+        int y = s->fb_h - 430;// 300;// 410;
 
         int bx = x;
         int by = y + 270;
