@@ -4,6 +4,7 @@
 #include <cmath>
 
 //#define __TEST
+//#define __UI_TEST
 
 #ifdef __APPLE__
 #include <OpenGL/gl3.h>
@@ -875,8 +876,8 @@ protected:
                 _model->mapToScreen(road_edges[1].getX()[idx], road_edges[1].getY()[idx], road_edges[1].getZ()[idx], &left_dist_point);
             }
 
-            float scale = 0.2;
-            if (xSpdDist < 200) scale = 1.0 - (0.8 * xSpdDist / 200.);
+            float scale = 0.6;
+            if (xSpdDist < 200) scale = 1.0 - (0.6 * xSpdDist / 200.);
             int bx = left_dist_point.x() + 140 * scale;
             int by = left_dist_point.y();
             if (left_dist_flag) {
@@ -1013,10 +1014,12 @@ public:
         nGoPosTime = carrot_man.getNGoPosTime();
         szSdiDescr = QString::fromStdString(carrot_man.getSzSdiDescr());
 
-        //active_carrot = 2;
-        //xSpdLimit = 110;
-        //xSpdDist = 12345;
-        //nRoadLimitSpeed = 110;
+#ifdef __UI_TEST
+        active_carrot = 2;
+        xSpdLimit = 110;
+        xSpdDist = 12345;
+        nRoadLimitSpeed = 110;
+#endif
 
         int bx = s->fb_w - 120;// 350;// 150;
         int by = 300;// s->fb_h - 150; // 410;
@@ -1756,6 +1759,10 @@ public:
     float   xTarget = 0.0;
 
     QString szPosRoadName = "";
+    int     nRoadLimitSpeed = 30;
+    int     xSpdLimit = 0;
+    int     xSignType = -1;
+
 
     void updateState(UIState *s) {
         const SubMaster& sm = *(s->sm);
@@ -1786,6 +1793,9 @@ public:
             apply_source = QString::fromStdString(carrot_man.getDesiredSource());
             if (apply_speed >= v_cruise) apply_source = "";
             szPosRoadName = QString::fromStdString(carrot_man.getSzPosRoadName());
+            nRoadLimitSpeed = carrot_man.getNRoadLimitSpeed();
+            xSpdLimit = carrot_man.getXSpdLimit();
+            xSignType = carrot_man.getXSpdType();
             QString atcType = QString::fromStdString(carrot_man.getAtcType());
             trafficState_carrot = carrot_man.getTrafficState();
             const auto velocity = model.getVelocity();
@@ -1810,6 +1820,7 @@ public:
             apply_source = "";
             carrot_man_debug[0] = 0;
             szPosRoadName = "";
+            nRoadLimitSpeed = 30;
 		}
         xState = lp.getXState();
         trafficState = lp.getTrafficState();
@@ -1833,7 +1844,9 @@ public:
     char    driving_mode_str_last[32] = "";
     int     gap_last = 0;
     char    gear_str_last[32] = "";
+    int     blink_timer = 0;
     void drawHud(UIState* s) {
+        blink_timer = (blink_timer + 1) % 32;
         nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
 
         int x = 150;// 120;
@@ -1902,15 +1915,17 @@ public:
         // draw gap info
         char driving_mode_str[32] = "연비";
         int driving_mode = params.getInt("MyDrivingMode");
+        NVGcolor mode_color = COLOR_GREEN_ALPHA(130);
         switch (driving_mode) {
-        case 1: strcpy(driving_mode_str, tr("ECO").toStdString().c_str()); break;
-        case 2: strcpy(driving_mode_str, tr("SAFE").toStdString().c_str()); break;
-        case 3: strcpy(driving_mode_str, tr("NORM").toStdString().c_str()); break;
-        case 4: strcpy(driving_mode_str, tr("FAST").toStdString().c_str()); break;
+        case 1: strcpy(driving_mode_str, tr("ECO").toStdString().c_str()); mode_color = COLOR_GREEN_ALPHA(130);  break;
+        case 2: strcpy(driving_mode_str, tr("SAFE").toStdString().c_str()); mode_color = COLOR_ORANGE_ALPHA(130);  break;
+        case 3: strcpy(driving_mode_str, tr("NORM").toStdString().c_str()); mode_color = COLOR_WHITE_ALPHA(130);  break;
+        case 4: strcpy(driving_mode_str, tr("FAST").toStdString().c_str()); mode_color = COLOR_RED_ALPHA(130);  break;
         default: strcpy(driving_mode_str, tr("ERRM").toStdString().c_str()); break;
         }
-        int dx = bx + 50;
-        int dy = by + 110;
+        int dx = bx - 40;
+        int dy = by + 120;
+        ui_fill_rect(s->vg, { dx - 50, dy - 26, 100, 34 }, mode_color, 15, 2);
         ui_draw_text(s, dx, dy, driving_mode_str, 30, COLOR_WHITE, BOLD);
         if (strcmp(driving_mode_str, driving_mode_str_last)) ui_draw_text_a(s, dx, dy, driving_mode_str, 30, COLOR_WHITE, BOLD);
         strcpy(driving_mode_str_last, driving_mode_str);
@@ -1920,9 +1935,19 @@ public:
         dx = bx + 220;
         dy = by + 77;
         sprintf(gap_str, "%d", gap);
-        ui_draw_text(s, dx, dy, gap_str, 40, COLOR_WHITE, BOLD);
+        //ui_draw_text(s, dx, dy, gap_str, 40, COLOR_WHITE, BOLD);
         if (gap_last != gap) ui_draw_text_a(s, dx, dy, gap_str, 40, COLOR_WHITE, BOLD);
         gap_last = gap;
+
+        dx = bx + 300 - 30;
+        dy = by + 120 - 26;
+        float ddx = 60 / 4.;
+#ifdef __UI_TEST
+        gap = 3;
+#endif
+        for (int i = 0; i < gap; i++) {
+            ui_fill_rect(s->vg, { (int)(dx + i * ddx), (int)dy, (int)ddx - 2, 34 }, COLOR_GREEN_ALPHA(180), 4, 2);
+        }
 
         char gear_str[32] = "R";
         dx = bx + 300;
@@ -1953,9 +1978,11 @@ public:
 			strcpy(gear_str_last, gear_str);
         }
 
-        dx = bx + 220;
+        dx = bx + 210;
         dy = by + 120;
-        //active_carrot = 1;
+#ifdef __UI_TEST
+        active_carrot = 1;
+#endif
         if (active_carrot >= 2) {
             ui_fill_rect(s->vg, { dx - 45, dy - 26, 90, 34 }, COLOR_GREEN_ALPHA(140), 15, 2);
             ui_draw_text(s, dx, dy, "APN", 30, COLOR_WHITE, BOLD);
@@ -1964,6 +1991,32 @@ public:
             ui_fill_rect(s->vg, { dx - 45, dy - 26, 90, 34 }, COLOR_BLUE_ALPHA(140), 15, 2);
             ui_draw_text(s, dx, dy, "APM", 30, COLOR_WHITE, BOLD);
         }
+#ifdef __UI_TEST
+        active_carrot = 2;
+        nRoadLimitSpeed = 30;
+        xSpdLimit = 50;
+        xSignType = 1;
+#endif
+
+        if (active_carrot >= 2) {
+            dx = bx + 105;
+            dy = by + 120;
+            int disp_speed = 0;
+            NVGcolor limit_color = COLOR_GREEN_ALPHA(130);
+            if (xSpdLimit > 0 && xSignType != 22) {
+                disp_speed = xSpdLimit;
+                limit_color = (blink_timer <= 16) ? COLOR_RED_ALPHA(180) : COLOR_YELLOW_ALPHA(130);
+                ui_draw_text(s, dx, dy-30, "CAM", 20, COLOR_WHITE, BOLD);
+            }
+            else {
+                disp_speed = nRoadLimitSpeed;
+                limit_color = (v_ego * 3.6 > nRoadLimitSpeed + 2) ? COLOR_RED_ALPHA(130) : COLOR_WHITE_ALPHA(130);
+            }
+
+            ui_fill_rect(s->vg, { dx - 45, dy - 26, 90, 34 }, limit_color, 15, 2);
+            ui_draw_text(s, dx, dy, QString::number(disp_speed).toStdString().c_str(), 30, COLOR_WHITE, BOLD);
+        }
+
     }
     void drawDateTime(const UIState* s) {
         char str[128];
