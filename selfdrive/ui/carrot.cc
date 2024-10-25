@@ -673,7 +673,7 @@ public:
         }
         if (isLeadDetected()) {
             NVGcolor radar_stroke = isRadarDetected() ? rcolor : COLOR_BLUE;
-            ui_fill_rect(s->vg, { (int)(path_x - path_width / 2 - 10), (int)(path_y - path_width * 0.8), (int)(path_width + 20), (int)(path_width * 0.8) }, COLOR_BLACK_ALPHA(20), 30, 3, &radar_stroke);
+            ui_fill_rect(s->vg, { (int)(path_x - path_width / 2 - 10), (int)(path_y - path_width * 0.8), (int)(path_width + 20), (int)(path_width * 0.8) }, COLOR_BLACK_ALPHA(20), 15, 3, &radar_stroke);
 #if 0
             px[0] = path_x - path_width / 2 - 10;
             px[1] = px[0] + path_width + 20;
