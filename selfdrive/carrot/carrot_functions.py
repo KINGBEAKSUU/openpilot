@@ -216,14 +216,20 @@ class CarrotPlanner:
       xSpdCountDown = carrot_man.xSpdCountDown if carrot_man.xSpdDist > 0 else 100
       xTurnCountDown = carrot_man.xTurnCountDown if carrot_man.xDistToTurn > 0 else 100
       left_sec = min(xSpdCountDown, xTurnCountDown)
+      max_left_sec = min(10, max(5, int(v_ego_kph/10)))
+      if 0 < left_sec < max_left_sec:
+        pass
+      elif carrot_man.desiredSource in ["cam", "hda"]:
+        left_sec = 11
+      else:
+        left_sec = -1
+
       if left_sec != self.left_sec:
-        max_left_sec = min(10, max(5, int(v_ego_kph/10)))
-        if 1 <= left_sec <= max_left_sec:
-          #self.events.add(getattr(EventName, f'audio{left_sec}'))
+        if 1 <= left_sec <= 11:
           self.params_memory.put_int_nonblocking("CarrotCountDownSec", left_sec)
         elif left_sec == 0 and self.left_sec == 1:
-          #self.events.add(EventName.audio0)
           self.params_memory.put_int_nonblocking("CarrotCountDownSec", left_sec)
+
         self.left_sec = left_sec
 
     return v_cruise_kph
