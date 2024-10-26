@@ -416,9 +416,12 @@ class HyundaiJerk:
     self.jerk_u_min = 0.5
 
   def make_jerk(self, CP, CS, accel, actuators, hud_control):
-    jerk = actuators.jerk if actuators.longControlState == LongCtrlState.pid else 0.0
-    a_error = actuators.aTargetNow - CS.out.aEgo
-    self.jerk = jerk + a_error
+    if actuators.longControlState == LongCtrlState.stopping:
+      self.jerk = - CS.out.aEgo * 2.0
+    else:
+      jerk = actuators.jerk if actuators.longControlState == LongCtrlState.pid else 0.0
+      a_error = actuators.aTargetNow - CS.out.aEgo
+      self.jerk = jerk + a_error
 
     jerk_max_l = 5.0
     jerk_max_u = jerk_max_l
@@ -433,7 +436,6 @@ class HyundaiJerk:
         self.cb_upper = self.cb_lower = 0.0
       else:
         self.jerk_u = min(max(self.jerk_u_min, self.jerk * 2.0), jerk_max_u)
-        #self.jerk_l = min(max(0.5, -self.jerk * 2.0), jerk_max_l)
         self.jerk_l = min(max(1.0, -self.jerk * 2.0), jerk_max_l)
         self.cb_upper = clip(0.9 + accel * 0.2, 0, 1.2)
         self.cb_lower = clip(0.8 + accel * 0.2, 0, 1.2)
