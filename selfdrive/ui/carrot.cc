@@ -1850,7 +1850,7 @@ public:
         }
 	}
     void drawDebug(UIState* s) {
-        if (params.getInt("ShowDebugUI") > 0) {
+        if (params.getInt("ShowDebugUI") > 1) {
             nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
             ui_draw_text(s, s->fb_w, s->fb_h - 10, carrot_man_debug, 35, COLOR_WHITE, BOLD, 1.0f, 1.0f);
         }
@@ -2146,6 +2146,8 @@ public:
         ui_draw_text(s, bx + dw, by + 70, get_tpms_text(rr), 40, get_tpms_color(rr), BOLD);
     }
     void drawDeviceInfo(const UIState* s) {
+        if (params.getInt("ShowDebugUI") == 0) return;
+
         nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
         SubMaster& sm = *(s->sm);
         auto deviceState = sm["deviceState"].getDeviceState();
