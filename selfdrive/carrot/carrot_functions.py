@@ -217,9 +217,9 @@ class CarrotPlanner:
       xTurnCountDown = carrot_man.xTurnCountDown if carrot_man.xDistToTurn > 0 else 100
       left_sec = min(xSpdCountDown, xTurnCountDown)
       max_left_sec = min(10, max(5, int(v_ego_kph/10)))
-      if 0 < left_sec < max_left_sec:
+      if 0 <= left_sec <= max_left_sec:
         pass
-      elif carrot_man.desiredSource in ["cam", "hda"]:
+      elif left_sec > 0 and carrot_man.desiredSource in ["cam", "hda"]:
         left_sec = 11
       else:
         left_sec = -1
