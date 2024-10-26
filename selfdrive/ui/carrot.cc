@@ -275,9 +275,9 @@ protected:
     float   plotMin = 0.;
     float   plotMax = 0.;
     float   plotShift = 0.0;
-    float   plotX = 30.0;// 300.0;
+    float   plotX = 350.0;// 30.0;// 300.0;
     float   plotWidth = 1000;
-    float   plotY = 70.0;// 120.0;// 30.0;
+    float   plotY = 40;// 70.0;// 120.0;// 30.0;
     float   plotHeight = 300.0;
     float   plotRatio = 1.0;
     float   plotDx = 2.0;
@@ -386,7 +386,7 @@ public:
         if (sm.alive("carState") && sm.alive("longitudinalPlan"));
         else return;
 
-        ui_fill_rect(s->vg, { (int)plotX - 10, (int)plotY - 50, (int)(PLOT_MAX * plotDx) + 150, (int)plotHeight + 100}, COLOR_BLACK_ALPHA(90), 30);
+        //ui_fill_rect(s->vg, { (int)plotX - 10, (int)plotY - 50, (int)(PLOT_MAX * plotDx) + 150, (int)plotHeight + 100}, COLOR_BLACK_ALPHA(90), 30);
 
 
         float plot_data[3] =  {0., 0., 0. };
@@ -411,7 +411,7 @@ public:
         for (int i = 0; i < 3; i++) {
             drawPlotting(s, i, plotIndex, plotX, plotQueue[i], plotSize, &color[i], 3.0f);
         }
-        ui_draw_text(s, 400, plotY - 20, title, 25, COLOR_WHITE, BOLD);
+        ui_draw_text(s, plotX + 400, plotY - 20, title, 25, COLOR_WHITE, BOLD);
     }
 };
 
@@ -793,6 +793,7 @@ private:
 
     QString szSdiDescr = "";
     QString atc_type;
+    QString szPosRoadName = "";
 
 protected:
     QPointF navi_turn_point[2];
@@ -929,13 +930,14 @@ protected:
         }
 	}
     void drawTurnInfoHud(const UIState* s) {
-#if 0
+#ifdef __UI_TEST
         active_carrot = 2;
         nGoPosDist = 500000;
         nGoPosTime = 4 * 60 * 60;
         szSdiDescr = "어린이 보호구역(스쿨존 시작 구간)";
         xTurnInfo = 1;
         xDistToTurn = 1000;
+        szPosRoadName = "구문천 1길 17";
 #endif
 
         if (active_carrot <= 0) return;
@@ -944,9 +946,14 @@ protected:
 
         int tbt_x = s->fb_w - 800;
         int tbt_y = s->fb_h - 300;
-        ui_fill_rect(s->vg, { tbt_x, tbt_y, 790, 240 }, COLOR_BLACK_ALPHA(120), 30);
+        ui_fill_rect(s->vg, { tbt_x, tbt_y - 60, 790, 240 + 60 }, COLOR_BLACK_ALPHA(120), 30);
+        if (szPosRoadName.length() > 0) {
+            nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+   			ui_draw_text(s, tbt_x + 50, tbt_y, szPosRoadName.toStdString().c_str(), 40, COLOR_WHITE, BOLD);
+        }
 
         if(xTurnInfo > 0) {
+            nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             int bx = tbt_x + 100;
             int by = tbt_y + 85;
             if (atc_type.length() > 0 && !atc_type.contains("prepare")) {
@@ -1013,6 +1020,7 @@ public:
         nGoPosDist = carrot_man.getNGoPosDist();
         nGoPosTime = carrot_man.getNGoPosTime();
         szSdiDescr = QString::fromStdString(carrot_man.getSzSdiDescr());
+        szPosRoadName = QString::fromStdString(carrot_man.getSzPosRoadName());
 
 #ifdef __UI_TEST
         active_carrot = 2;
@@ -1020,57 +1028,58 @@ public:
         xSpdDist = 12345;
         nRoadLimitSpeed = 110;
 #endif
+        if (false) {
+            int bx = s->fb_w - 120;// 350;// 150;
+            int by = 300;// s->fb_h - 150; // 410;
+            char str[128] = "";
 
-        int bx = s->fb_w - 120;// 350;// 150;
-        int by = 300;// s->fb_h - 150; // 410;
-        char str[128] = "";
-
-        if (xSpdLimit > 0) {
-            if (xSignType == 22) {
-                ui_draw_image(s, { bx - 60, by - 50, 120, 150 }, "ic_speed_bump", 1.0f);
+            if (xSpdLimit > 0) {
+                if (xSignType == 22) {
+                    ui_draw_image(s, { bx - 60, by - 50, 120, 150 }, "ic_speed_bump", 1.0f);
+                }
+                else {
+                    nvgBeginPath(s->vg);
+                    nvgCircle(s->vg, bx, by, 140 / 2);
+                    nvgFillColor(s->vg, COLOR_WHITE);
+                    nvgFill(s->vg);
+                    nvgBeginPath(s->vg);
+                    nvgCircle(s->vg, bx, by, 130 / 2);
+                    nvgFillColor(s->vg, COLOR_RED);
+                    nvgFill(s->vg);
+                    nvgBeginPath(s->vg);
+                    nvgCircle(s->vg, bx, by, 110 / 2);
+                    nvgFillColor(s->vg, COLOR_WHITE);
+                    nvgFill(s->vg);
+                    sprintf(str, "%d", xSpdLimit);
+                    ui_draw_text(s, bx, by + 25, str, 60, COLOR_BLACK, BOLD, 0.0f, 0.0f);
+                }
+                if (xSpdDist < 1000) sprintf(str, "%d m", xSpdDist);
+                else  sprintf(str, "%.1f km", xSpdDist / 1000.f);
+                ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE, BOLD);
             }
-            else {
-                nvgBeginPath(s->vg);
-                nvgCircle(s->vg, bx, by, 140 / 2);
-                nvgFillColor(s->vg, COLOR_WHITE);
-                nvgFill(s->vg);
-                nvgBeginPath(s->vg);
-                nvgCircle(s->vg, bx, by, 130 / 2);
-                nvgFillColor(s->vg, COLOR_RED);
-                nvgFill(s->vg);
-                nvgBeginPath(s->vg);
-                nvgCircle(s->vg, bx, by, 110 / 2);
-                nvgFillColor(s->vg, COLOR_WHITE);
-                nvgFill(s->vg);
-                sprintf(str, "%d", xSpdLimit);
-                ui_draw_text(s, bx, by + 25, str, 60, COLOR_BLACK, BOLD, 0.0f, 0.0f);
+            else if (false && xTurnInfo > 0) {
+                switch (xTurnInfo) {
+                case 1: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_l", 1.0f); break;
+                case 2: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_r", 1.0f); break;
+                case 3: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f); break;
+                case 4: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f); break;
+                case 7: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_u", 1.0f); break;
+                case 6: ui_draw_text(s, bx, by + 20, "TG", 35, COLOR_WHITE, BOLD); break;
+                case 8: ui_draw_text(s, bx, by + 20, "arrived", 35, COLOR_WHITE, BOLD); break;
+                default:
+                    sprintf(str, "unknown(%d)", xTurnInfo);
+                    ui_draw_text(s, bx, by + 20, str, 35, COLOR_WHITE, BOLD, 0.0f, 0.0f);
+                    break;
+                }
+                if (xDistToTurn < 1000) sprintf(str, "%d m", xDistToTurn);
+                else  sprintf(str, "%.1f km", xDistToTurn / 1000.f);
+                ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE, BOLD);
             }
-            if (xSpdDist < 1000) sprintf(str, "%d m", xSpdDist);
-            else  sprintf(str, "%.1f km", xSpdDist / 1000.f);
-            ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE, BOLD);
-        }
-        else if(false && xTurnInfo > 0) {
-            switch (xTurnInfo) {
-            case 1: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_l", 1.0f); break;
-            case 2: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_r", 1.0f); break;
-            case 3: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f); break;
-            case 4: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f); break;
-            case 7: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_u", 1.0f); break;
-            case 6: ui_draw_text(s, bx, by + 20, "TG", 35, COLOR_WHITE, BOLD); break;
-            case 8: ui_draw_text(s, bx, by + 20, "arrived", 35, COLOR_WHITE, BOLD); break;
-            default:
-                sprintf(str, "unknown(%d)", xTurnInfo);
-                ui_draw_text(s, bx, by + 20, str, 35, COLOR_WHITE, BOLD, 0.0f, 0.0f);
-                break;
+            else if (active_carrot > 1 && nRoadLimitSpeed >= 30 && nRoadLimitSpeed < 200) {
+                ui_draw_image(s, { bx - 60, by - 50, 120, 150 }, "ic_road_speed", 1.0f);
+                sprintf(str, "%d", nRoadLimitSpeed);
+                ui_draw_text(s, bx, by + 75, str, 50, COLOR_BLACK, BOLD, 0.0f, 0.0f);
             }
-            if (xDistToTurn < 1000) sprintf(str, "%d m", xDistToTurn);
-            else  sprintf(str, "%.1f km", xDistToTurn / 1000.f);
-            ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE, BOLD);
-        }
-        else if (active_carrot > 1 && nRoadLimitSpeed >= 30 && nRoadLimitSpeed < 200) {
-            ui_draw_image(s, { bx - 60, by - 50, 120, 150 }, "ic_road_speed", 1.0f);
-            sprintf(str, "%d", nRoadLimitSpeed);
-            ui_draw_text(s, bx, by + 75, str, 50, COLOR_BLACK, BOLD, 0.0f, 0.0f);
         }
         drawTurnInfo(s);
         drawSpeedLimit(s);
@@ -1856,7 +1865,7 @@ public:
         nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
 
         int x = 140;// 120;
-        int y = s->fb_h - 490;// 300;// 410;
+        int y = s->fb_h - 500;// 300;// 410;
 
         int bx = x;
         int by = y + 270;
@@ -1989,10 +1998,10 @@ public:
         dx = bx + 200;
         dy = by + 175;
 #ifdef __UI_TEST
-        active_carrot = 1;
+        active_carrot = 2;
 #endif
         if (active_carrot >= 2) {
-            ui_fill_rect(s->vg, { dx - 55, dy - 38, 110, 48 }, COLOR_GREEN_ALPHA(140), 15, 2);
+            ui_fill_rect(s->vg, { dx - 55, dy - 38, 110, 48 }, COLOR_GREEN_ALPHA(250), 15, 2);
             ui_draw_text(s, dx, dy, "APN", 40, COLOR_WHITE, BOLD);
         }
         else if (active_carrot >= 1) {
@@ -2034,11 +2043,11 @@ public:
             time_t now = time(nullptr);
             struct tm* local = localtime(&now);
 
-            int x = s->fb_w - 300;
-            int y = 150;
+            int x = 170;// s->fb_w - 300;
+            int y = 120;// 150;
             int nav_y = y + 50;
 
-            nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+            nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             if (show_datetime == 1 || show_datetime == 2) {
                 strftime(str, sizeof(str), "%H:%M", local);
                 ui_draw_text(s, x, y, str, 100, COLOR_WHITE, BOLD, 3.0f, 8.0f);
@@ -2049,7 +2058,7 @@ public:
                 ui_draw_text(s, x, y + 70, str, 60, COLOR_WHITE, BOLD, 3.0f, 8.0f);
                 nav_y += 70;
             }
-            if (szPosRoadName.size() > 0) {
+            if (false && szPosRoadName.size() > 0) {
                 nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
                 ui_draw_text(s, x, nav_y, szPosRoadName.toStdString().c_str(), 35, COLOR_WHITE, BOLD, 3.0f, 8.0f);
             }
@@ -2126,12 +2135,14 @@ public:
         float fr = tpms.getFr();
         float rl = tpms.getRl();
         float rr = tpms.getRr();
-        //fl = fr = rl = rr = 29;
+#ifdef __UI_TEST
+        fl = fr = rl = rr = 29;
+#endif
         int dw = 80;
-        ui_draw_text(s, bx - dw, by - 55, get_tpms_text(fl), 30, get_tpms_color(fl), BOLD);
-        ui_draw_text(s, bx + dw, by - 55, get_tpms_text(fr), 30, get_tpms_color(fr), BOLD);
-        ui_draw_text(s, bx - dw, by + 70, get_tpms_text(rl), 30, get_tpms_color(rl), BOLD);
-        ui_draw_text(s, bx + dw, by + 70, get_tpms_text(rr), 30, get_tpms_color(rr), BOLD);
+        ui_draw_text(s, bx - dw, by - 55, get_tpms_text(fl), 40, get_tpms_color(fl), BOLD);
+        ui_draw_text(s, bx + dw, by - 55, get_tpms_text(fr), 40, get_tpms_color(fr), BOLD);
+        ui_draw_text(s, bx - dw, by + 70, get_tpms_text(rl), 40, get_tpms_color(rl), BOLD);
+        ui_draw_text(s, bx + dw, by + 70, get_tpms_text(rr), 40, get_tpms_color(rr), BOLD);
     }
     void drawDeviceInfo(const UIState* s) {
         nvgTextAlign(s->vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
