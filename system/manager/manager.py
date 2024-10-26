@@ -44,7 +44,6 @@ def get_default_params():
     ("ShowPathModeLane", "14"),
     ("ShowPathColorLane", "13"),
     ("ShowPlotMode", "0"),
-    ("ReverseDriverView", "0"),
     ("AutoCruiseControl", "0"),    
     ("AutoEngage", "0"),    
     ("SoftHoldMode", "0"),       
