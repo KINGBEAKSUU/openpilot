@@ -219,7 +219,7 @@ class CarrotPlanner:
       max_left_sec = min(10, max(5, int(v_ego_kph/10)))
       if 0 <= left_sec <= max_left_sec:
         pass
-      elif left_sec > 0 and carrot_man.desiredSource in ["cam", "hda"]:
+      elif left_sec > 0 and carrot_man.xSpdDist > 30 and carrot_man.desiredSource in ["cam", "hda"]:
         left_sec = 11
       else:
         left_sec = -1
