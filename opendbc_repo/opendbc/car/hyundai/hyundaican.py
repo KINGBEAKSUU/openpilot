@@ -127,6 +127,7 @@ def create_lfahda_mfc(packer, CC, blinking_signal):
 
 def create_acc_commands_scc(packer, enabled, accel, jerk, idx, hud_control, set_speed, stopping, long_override, use_fca, CS, soft_hold_mode):
   from opendbc.car.hyundai.carcontroller import HyundaiJerk
+  cruise_available = CS.out.cruiseState.available
   soft_hold_active = CS.softHoldActive
   soft_hold_info = soft_hold_active > 1 and enabled
   #soft_hold_mode = 2 ## some cars can't enable while braking
@@ -154,7 +155,7 @@ def create_acc_commands_scc(packer, enabled, accel, jerk, idx, hud_control, set_
   commands = []
   if CS.scc11 is not None:
     values = CS.scc11
-    values["MainMode_ACC"] = 1
+    values["MainMode_ACC"] = 1 if cruise_available else 0
     values["TauGapSet"] = hud_control.leadDistanceBars
     values["VSetDis"] = set_speed if enabled else 0
     values["AliveCounterACC"] = idx % 0x10
@@ -174,6 +175,8 @@ def create_acc_commands_scc(packer, enabled, accel, jerk, idx, hud_control, set_
     values["aReqRaw"] = accel
     values["aReqValue"] = accel
     values["ACCFailInfo"] = 0
+
+    #values["DESIRED_DIST"] = CS.out.vEgo * 1.0 + 4.0  # TF: 1.0 + STOPDISTANCE 4.0 m로 가정함.
 
     values["CR_VSM_ChkSum"] = 0
     values["CR_VSM_Alive"] = idx % 0xF
@@ -214,6 +217,7 @@ def create_acc_opt_copy(CS, packer):
 
 def create_acc_commands(packer, enabled, accel, jerk, idx, hud_control, set_speed, stopping, long_override, use_fca, CS, soft_hold_mode):
   from opendbc.car.hyundai.carcontroller import HyundaiJerk
+  cruise_available = CS.out.cruiseState.available
   soft_hold_active = CS.softHoldActive
   soft_hold_info = soft_hold_active > 1 and enabled
   #soft_hold_mode = 2 ## some cars can't enable while braking
@@ -241,7 +245,7 @@ def create_acc_commands(packer, enabled, accel, jerk, idx, hud_control, set_spee
   commands = []
 
   scc11_values = {
-    "MainMode_ACC": 1,
+    "MainMode_ACC": 1 if cruise_available else 0,
     "TauGapSet": hud_control.leadDistanceBars,
     "VSetDis": set_speed if enabled else 0,
     "AliveCounterACC": idx % 0x10,
@@ -260,6 +264,7 @@ def create_acc_commands(packer, enabled, accel, jerk, idx, hud_control, set_spee
     "StopReq": stop_req,
     "aReqRaw": 0 if stop_req > 0 else accel,
     "aReqValue": accel,  # stock ramps up and down respecting jerk limit until it reaches aReqRaw
+    #"DESIRED_DIST": CS.out.vEgo * 1.0 + 4.0,
     "CR_VSM_Alive": idx % 0xF,
   }
 

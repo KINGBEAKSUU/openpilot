@@ -166,9 +166,10 @@ class SelfdriveD:
     if not self.CP.pcmCruise and CS.vCruise > 250 and resume_pressed:
       self.events.add(EventName.resumeBlocked)
 
-    if not self.CP.notCar:
+    if not self.CP.notCar and self.params.get_int("DisableDM") == 0:
       self.events.add_from_msg(self.sm['driverMonitoringState'].events)
-      self.events.add_from_msg(self.sm['longitudinalPlan'].events)  ## carrot
+
+    self.events.add_from_msg(self.sm['longitudinalPlan'].events)  ## carrot
 
     # Add car events, ignore if CAN isn't valid
     if CS.canValid:

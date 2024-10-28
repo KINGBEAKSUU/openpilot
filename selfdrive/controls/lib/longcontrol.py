@@ -78,7 +78,7 @@ class LongControl:
     if len(speeds) == CONTROL_N:
       v_target_now = interp(t_since_plan, ModelConstants.T_IDXS[:CONTROL_N], long_plan.speeds)
       a_target_now = interp(t_since_plan, ModelConstants.T_IDXS[:CONTROL_N], long_plan.accels)
-      j_target_now = interp(t_since_plan, ModelConstants.T_IDXS[:CONTROL_N], long_plan.jerks)
+      j_target_now = long_plan.jerks[0] #interp(t_since_plan, ModelConstants.T_IDXS[:CONTROL_N], long_plan.jerks)
     else:
       v_target_now = a_target_now = j_target_now = 0.0
  

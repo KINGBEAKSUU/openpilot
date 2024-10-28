@@ -86,6 +86,7 @@ class CarrotPlanner:
     self.soft_hold_active = 0
     self.events = Events()
     self.left_sec = -1
+    self.max_left_sec = 100
     self.myDrivingMode = 3
     self.myEcoModeFactor = 0.9
     self.mySafeModeFactor = 0.8
@@ -108,6 +109,9 @@ class CarrotPlanner:
 
     self.eco_over_speed = 4
     self.eco_target_speed = 0
+
+    self.gas_override_speed = 0
+    self.desired_source_last = "none"
 
 
   def _params_update(self):
@@ -212,20 +216,33 @@ class CarrotPlanner:
           self.xState = XState.e2eCruise
           self.traffic_starting_count = 10.0 / DT_MDL
       
-      v_cruise_kph = min(v_cruise_kph, carrot_man.desiredSpeed)
+      v_cruise_kph_apply = min(v_cruise_kph, carrot_man.desiredSpeed)
+      desired_source = carrot_man.desiredSource
+      if desired_source != self.desired_source_last:
+        self.gas_override_speed = 0
+      elif carrot_man.desiredSpeed > 200 or desired_source in ["cam", "section"] or sm['carState'].brakePressed:
+        self.gas_override_speed = 0
+      elif sm['carState'].gasPressed:
+        self.gas_override_speed = v_ego_kph
+      self.desired_source = desired_source
+      v_cruise_kph_apply = max(v_cruise_kph_apply, self.gas_override_speed)
+
+      v_cruise_kph = v_cruise_kph_apply
       xSpdCountDown = carrot_man.xSpdCountDown if carrot_man.xSpdDist > 0 else 100
       xTurnCountDown = carrot_man.xTurnCountDown if carrot_man.xDistToTurn > 0 else 100
       left_sec = min(xSpdCountDown, xTurnCountDown)
-      max_left_sec = min(10, max(5, int(v_ego_kph/10)))
-      if 0 <= left_sec <= max_left_sec:
-        pass
-      elif left_sec > 0 and carrot_man.xSpdDist > 30 and carrot_man.desiredSource in ["cam", "hda"]:
-        left_sec = 11
+
+      if left_sec > 11:
+        self.left_sec = 100
+        self.max_left_sec = 100
       else:
-        left_sec = -1
+        self.sdi_inform = True if carrot_man.desiredSource in ["cam", "hda"] else False
+        self.max_left_sec = min(11, max(6, int(v_ego_kph/10) + 1))
 
       if left_sec != self.left_sec:
-        if 1 <= left_sec <= 11:
+        if left_sec == self.max_left_sec and self.sdi_inform:
+          self.params_memory.put_int_nonblocking("CarrotCountDownSec", 11)
+        elif 1 <= left_sec < self.max_left_sec:
           self.params_memory.put_int_nonblocking("CarrotCountDownSec", left_sec)
         elif left_sec == 0 and self.left_sec == 1:
           self.params_memory.put_int_nonblocking("CarrotCountDownSec", left_sec)

@@ -286,12 +286,13 @@ std::unordered_map<std::string, uint32_t> keys = {
     { "CustomSteerDeltaDown", PERSISTENT },
     { "SpeedFromPCM", PERSISTENT },
     { "MaxTimeOffroadMin", PERSISTENT },
+    { "DisableDM", PERSISTENT },
 
 
     { "CarrotCountDownSec", PERSISTENT },
     { "CarrotManCommand", PERSISTENT },
     { "CarrotException", CLEAR_ON_MANAGER_START },
-    { "CarName", CLEAR_ON_MANAGER_START },
+    { "CarName", PERSISTENT },
     
     {"EVTable", PERSISTENT},
     {"LongPitch", PERSISTENT},    

@@ -36,6 +36,8 @@ class Controls:
 
     self.CI = get_car_interface(self.CP)
 
+    self.disable_dm = False
+
     self.sm = messaging.SubMaster(['liveParameters', 'liveTorqueParameters', 'modelV2', 'selfdriveState',
                                    'liveCalibration', 'livePose', 'longitudinalPlan', 'carState', 'carOutput',
                                    'carrotMan', 'lateralPlan', 'radarState',
@@ -166,7 +168,7 @@ class Controls:
 
     hudControl = CC.hudControl
     
-    hudControl.activeCarrot = self.sm['carrotMan'].active
+    hudControl.activeCarrot = self.sm['carrotMan'].activeCarrot
     
     lp = self.sm['longitudinalPlan']
     if self.CP.pcmCruise:
@@ -224,7 +226,7 @@ class Controls:
     cs.upAccelCmd = float(self.LoC.pid.p)
     cs.uiAccelCmd = float(self.LoC.pid.i)
     cs.ufAccelCmd = float(self.LoC.pid.f)
-    cs.forceDecel = bool((self.sm['driverMonitoringState'].awarenessStatus < 0.) or
+    cs.forceDecel = bool((self.sm['driverMonitoringState'].awarenessStatus < 0. and self.params.get_int("DisableDM") == 0) or
                          (self.sm['selfdriveState'].state == State.softDisabling))
 
     lat_tuning = self.CP.lateralTuning.which()

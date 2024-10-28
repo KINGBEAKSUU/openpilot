@@ -180,6 +180,7 @@ class VCruiseCarrot:
     self._activate_cruise = 0
     self._lat_enabled = self.params.get_int("AutoEngage") > 0
     self._v_cruise_kph_at_brake = 0
+    self.cruise_state_available_last = False
     
     #self.events = []
     self.xState = 0
@@ -271,6 +272,8 @@ class VCruiseCarrot:
       self._cruise_ready = True if self._activate_cruise == -2 else False
 
     if CS.cruiseState.available:
+      if not self.cruise_state_available_last:
+        self._lat_enabled = True
       if not self.CP.pcmCruise:
         # if stock cruise is completely disabled, then we can use our own set speed logic
         self.v_cruise_kph = clip(v_cruise_kph, self._cruise_speed_min, self._cruise_speed_max)
@@ -285,6 +288,10 @@ class VCruiseCarrot:
     else:
       self.v_cruise_kph = 20 #V_CRUISE_UNSET
       self.v_cruise_cluster_kph = 20 #V_CRUISE_UNSET
+      if self.cruise_state_available_last: # 최초 한번이라도 cruiseState.available이 True였다면
+        self._lat_enabled = False
+
+    self.cruise_state_available_last = CS.cruiseState.available
 
   def initialize_v_cruise(self, CS, experimental_mode: bool) -> None:
     # initializing is handled by the PCM

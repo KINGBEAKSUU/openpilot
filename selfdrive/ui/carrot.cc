@@ -955,8 +955,8 @@ protected:
         szPosRoadName = "구문천 1길 17";
 #endif
 
-        if (active_carrot <= 0) return;
-        if (xDistToTurn <= 0 || nGoPosDist <= 0) return;
+        if (active_carrot <= 1) return;
+        //if (xDistToTurn <= 0 || nGoPosDist <= 0) return;
         char str[128] = "";
 
         int tbt_x = s->fb_w - 800;
@@ -971,8 +971,8 @@ protected:
             nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
             int bx = tbt_x + 100;
             int by = tbt_y + 85;
-            if (atc_type.length() > 0 && !atc_type.contains("prepare")) {
-                ui_fill_rect(s->vg, { bx - 80, by - 65, 160, 210 }, COLOR_GREEN_ALPHA(100), 15);
+            if (atc_type.length() > 0) {
+                ui_fill_rect(s->vg, { bx - 80, by - 85, 160, 230 }, atc_type.contains("prepare")?COLOR_GREEN_ALPHA(100) : COLOR_GREEN, 15);
             }
             switch (xTurnInfo) {
             case 1: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_l", 1.0f); break;
@@ -1029,7 +1029,7 @@ public:
         xTurnInfo = carrot_man.getXTurnInfo();
         xDistToTurn = carrot_man.getXDistToTurn();
         nRoadLimitSpeed = carrot_man.getNRoadLimitSpeed();
-        active_carrot = carrot_man.getActive();
+        active_carrot = carrot_man.getActiveCarrot();
         atc_type = QString::fromStdString(carrot_man.getAtcType());
 
         nGoPosDist = carrot_man.getNGoPosDist();
@@ -1818,7 +1818,7 @@ public:
         v_cruise = car_state.getVCruiseCluster();
         v_ego = car_state.getVEgoCluster();
         if (carrot_man_alive) {
-            active_carrot = carrot_man.getActive();
+            active_carrot = carrot_man.getActiveCarrot();
             apply_speed = carrot_man.getDesiredSpeed();
             apply_source = QString::fromStdString(carrot_man.getDesiredSource());
             if (apply_speed >= v_cruise) apply_source = "";
