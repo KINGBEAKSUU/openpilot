@@ -176,6 +176,8 @@ def create_acc_commands_scc(packer, enabled, accel, jerk, idx, hud_control, set_
     values["aReqValue"] = accel
     values["ACCFailInfo"] = 0
 
+    values["DESIRED_DIST"] = CS.out.vEgo * 1.0 + 4.0  # TF: 1.0 + STOPDISTANCE 4.0 m로 가정함.
+
     values["CR_VSM_ChkSum"] = 0
     values["CR_VSM_Alive"] = idx % 0xF
     scc12_dat = packer.make_can_msg("SCC12", 0, values)[1]
@@ -262,6 +264,7 @@ def create_acc_commands(packer, enabled, accel, jerk, idx, hud_control, set_spee
     "StopReq": stop_req,
     "aReqRaw": 0 if stop_req > 0 else accel,
     "aReqValue": accel,  # stock ramps up and down respecting jerk limit until it reaches aReqRaw
+    "DESIRED_DIST": CS.out.vEgo * 1.0 + 4.0,
     "CR_VSM_Alive": idx % 0xF,
   }
 
