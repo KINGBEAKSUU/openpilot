@@ -363,7 +363,7 @@ class VisionTrack:
 
         a_lead = (self.vLead - self.vLead_last) / self.radar_ts * 0.5
         self.aLead = self.aLead * (1. - self.alpha_a) + a_lead * self.alpha_a
-        if abs(a_lead_vision) < abs(self.aLead): # or self.mixRadarInfo == 3:
+        if abs(a_lead_vision) > abs(self.aLead): # or self.mixRadarInfo == 3:
           self.aLead = a_lead_vision
 
         vLat_alpha = 0.002
