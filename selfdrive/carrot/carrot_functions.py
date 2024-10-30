@@ -86,6 +86,7 @@ class CarrotPlanner:
     self.soft_hold_active = 0
     self.events = Events()
     self.left_sec = -1
+    self.max_left_sec = 100
     self.myDrivingMode = 3
     self.myEcoModeFactor = 0.9
     self.mySafeModeFactor = 0.8
@@ -228,16 +229,18 @@ class CarrotPlanner:
       xSpdCountDown = carrot_man.xSpdCountDown if carrot_man.xSpdDist > 0 else 100
       xTurnCountDown = carrot_man.xTurnCountDown if carrot_man.xDistToTurn > 0 else 100
       left_sec = min(xSpdCountDown, xTurnCountDown)
-      max_left_sec = min(10, max(5, int(v_ego_kph/10)))
-      if 0 <= left_sec <= max_left_sec:
-        pass
-      elif left_sec > 0 and carrot_man.xSpdDist > 30 and carrot_man.desiredSource in ["cam", "hda"]:
-        left_sec = 11
+
+      if left_sec > 11:
+        self.left_sec = 100
+        self.max_left_sec = 100
       else:
-        left_sec = -1
+        self.sdi_inform = True if carrot_man.desiredSource in ["cam", "hda"] else False
+        self.max_left_sec = min(11, max(6, int(v_ego_kph/10) + 1))
 
       if left_sec != self.left_sec:
-        if 1 <= left_sec <= 11:
+        if left_sec == self.max_left_sec and self.sdi_inform:
+          self.params_memory.put_int_nonblocking("CarrotCountDownSec", 11)
+        elif 1 <= left_sec <= 10:
           self.params_memory.put_int_nonblocking("CarrotCountDownSec", left_sec)
         elif left_sec == 0 and self.left_sec == 1:
           self.params_memory.put_int_nonblocking("CarrotCountDownSec", left_sec)
