@@ -9,7 +9,7 @@ $Cxx.namespace("cereal");
 
 # you can rename the struct, but don't change the identifier
 struct CarrotMan @0x81c2f05a394cf4af {
-	active @0 : Int32;
+	activeCarrot @0 : Int32;
 	nRoadLimitSpeed @1 : Int32;
 	remote @2 : Text;
 	xSpdType @3 : Int32;

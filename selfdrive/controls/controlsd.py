@@ -166,7 +166,7 @@ class Controls:
 
     hudControl = CC.hudControl
     
-    hudControl.activeCarrot = self.sm['carrotMan'].active
+    hudControl.activeCarrot = self.sm['carrotMan'].activeCarrot
     
     lp = self.sm['longitudinalPlan']
     if self.CP.pcmCruise:

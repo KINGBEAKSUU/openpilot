@@ -506,7 +506,7 @@ class CarrotServ:
     
     self.nRoadLimitSpeed = 30
 
-    self.active = 0     ## 1: CarrotMan Active, 2: sdi active , 3: speed decel active, 4: section active, 5: bump active, 6: speed limit active
+    self.active_carrot = 0     ## 1: CarrotMan Active, 2: sdi active , 3: speed decel active, 4: section active, 5: bump active, 6: speed limit active
     self.active_count = 0
     self.active_sdi_count = 0
     self.active_sdi_count_max = 80
@@ -1025,11 +1025,11 @@ class CarrotServ:
     self.active_count = max(self.active_count - 1, 0)
     self.active_sdi_count = max(self.active_sdi_count - 1, 0)
     if self.active_count > 0:
-      self.active = 2 if self.active_sdi_count > 0 else 1
+      self.active_carrot = 2 if self.active_sdi_count > 0 else 1
     else:
-      self.active = 0
+      self.active_carrot = 0
 
-    if self.active <= 1:
+    if self.active_carrot <= 1:
       self.xSpdType = self.navType = self.xTurnInfo = self.xTurnInfoNext = -1
       self.nSdiType = self.nSdiBlockType = self.nSdiPlusBlockType = -1
       self.nTBTTurnType = self.nTBTTurnTypeNext = -1
@@ -1046,27 +1046,29 @@ class CarrotServ:
       self.xTurnInfoNext = -1
 
     sdi_speed = 250
+    hda_active = False
     ### 과속카메라, 사고방지턱
-    if self.xSpdDist > 0 and self.active > 0:
+    if self.xSpdDist > 0 and self.active_carrot > 0:
       safe_sec = self.autoNaviSpeedBumpTime if self.xSpdType == 22 else self.autoNaviSpeedCtrlEnd
       decel = self.autoNaviSpeedDecelRate
       sdi_speed = min(sdi_speed, self.calculate_current_speed(self.xSpdDist, self.xSpdLimit, safe_sec, decel))
-      self.active = 5 if self.xSpdType == 22 else 3
+      self.active_carrot = 5 if self.xSpdType == 22 else 3
       if self.xSpdType == 4:
         sdi_speed = self.xSpdLimit
-        self.active = 4
+        self.active_carrot = 4
     elif CS is not None and CS.speedLimit > 0 and CS.speedLimitDistance > 0:
       sdi_speed = min(sdi_speed, self.calculate_current_speed(CS.speedLimitDistance, CS.speedLimit * self.autoNaviSpeedSafetyFactor, self.autoNaviSpeedCtrlEnd, self.autoNaviSpeedDecelRate))
-      self.active = 6
+      #self.active_carrot = 6
+      hda_active = True
 
     ### TBT 속도제어
     atc_desired, self.atcType, self.atcSpeed, self.atcDist = self.update_auto_turn(v_ego*3.6, sm, self.xTurnInfo, self.xDistToTurn, True)
     atc_desired_next, _, _, _ = self.update_auto_turn(v_ego*3.6, sm, self.xTurnInfoNext, self.xDistToTurnNext, False)
 
-    if self.nSdiType  >= 0: # or self.active > 0:      
+    if self.nSdiType  >= 0: # or self.active_carrot > 0:      
       #self.debugText = f"Atc:{atc_desired:.1f},{self.xTurnInfo}:{self.xDistToTurn:.1f}, I({self.nTBTNextRoadWidth},{self.roadcate}) Atc2:{atc_desired_next:.1f},{self.xTurnInfoNext},{self.xDistToTurnNext:.1f}"
       self.debugText = "" #f" {self.nSdiType}/{self.nSdiSpeedLimit}/{self.nSdiDist},BLOCK:{self.nSdiBlockType}/{self.nSdiBlockSpeed}/{self.nSdiBlockDist}, PLUS:{self.nSdiPlusType}/{self.nSdiPlusSpeedLimit}/{self.nSdiPlusDist}"
-    #elif self.nGoPosDist > 0 and self.active > 1:
+    #elif self.nGoPosDist > 0 and self.active_carrot > 1:
     #  self.debugText = " 목적지:{:.1f}km/{:.1f}분 남음".format(self.nGoPosDist/1000., self.nGoPosTime / 60)
     else:
       self.debugText = ""
@@ -1080,7 +1082,7 @@ class CarrotServ:
     speed_n_sources = [
       (atc_desired, "atc"),
       (atc_desired_next, "atc2"),
-      (sdi_speed, "hda" if self.active == 6 else "bump" if self.xSpdType == 22 else "section" if self.xSpdType == 4 else "cam"),
+      (sdi_speed, "hda" if hda_active else "bump" if self.xSpdType == 22 else "section" if self.xSpdType == 4 else "cam"),
       (abs(vturn_speed), "vturn"),
     ]
     desired_speed, source = min(speed_n_sources, key=lambda x: x[0])
@@ -1101,36 +1103,10 @@ class CarrotServ:
     self.left_tbt_sec = left_tbt_sec
 
     self._update_cmd()
-    if False:
-      data = {
-        "remote" : remote_ip,
-        "active" : self.active,
-        "xSpdType" : self.xSpdType,
-        "xSpdLimit": self.xSpdLimit,
-        "xSpdDist" : int(self.xSpdDist),
-        "xSpdCountDown" : left_spd_sec,
-        "xTurnInfo" : self.xTurnInfo,
-        "xDistToTurn" : int(self.xDistToTurn),
-        "xTurnCountDown" : left_tbt_sec,
-        "atcType" : self.atcType,
-        "vTurnSpeed" : int(vturn_speed),
-        "nRoadLimitSpeed" : self.nRoadLimitSpeed,
-        "szPosRoadName" : self.szPosRoadName,
-        "szTBTMainText" : self.szTBTMainText,
-        "desiredSpeed" : int(desired_speed),
-        "desiredSource" : source,
-        "carrotCmdIndex" : int(self.carrotCmdIndex),
-        "carrotCmd" : self.carrotCmd,
-        "carrotArg" : self.carrotArg,
-        }
-      try:
-        self.params_memory.put_nonblocking("CarrotNavi", json.dumps(data))
-      except Exception as e:
-        print(f" error...: {e}")
 
     msg = messaging.new_message('carrotMan')
     msg.valid = True
-    msg.carrotMan.active = self.active
+    msg.carrotMan.activeCarrot = self.active_carrot
     msg.carrotMan.nRoadLimitSpeed = int(self.nRoadLimitSpeed)
     msg.carrotMan.remote = remote_ip
     msg.carrotMan.xSpdType = int(self.xSpdType)

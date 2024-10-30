@@ -1029,7 +1029,7 @@ public:
         xTurnInfo = carrot_man.getXTurnInfo();
         xDistToTurn = carrot_man.getXDistToTurn();
         nRoadLimitSpeed = carrot_man.getNRoadLimitSpeed();
-        active_carrot = carrot_man.getActive();
+        active_carrot = carrot_man.getActiveCarrot();
         atc_type = QString::fromStdString(carrot_man.getAtcType());
 
         nGoPosDist = carrot_man.getNGoPosDist();
@@ -1818,7 +1818,7 @@ public:
         v_cruise = car_state.getVCruiseCluster();
         v_ego = car_state.getVEgoCluster();
         if (carrot_man_alive) {
-            active_carrot = carrot_man.getActive();
+            active_carrot = carrot_man.getActiveCarrot();
             apply_speed = carrot_man.getDesiredSpeed();
             apply_source = QString::fromStdString(carrot_man.getDesiredSource());
             if (apply_speed >= v_cruise) apply_source = "";
