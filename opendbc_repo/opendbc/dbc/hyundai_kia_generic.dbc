@@ -1172,11 +1172,7 @@ BO_ 1314 GW_IPM_PE_1: 8 BCM
  SG_ C_SMKTeleCrankingFailRes : 34|2@1+ (1.0,0.0) [0.0|3.0] ""  CLU
 
 BO_ 1057 SCC12: 8 SCC
- SG_ CF_VSM_Prefill : 0|1@1+ (1,0) [0|1] "" ESC
- SG_ CF_VSM_DecCmdAct : 1|1@1+ (1,0) [0|1] "" ESC
- SG_ CF_VSM_HBACmd : 2|2@1+ (1,0) [0|3] "" ESC
- SG_ CF_VSM_Warn : 4|2@1+ (1,0) [0|3] "" CLU,ESC,IAP
- SG_ CF_VSM_Stat : 6|2@1+ (1,0) [0|3] "" CLU,ESC,PSB
+ SG_ DESIRED_DIST : 0|8@1+ (0.1,0) [0|255] "m" XXX
  SG_ CF_VSM_BeltCmd : 8|3@1+ (1,0) [0|7] "" ESC,PSB
  SG_ ACCFailInfo : 11|2@1+ (1,0) [0|3] "" CLU,CUBIS,ESC,IBOX
  SG_ ACCMode : 13|2@1+ (1,0) [0|3] "" CLU,ESC,IBOX,TCU
