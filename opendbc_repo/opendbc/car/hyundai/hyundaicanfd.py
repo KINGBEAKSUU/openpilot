@@ -421,7 +421,7 @@ def create_fca_warning_light(CP, packer, CAN, frame):
   return ret
 
 
-def create_adrv_messages(CP, packer, CAN, frame, CC, CS, hud_control, canfd_debug):
+def create_adrv_messages(CP, packer, CAN, frame, CC, CS, hud_control, disp_angle, left_lane_warning, right_lane_warning, canfd_debug):
   # messages needed to car happy after disabling
   # the ADAS Driving ECU to do longitudinal control
 
@@ -439,10 +439,34 @@ def create_adrv_messages(CP, packer, CAN, frame, CC, CS, hud_control, canfd_debu
           #print("adrv_info_161 = ", CS.adrv_info_161)
           values["vSetDis"] = int(hud_control.setSpeed * 3.6 + 0.5)
           values["GAP_DIST_SET"] = hud_control.leadDistanceBars
+          
+          values["BACKGROUND"] = 1 if cruise_enabled else 7
+          values["CENTERLINE"] = 1 if CC.latActive else 0
+          curvature = {
+            i: (31 if i == -1 else 13 - abs(i + 15)) if i < 0 else 15 + i
+            for i in range(-15, 16)
+          }
+          values["LANELINE_CURVATURE"] = curvature.get(max(-15, min(int(disp_angle / 3), 15)), 14) if main_enabled else 15
+          if hud_control.leftLaneDepart:
+            values["LANELINE_LEFT"] = 4 if (frame // 50) % 2 == 0 else 1
+          else:
+            values["LANELINE_LEFT"] = 2 if hud_control.leftLaneVisible else 0
+          if hud_control.rightLaneDepart:
+            values["LANELINE_RIGHT"] = 4 if (frame // 50) % 2 == 0 else 1
+          else:
+            values["LANELINE_RIGHT"] =  2 if hud_control.rightLaneVisible else 0
+          values["LANELINE_LEFT_POSITION"] = 15
+          values["LANELINE_RIGHT_POSITION"] = 15
+          
+          values["LCA_LEFT_ARROW"] = 2 if CS.out.leftBlinker else 0
+          values["LCA_RIGHT_ARROW"] = 2 if CS.out.rightBlinker else 0
+          
 
           values["WHEEL_ICON"] = 2 if CC.latActive else 1
 
-          values["CRUISE_INFO6_SET3"] = 3 if cruise_enabled else 0
+          #values["TARGET"] = 3 if cruise_enabled else 0
+          values["TARGET"] = 1 if cruise_enabled else 0
+          values["TARGET_POSITION"] = int(hud_control.leadDistance)
           values["CRUISE_INFO1_SET2"] = 2 if cruise_enabled else 1 if main_enabled else 0
           values["CRUISE_INFO2_SET2"] = 2 if cruise_enabled else 1 if main_enabled else 0
           values["CRUISE_INFO4_SET3"] = 3 if cruise_enabled else 0
@@ -453,17 +477,17 @@ def create_adrv_messages(CP, packer, CAN, frame, CC, CS, hud_control, canfd_debu
           values["START_READY_INFO_MAYBE"] = 0
 
           values["NEW_SIGNAL_7"] = 0
-          values["NEW_SIGNAL_5"] = 0
-          values["LANE_ASSIST_CONCERNED"] = 0
-          values["LANE_ASSIST_GREEN"] = 0
+          #values["NEW_SIGNAL_5"] = 0
+          #values["LANE_ASSIST_CONCERNED"] = 0
+          #values["LANE_ASSIST_GREEN"] = 0
 
           #values["CRUISE_INFO10_SET1"] = 1
           #values["CRUISE_INFO11_SET1"] = 1
 
           values["AUTO_LANE_CHANGE_MESSAGE_SET6"] = 0 # 1: 핸들잡아, 2: 빨리잡아, 6: 자동차선변경준비.
 
-          values["CRUISE_INFO7_HWAY_SET2_ELSE_0"] = 0
-          values["CRUISE_INFO9_HWAY_SET2_ELSE_0"] = 0
+          values["HDA_ICON"] = 2 if cruise_enabled else 0
+          values["NAV_ICON"] = 2 if hud_control.activeCarrot > 1 else 0
           #values["NEW_SIGNAL_HWAY_SET1_ELSE_0"] = 1
 
           values["CRUISE_INFO10_0_TO_4"] = 0 #4 if main_enabled else 0      # message
@@ -506,7 +530,9 @@ def create_adrv_messages(CP, packer, CAN, frame, CC, CS, hud_control, canfd_debu
         values["SIGNAL234"] = 0
         values["SIGNAL240"] = 0
         values["SIGNAL246"] = 0
-        ret.append(packer.make_can_msg("CORNER_RADAR_HIGHWAY", CAN.ECAN, values))
+        if left_lane_warning or right_lane_warning:
+          values["HAPTIC_VIBRATE"] = 1
+        ret.append(packer.make_can_msg("ADRV_0x162", CAN.ECAN, values))
 
     if frame % 20 == 0 and canfd_debug > 0: # 아직 시험중..
       if CS.hda_info_4a3 is not None:
@@ -531,12 +557,14 @@ def create_adrv_messages(CP, packer, CAN, frame, CC, CS, hud_control, canfd_debu
         values["NEW_SIGNAL_6"] = 256
         values["NEW_SIGNAL_7"] = 0
         ret.append(packer.make_can_msg("HDA_INFO_4A3", CAN.CAM, values))
-    if frame % 10 == 0 and False:
+    if frame % 10 == 0:
       if CS.new_msg_4b4 is not None: #G80 HDA2개조차량은 안나옴...
         values = CS.new_msg_4b4
+        values["NEW_SIGNAL_1"] = 8
+        values["NEW_SIGNAL_3"] = (frame / 100) % 10 
         values["NEW_SIGNAL_4"] = 146
-        values["NEW_SIGNAL_5"] = 72
-        values["NEW_SIGNAL_6"] = 44
+        values["NEW_SIGNAL_5"] = 68
+        values["NEW_SIGNAL_6"] = 76
         ret.append(packer.make_can_msg("NEW_MSG_4B4", CAN.CAM, values))
     return ret
   else:
