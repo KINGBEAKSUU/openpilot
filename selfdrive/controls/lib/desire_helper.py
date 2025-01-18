@@ -175,8 +175,8 @@ class DesireHelper:
     available_count = int(0.2 / DT_MDL)
     self.available_left_lane = self.lane_width_left_count.counter > available_count
     self.available_right_lane = self.lane_width_right_count.counter > available_count
-    self.available_left_edge = self.road_edge_left_count.counter > available_count and self.distance_to_road_edge_left < self.distance_to_road_edge_left_far + 0.2
-    self.available_right_edge = self.road_edge_right_count.counter > available_count and self.distance_to_road_edge_right < self.distance_to_road_edge_right_far + 0.2
+    self.available_left_edge = self.road_edge_left_count.counter > available_count and self.distance_to_road_edge_left_far > min_lane_width
+    self.available_right_edge = self.road_edge_right_count.counter > available_count and self.distance_to_road_edge_right_far > min_lane_width
 
     if one_blinker:
       lane_available = self.available_left_lane if leftBlinker else self.available_right_lane
