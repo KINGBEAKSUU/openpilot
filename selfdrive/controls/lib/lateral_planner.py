@@ -75,7 +75,7 @@ class LateralPlanner:
     self.curve_speed = 0
     
     self.prev_path_xyz = None
-    self.path_history = deque(maxlen=5)
+    self.path_history = deque(maxlen=10)
     self.carrot_lat_control = 0
 
   def reset_mpc(self, x0=None):
@@ -163,7 +163,7 @@ class LateralPlanner:
     """
 
     if self.carrot_lat_control in [1,2]:
-      if self.plan_a[0] < -1.0:
+      if laneless_only or sm['carState'].steeringPressed:
         self.path_history.clear()
       
       self.path_history.append(self.path_xyz)
