@@ -1461,7 +1461,7 @@ class CarrotServ:
         
       if self.turn_speed_ratio < 1.0:
         if self.turn_speed_ratio < 0.5:
-          print("ERROR: turn_speed_ratio < 0.5", self.turn_speed_ratio")
+          print("ERROR: turn_speed_ratio < 0.5", self.turn_speed_ratio)
         else:      
           desired_speed *= self.turn_speed_ratio
           source += "T"
