@@ -141,12 +141,14 @@ class CarController(CarControllerBase):
     if self.CP.openpilotLongitudinalControl:
 
       if self.CP.carFingerprint in (CAR.CHEVROLET_VOLT):
+        button_counter = (CS.buttons_counter + 1) % 4
         # Auto Cruise
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
-          if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:  # 25Hz(40ms 버튼주기)
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
+          if (self.frame - self.last_button_frame) * DT_CTRL > 0.04: # 25Hz(40ms 버튼주기)
             self.last_button_frame = self.frame
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
+
         # GM: AutoResume
         elif actuators.longControlState == LongCtrlState.starting:
           if CS.out.cruiseState.enabled and not self.activateCruise_after_brake: #브레이크신호 한번만 보내기 위한 조건.
@@ -243,9 +245,9 @@ class CarController(CarControllerBase):
             acc_engaged = CC.enabled
 
           if actuators.longControlState in [LongCtrlState.stopping, LongCtrlState.starting]:
-            if (self.frame - self.last_button_frame) * DT_CTRL > 0.2:
+            if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
               self.last_button_frame = self.frame
-              can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, CS.buttons_counter, CruiseButtons.RES_ACCEL))
+              can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.RES_ACCEL))
           # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
           can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop))
           can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake,
