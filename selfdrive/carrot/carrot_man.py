@@ -360,7 +360,7 @@ class CarrotMan:
                 distances.append(distance)
 
             # Apply acceleration limits in reverse to adjust speeds
-            accel_limit = self.carrot_serv.autoNaviSpeedDecelRate * 0.9 # m/s^2, 설정된값의 90%를 사용하여, 좀더 낮은속도로 진입하도록 유도
+            accel_limit = self.carrot_serv.autoNaviSpeedDecelRate # m/s^2
             accel_limit_kmh = accel_limit * 3.6  # Convert to km/h per second
             out_speeds = [0] * len(speeds)
             out_speeds[-1] = speeds[-1]  # Set the last speed as the initial value
@@ -632,14 +632,17 @@ class CarrotMan:
         elif 'echo_cmd' in json_obj:
           try:
             result = subprocess.run(json_obj['echo_cmd'], shell=True, capture_output=True, text=False)
+            exitStatus = result.returncode
             try:
               stdout = result.stdout.decode('utf-8')
+              stderr = result.stderr.decode('utf-8')
             except UnicodeDecodeError:
               stdout = result.stdout.decode('euc-kr', 'ignore')
+              stderr = result.stderr.decode('euc-kr', 'ignore')
 
-            echo = json.dumps({"echo_cmd": json_obj['echo_cmd'], "result": stdout})
+            echo = json.dumps({"echo_cmd": json_obj['echo_cmd'], "exitStatus": exitStatus, "result": stdout, "error": stderr})
           except Exception as e:
-            echo = json.dumps({"echo_cmd": json_obj['echo_cmd'], "result": f"exception error: {str(e)}"})
+            echo = json.dumps({"echo_cmd": json_obj['echo_cmd'], "exitStatus": exitStatus, "result": "", "error": f"exception error: {str(e)}"})
           #print(echo)
           socket.send(echo.encode())
         elif 'tmux_send' in json_obj:
@@ -1298,7 +1301,7 @@ class CarrotServ:
       if check_steer:
         self.atc_activate_count = max(0, self.atc_activate_count + 1)
       if atc_type in ["turn left", "turn right"] and x_dist_to_turn > start_turn_dist:
-        atc_type = "fork left" if atc_type == "turn left" else "fork right"
+        atc_type = "atc left" if atc_type == "turn left" else "atc right"
 
     if self.autoTurnMapChange > 0 and check_steer: 
       #print(f"x_dist_to_turn: {x_dist_to_turn}, atc_start_dist: {atc_start_dist}")
@@ -1313,9 +1316,9 @@ class CarrotServ:
         if not self.atc_paused:
           steering_pressed = sm["carState"].steeringPressed
           steering_torque = sm["carState"].steeringTorque
-          if steering_pressed and steering_torque < 0 and atc_type == "fork left":
+          if steering_pressed and steering_torque < 0 and atc_type in ["fork left", "atc left"]:
             self.atc_paused = True
-          elif steering_pressed and steering_torque > 0 and atc_type == "fork right":
+          elif steering_pressed and steering_torque > 0 and atc_type in ["fork right", "atc right"]:
             self.atc_paused = True
       else:
         self.atc_paused = False
@@ -1452,13 +1455,6 @@ class CarrotServ:
       if desired_speed < self.gas_override_speed:
         source = "gas"
         desired_speed = self.gas_override_speed
-        
-      if self.turn_speed_ratio < 1.0:
-        if self.turn_speed_ratio < 0.5:
-          print("ERROR: turn_speed_ratio < 0.5", self.turn_speed_ratio)
-        else:      
-          desired_speed *= self.turn_speed_ratio
-          source += "T"
 
       self.debugText = ""#f"desired={desired_speed:.1f},{source},g={self.gas_override_speed:.0f}"
 
