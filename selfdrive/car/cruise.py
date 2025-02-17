@@ -376,7 +376,7 @@ class VCruiseCarrot:
         self.button_cnt = 0
     if self.button_cnt > self.button_long_time:
       self.long_pressed = True
-      V_CRUISE_DELTA = 10
+      V_CRUISE_DELTA = 5
       if self.button_prev == ButtonType.cancel:
         button_type = ButtonType.cancel
         self.button_cnt = 0
