@@ -703,8 +703,8 @@ public:
 #endif
             }
             else if (xState == 4) {     //XState.e2ePrepare
-				ui_draw_text(s, x, disp_y, "신호출발중", disp_size, COLOR_WHITE, BOLD);
-			}
+				      ui_draw_text(s, x, disp_y, "E2E주행중", disp_size, COLOR_WHITE, BOLD);
+			      }
             else if (xState == 0 || xState == 1 || xState == 2) {     //XState.lead
                 draw_dist = true;
             }
@@ -877,6 +877,7 @@ private:
     int xDistToTurn = 0;
     int nRoadLimitSpeed = 20;
     int active_carrot = 0;
+    bool active_navi_inst = false;
 
     int nGoPosDist = 0;
     int nGoPosTime = 0;
@@ -896,8 +897,8 @@ protected:
         if (xDistToTurn < 1500 && xDistToTurn > 0) {
             SubMaster& sm = *(s->sm);
 
-            const auto carrot_man = sm["carrotMan"].getCarrotMan();
-            szTBTMainText = QString::fromStdString(carrot_man.getSzTBTMainText());
+            //const auto carrot_man = sm["carrotMan"].getCarrotMan();
+            //szTBTMainText = QString::fromStdString(carrot_man.getSzTBTMainText());
 
             const cereal::ModelDataV2::Reader& model = sm["modelV2"].getModelV2();
             const auto road_edges = model.getRoadEdges();
@@ -1032,9 +1033,8 @@ protected:
         szPosRoadName = "구문천 1길 17";
 #endif
 
-        if (active_carrot <= 1) return;
-        if (nGoPosDist > 0 && nGoPosTime > 0);
-		    else return;
+        //if (active_carrot <= 1) return;
+        //printf("nGoPosDist=%d, nGoPosTime=%d\n", nGoPosDist, nGoPosTime);
 
         //if (xDistToTurn <= 0 || nGoPosDist <= 0) return;
         char str[128] = "";
@@ -1045,6 +1045,9 @@ protected:
         if (s->scene._current_carrot_display == 3) {
           ui_fill_rect(s->vg, { tbt_x, 5, 790, s->fb_h - 15 }, COLOR_BLACK_ALPHA(120), 30, 2, &stroke_color);
         }
+        if (nGoPosDist > 0 && nGoPosTime > 0);
+        else return;
+        if (s->scene._current_carrot_display == 3);
         else {
           ui_fill_rect(s->vg, { tbt_x, tbt_y - 60, 790, 240 + 60 }, COLOR_BLACK_ALPHA(120), 30, 2, &stroke_color);
         }
@@ -1115,21 +1118,63 @@ public:
             return;
         }
         const auto carrot_man = sm["carrotMan"].getCarrotMan();
-        //const auto car_state = sm["carState"].getCarState();
-        xSpdLimit = carrot_man.getXSpdLimit();
-        xSpdDist = carrot_man.getXSpdDist();
-        xSignType = carrot_man.getXSpdType();
-        xTurnInfo = carrot_man.getXTurnInfo();
-        xDistToTurn = carrot_man.getXDistToTurn();
-        nRoadLimitSpeed = carrot_man.getNRoadLimitSpeed();
+        float maneuverDistance = 0;
+        if (sm.alive("navInstruction")) {
+          const auto nav_inst = sm["navInstruction"].getNavInstruction();
+          maneuverDistance = nav_inst.getManeuverDistance();
+        }
+          
         active_carrot = carrot_man.getActiveCarrot();
-        atc_type = QString::fromStdString(carrot_man.getAtcType());
+        //printf("active_carrot: %d\n", active_carrot);
+        if (active_carrot <= 1 || (carrot_man.getNGoPosDist() <= 0 && maneuverDistance > 0)) active_navi_inst = true;
+        else active_navi_inst = false;
 
-        nGoPosDist = carrot_man.getNGoPosDist();
-        nGoPosTime = carrot_man.getNGoPosTime();
-        szSdiDescr = QString::fromStdString(carrot_man.getSzSdiDescr());
-        szPosRoadName = QString::fromStdString(carrot_man.getSzPosRoadName());
-        szTBTMainText = QString::fromStdString(carrot_man.getSzTBTMainText());
+        if (active_carrot > 1) {
+          xSpdLimit = carrot_man.getXSpdLimit();
+          xSpdDist = carrot_man.getXSpdDist();
+          xSignType = carrot_man.getXSpdType();
+        }
+        else {
+          xSpdLimit = 0;
+          xSpdDist = 0;
+          xSignType = 0;
+        }
+        if (active_carrot > 1 and !active_navi_inst) {
+          xTurnInfo = carrot_man.getXTurnInfo();
+          xDistToTurn = carrot_man.getXDistToTurn();
+          nRoadLimitSpeed = carrot_man.getNRoadLimitSpeed();
+          atc_type = QString::fromStdString(carrot_man.getAtcType());
+
+          nGoPosDist = carrot_man.getNGoPosDist();
+          nGoPosTime = carrot_man.getNGoPosTime();
+          szSdiDescr = QString::fromStdString(carrot_man.getSzSdiDescr());
+          szPosRoadName = QString::fromStdString(carrot_man.getSzPosRoadName());
+          szTBTMainText = QString::fromStdString(carrot_man.getSzTBTMainText());
+          
+        } else if(sm.alive("navInstruction") && sm.valid("navInstruction")) {
+          const auto nav_inst = sm["navInstruction"].getNavInstruction();
+          xTurnInfo = 0;
+          xDistToTurn = nav_inst.getManeuverDistance();
+          nRoadLimitSpeed = nav_inst.getSpeedLimit() * 3.6;
+          QString maneuverType = QString::fromStdString(nav_inst.getManeuverType());
+          QString manuverModifier = QString::fromStdString(nav_inst.getManeuverModifier());
+          if (maneuverType == "turn") {
+            if (manuverModifier == "sharp left" || manuverModifier == "slight left" || manuverModifier == "left") xTurnInfo = 1; // left turn
+            else if (manuverModifier == "sharp right" || manuverModifier == "slight right" || manuverModifier == "right") xTurnInfo = 2;
+            else if (manuverModifier == "uturn") xTurnInfo = 5;
+          }
+          else if (maneuverType == "fork" || maneuverType == "off ramp") {
+            if (manuverModifier == "slight left" || manuverModifier == "left") xTurnInfo = 3; // left turn
+            else if (manuverModifier == "slight right" || manuverModifier == "right") xTurnInfo = 4;
+          }
+
+          atc_type = maneuverType + " " + manuverModifier;
+          nGoPosDist = nav_inst.getDistanceRemaining();
+          nGoPosTime = nav_inst.getTimeRemaining();
+          szSdiDescr = "";
+          szPosRoadName = "";
+          szTBTMainText = QString::fromStdString(nav_inst.getManeuverPrimaryText());          
+        }
 
 #ifdef __UI_TEST
         active_carrot = 2;
@@ -1137,59 +1182,6 @@ public:
         xSpdDist = 12345;
         nRoadLimitSpeed = 110;
 #endif
-        if (false) {
-            int bx = s->fb_w - 120;// 350;// 150;
-            int by = 300;// s->fb_h - 150; // 410;
-            char str[128] = "";
-
-            if (xSpdLimit > 0) {
-                if (xSignType == 22) {
-                    ui_draw_image(s, { bx - 60, by - 50, 120, 150 }, "ic_speed_bump", 1.0f);
-                }
-                else {
-                    nvgBeginPath(s->vg);
-                    nvgCircle(s->vg, bx, by, 140 / 2);
-                    nvgFillColor(s->vg, COLOR_WHITE);
-                    nvgFill(s->vg);
-                    nvgBeginPath(s->vg);
-                    nvgCircle(s->vg, bx, by, 130 / 2);
-                    nvgFillColor(s->vg, COLOR_RED);
-                    nvgFill(s->vg);
-                    nvgBeginPath(s->vg);
-                    nvgCircle(s->vg, bx, by, 110 / 2);
-                    nvgFillColor(s->vg, COLOR_WHITE);
-                    nvgFill(s->vg);
-                    sprintf(str, "%d", xSpdLimit);
-                    ui_draw_text(s, bx, by + 25, str, 60, COLOR_BLACK, BOLD, 0.0f, 0.0f);
-                }
-                if (xSpdDist < 1000) sprintf(str, "%d m", xSpdDist);
-                else  sprintf(str, "%.1f km", xSpdDist / 1000.f);
-                ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE, BOLD);
-            }
-            else if (false && xTurnInfo > 0) {
-                switch (xTurnInfo) {
-                case 1: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_l", 1.0f); break;
-                case 2: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_r", 1.0f); break;
-                case 3: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_l", 1.0f); break;
-                case 4: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_lane_change_r", 1.0f); break;
-                case 7: ui_draw_image(s, { bx - icon_size / 2, by - icon_size / 2, icon_size, icon_size }, "ic_turn_u", 1.0f); break;
-                case 6: ui_draw_text(s, bx, by + 20, "TG", 35, COLOR_WHITE, BOLD); break;
-                case 8: ui_draw_text(s, bx, by + 20, "arrived", 35, COLOR_WHITE, BOLD); break;
-                default:
-                    sprintf(str, "unknown(%d)", xTurnInfo);
-                    ui_draw_text(s, bx, by + 20, str, 35, COLOR_WHITE, BOLD, 0.0f, 0.0f);
-                    break;
-                }
-                if (xDistToTurn < 1000) sprintf(str, "%d m", xDistToTurn);
-                else  sprintf(str, "%.1f km", xDistToTurn / 1000.f);
-                ui_draw_text(s, bx, by + 120, str, 40, COLOR_WHITE, BOLD);
-            }
-            else if (active_carrot > 1 && nRoadLimitSpeed >= 30 && nRoadLimitSpeed < 200) {
-                ui_draw_image(s, { bx - 60, by - 50, 120, 150 }, "ic_road_speed", 1.0f);
-                sprintf(str, "%d", nRoadLimitSpeed);
-                ui_draw_text(s, bx, by + 75, str, 50, COLOR_BLACK, BOLD, 0.0f, 0.0f);
-            }
-        }
         drawTurnInfo(s);
         drawSpeedLimit(s);
         drawTurnInfoHud(s);
@@ -1887,6 +1879,7 @@ public:
     int     trafficState = 0;
     int     trafficState_carrot = 0;
     int     active_carrot = 0;
+    bool    active_navi_inst = false;
     float   xTarget = 0.0;
     int     myDrivingMode = 1;
 
@@ -1984,6 +1977,13 @@ public:
             szPosRoadName = "";
             nRoadLimitSpeed = 30;
 		}
+    const auto nav_inst = sm["navInstruction"].getNavInstruction();
+    if (active_carrot <= 1 || (carrot_man.getNGoPosDist() <= 0 && nav_inst.getManeuverDistance() > 0)) active_navi_inst = true;
+    else active_navi_inst = false;
+    if (active_navi_inst) {
+      nRoadLimitSpeed = carrot_man.getNRoadLimitSpeed();
+    }
+
         xState = lp.getXState();
         trafficState = lp.getTrafficState();
         xTarget = lp.getXTarget();
@@ -2125,6 +2125,7 @@ public:
     int   memoryUsage = 0;
     float freeSpace = 0.0f;
     void drawHud(UIState* s) {
+        int show_device_state = params.getInt("ShowDeviceState");
         blink_timer = (blink_timer + 1) % 16;
         nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
 
@@ -2141,7 +2142,12 @@ public:
         if (xSpdLimit > 0 && xSignType != 22 && xSignType != 4) cam_detected = true;
         NVGcolor stroke_color = COLOR_WHITE;
         NVGcolor bg_color = (cam_detected && blink_timer > 8)?COLOR_RED_ALPHA(180):COLOR_BLACK_ALPHA(90);
-        ui_fill_rect(s->vg, { bx - 120, by - 270, 475, 495}, bg_color, 30, 2, &stroke_color);
+        if (show_device_state > 0) {
+          ui_fill_rect(s->vg, { bx - 120, by - 270, 475, 495 }, bg_color, 30, 2, &stroke_color);
+        }
+        else {
+          ui_fill_rect(s->vg, { bx - 120, by - 270 + 140, 475, 495 - 140 }, bg_color, 30, 2, &stroke_color);
+        }
 
 
         // draw traffic light
@@ -2215,7 +2221,7 @@ public:
         int dx = bx - 50;
         int dy = by + 175;
         ui_fill_rect(s->vg, { dx - 55, dy - 38, 110, 48 }, mode_color, 15, 2);
-        ui_draw_text(s, dx, dy, driving_mode_str, 40, text_color, BOLD);
+        ui_draw_text(s, dx, dy, driving_mode_str, 35, text_color, BOLD);
         if (strcmp(driving_mode_str, driving_mode_str_last)) ui_draw_text_a(s, dx, dy, driving_mode_str, 30, COLOR_WHITE, BOLD);
         strcpy(driving_mode_str_last, driving_mode_str);
 
@@ -2298,7 +2304,7 @@ public:
         xSignType = 1;
 #endif
 
-        if (active_carrot >= 2) {
+        if (active_carrot >= 2 || active_navi_inst) {
             dx = bx + 75;
             dy = by + 175;
             int disp_speed = 0;
@@ -2318,7 +2324,7 @@ public:
             ui_draw_text(s, dx, dy, QString::number(disp_speed).toStdString().c_str(), 40, COLOR_WHITE, BOLD);
         }
 
-        if (true) {
+        if (show_device_state) {
             char str[128];
             dx = bx - 35;
             dy = by - 200;

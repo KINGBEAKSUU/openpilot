@@ -225,7 +225,8 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"ShowPathEnd", PERSISTENT},
     {"ShowCustomBrightness", PERSISTENT},
     {"ShowLaneInfo", PERSISTENT},
-    {"ShowRadarInfo", PERSISTENT },
+    {"ShowRadarInfo", PERSISTENT},
+    {"ShowDeviceState", PERSISTENT},
     {"ShowRouteInfo", PERSISTENT },
     {"ShowPathMode", PERSISTENT},
     {"ShowPathColor", PERSISTENT},
@@ -251,6 +252,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"GpsDelayTimeAdjust", PERSISTENT},
     {"AutoTurnMapChange", PERSISTENT },
     {"AutoNaviSpeedCtrlEnd", PERSISTENT},
+    {"AutoNaviSpeedCtrlMode", PERSISTENT},
     {"AutoNaviSpeedBumpTime", PERSISTENT},
     {"AutoNaviSpeedBumpSpeed", PERSISTENT},
     {"AutoNaviSpeedDecelRate", PERSISTENT},
@@ -283,7 +285,8 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"LongTuningKpV", PERSISTENT},
     {"LongTuningKiV", PERSISTENT},
     {"LongTuningKf", PERSISTENT},
-    {"LongActuatorDelay", PERSISTENT},
+    {"LongActuatorDelay", PERSISTENT },
+    {"VegoStopping", PERSISTENT },
     {"RadarReactionFactor", PERSISTENT},
     {"EnableRadarTracks", PERSISTENT},
     {"EnableRadarTracksResult", PERSISTENT | CLEAR_ON_MANAGER_START},
@@ -332,7 +335,6 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"SpeedFromPCM", PERSISTENT},
     {"MaxTimeOffroadMin", PERSISTENT},
     {"DisableDM", PERSISTENT},
-    {"CarrotManCommand", PERSISTENT},
     {"CarrotException", CLEAR_ON_MANAGER_START},
     {"CarName", PERSISTENT},
     {"EVTable", PERSISTENT},
@@ -346,6 +348,7 @@ std::unordered_map<std::string, uint32_t> keys = {
     {"NNFFLite", PERSISTENT},
     {"NNFFModelName", CLEAR_ON_OFFROAD_TRANSITION},
  
+    {"TrafficStopDistanceAdjust", PERSISTENT},
 };
 
 } // namespace

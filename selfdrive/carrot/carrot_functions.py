@@ -79,7 +79,7 @@ class CarrotPlanner:
     self.stopSignCount = 0
 
     self.stop_distance = 6.0
-    self.trafficStopDistanceAdjust = 1.7 #params.get_float("TrafficStopDistanceAdjust") / 100.
+    self.trafficStopDistanceAdjust = 1.0 #params.get_float("TrafficStopDistanceAdjust") / 100.
     self.comfortBrake = 2.4 #params.get_float("ComfortBrake") / 100.
     self.comfort_brake = self.comfortBrake
 
@@ -150,6 +150,7 @@ class CarrotPlanner:
     if self.params_count == 10:
       self.myHighModeFactor = 1.2 #float(self.params.get_int("MyHighModeFactor")) / 100.
       self.trafficLightDetectMode = self.params.get_int("TrafficLightDetectMode") # 0: None, 1:Stop, 2:Stop&Go
+      self.trafficStopDistanceAdjust = self.params.get_float("TrafficStopDistanceAdjust") / 100.
     elif self.params_count == 20:
       self.tFollowGap1 = self.params.get_float("TFollowGap1") / 100.
       self.tFollowGap2 = self.params.get_float("TFollowGap2") / 100.
@@ -222,7 +223,6 @@ class CarrotPlanner:
     stop_x = self.xStopFilter2.process(stop_x)
     return stop_x
 
-
   def check_model_stopping(self, v, v_ego, a_ego, model_x, y, d_rel):
     v_ego_kph = v_ego * CV.MS_TO_KPH
     model_v = self.vFilter.process(v[-1])
@@ -267,6 +267,7 @@ class CarrotPlanner:
       self.trafficState = TrafficState.off
 
   def _update_carrot_man(self, sm, v_ego_kph, v_cruise_kph):
+    atc_active = False
     if sm.alive['carrotMan']:
       carrot_man = sm['carrotMan']
       atc_turn_left = carrot_man.atcType in ["turn left", "atc left"]
@@ -291,12 +292,12 @@ class CarrotPlanner:
 
       self.activeCarrot = carrot_man.activeCarrot
       self.xDistToTurn = carrot_man.xDistToTurn
-      self.atc_active = self.activeCarrot > 1 and 0 < self.xDistToTurn < 100
+      atc_active = self.activeCarrot > 1 and 0 < self.xDistToTurn < 100
       self.atcType = carrot_man.atcType
 
       v_cruise_kph = min(v_cruise_kph, carrot_man.desiredSpeed)
 
-    return v_cruise_kph
+    return v_cruise_kph, atc_active
 
   def cruise_eco_control(self, v_ego_kph, v_cruise_kph):
     v_cruise_kph_apply = v_cruise_kph
@@ -354,7 +355,12 @@ class CarrotPlanner:
       self.drivingModeDetector.update_data(v_ego_kph, vLead, carstate.aEgo, aLead, dRel)
 
     v_cruise_kph = self.cruise_eco_control(v_ego_cluster_kph, v_cruise_kph)
-    v_cruise_kph = self._update_carrot_man(sm, v_ego_kph, v_cruise_kph)
+    v_cruise_kph, atc_active = self._update_carrot_man(sm, v_ego_kph, v_cruise_kph)
+    
+    if atc_active and not self.atc_active and self.xState not in [XState.e2eStop, XState.e2eStopped, XState.lead]:
+      if self.atcType in ["turn left", "turn right", "atc left", "atc right"]:
+        self.xState = XState.e2ePrepare
+    self.atc_active = atc_active
 
     v_cruise = v_cruise_kph * CV.KPH_TO_MS
     if vCluRatio > 0.5:
@@ -428,6 +434,9 @@ class CarrotPlanner:
     elif self.xState == XState.e2ePrepare:
       if lead_detected:
         self.xState = XState.lead
+      elif self.atc_active:
+        if carstate.gasPressed:
+          self.xState = XState.e2eCruise
       elif v_ego_kph < 5.0 and self.trafficState != TrafficState.green:
         self.xState = XState.e2eStop
         self.actual_stop_distance = 5.0 #2.0
@@ -444,10 +453,7 @@ class CarrotPlanner:
       else:
         self.xState = XState.e2eCruise
 
-    if self.atc_active and self.atcType in ["turn left", "turn right", "atc left", "atc right"] and self.xState not in [XState.e2eStop, XState.e2eStopped, XState.lead]:
-      self.xState = XState.e2ePrepare
-
-    elif self.trafficState in [TrafficState.off, TrafficState.green] or self.xState not in [XState.e2eStop, XState.e2eStopped]:
+    if self.trafficState in [TrafficState.off, TrafficState.green] or self.xState not in [XState.e2eStop, XState.e2eStopped]:
       stop_model_x = 1000.0
 
     if self.user_stop_distance >= 0:

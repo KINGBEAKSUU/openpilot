@@ -24,6 +24,7 @@ def get_default_params():
     # kans
     ("LongPitch", "1"),
     ("EVTable", "1"),
+    ("TrafficStopDistanceAdjust", "120"),
     ("CompletedTrainingVersion", "0"),
     ("DisengageOnAccelerator", "0"),
     ("GsmMetered", "1"),
@@ -44,6 +45,7 @@ def get_default_params():
     ("ShowCustomBrightness", "100"),
     ("ShowLaneInfo", "1"),
     ("ShowRadarInfo", "1"),
+    ("ShowDeviceState", "1"),
     ("ShowRouteInfo", "1"),
     ("ShowPathMode", "9"),
     ("ShowPathColor", "13"),
@@ -73,6 +75,7 @@ def get_default_params():
     ("AutoTurnMapChange", "0"),
 
     ("AutoNaviSpeedCtrlEnd", "7"),
+    ("AutoNaviSpeedCtrlMode", "2"),
     ("AutoNaviSpeedBumpTime", "1"),
     ("AutoNaviSpeedBumpSpeed", "35"),
     ("AutoNaviSpeedSafetyFactor", "105"),
@@ -101,6 +104,7 @@ def get_default_params():
     ("LongTuningKiV", "0"),
     ("LongTuningKf", "100"),
     ("LongActuatorDelay", "20"),
+    ("VegoStopping", "5"),
     ("RadarReactionFactor", "10"),
     ("EnableRadarTracks", "0"),
     ("HyundaiCameraSCC", "0"),

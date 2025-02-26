@@ -9,7 +9,7 @@
 #include <QJsonValue>
 #include <QJsonArray>
 #include <QDialog>
-
+#include <QMouseEvent>
 
 #include "selfdrive/ui/qt/util.h"
 #include "selfdrive/ui/carrot.h"
@@ -133,35 +133,41 @@ void OnroadWindow::updateState(const UIState &s) {
     //update();
   }
   update();
-  if (true) { //carrot_display > 0) {
+  if (true) { 
       int carrot_display = 0;
-      Params	params_memory{ "/dev/shm/params" };
-      QString command = QString::fromStdString(params_memory.get("CarrotManCommand"));
-      if (command.startsWith("DISPLAY ")) {
-        QString display_cmd = command.mid(8);
-        if (display_cmd == "TOGGLE") {
-          carrot_display = 5;
-          printf("Display toggle\n");
-        }
-        else if (display_cmd == "DEFAULT") {
-          carrot_display = 1;
-          printf("Display 1\n");
-        }
-        else if (display_cmd == "ROAD") {
-          carrot_display = 2;
-          printf("Display 2\n");
-        }
-        else if (display_cmd == "MAP") {
-          carrot_display = 3;
-          printf("Display 3\n");
-        }
-        else if (display_cmd == "FULLMAP") {
-          carrot_display = 4;
-          printf("Display 4\n");
-        }
-        params_memory.putNonBlocking("CarrotManCommand", "");
-      }
 
+      static int carrot_cmd_index_last = 0;
+      if (sm.alive("carrotMan")) {
+        const auto& carrot = sm["carrotMan"].getCarrotMan();
+        int carrot_cmd_index = carrot.getCarrotCmdIndex();
+        if (carrot_cmd_index != carrot_cmd_index_last) {
+          carrot_cmd_index_last = carrot_cmd_index;
+          QString carrot_cmd = QString::fromStdString(carrot.getCarrotCmd());
+          QString carrot_arg = QString::fromStdString(carrot.getCarrotArg());
+          if (carrot_cmd == "DISPLAY") {
+            if (carrot_arg == "TOGGLE") {
+              carrot_display = 5;
+              //printf("Display toggle\n");
+            }
+            else if (carrot_arg == "DEFAULT") {
+              carrot_display = 1;
+              //printf("Display 1\n");
+            }
+            else if (carrot_arg == "ROAD") {
+              carrot_display = 2;
+              //printf("Display 2\n");
+            }
+            else if (carrot_arg == "MAP") {
+              carrot_display = 3;
+              //printf("Display 3\n");
+            }
+            else if (carrot_arg == "FULLMAP") {
+              carrot_display = 4;
+              //printf("Display 4\n");
+            }
+          }
+        }
+      }
 
       if (carrot_display == 5) ss->scene._current_carrot_display = (ss->scene._current_carrot_display % 3) + 1;
       else if(carrot_display > 0) ss->scene._current_carrot_display = carrot_display;
@@ -209,10 +215,50 @@ void OnroadWindow::mousePressEvent(QMouseEvent* e) {
 //  }
 //#endif
   // propagation event to parent(HomeWindow)
-  UIState* s = uiState();
-  s->scene._current_carrot_display = (s->scene._current_carrot_display % 3) + 1;  // 4번: full map은 안보여줌.
-  printf("_current_carrot_display1=%d\n", s->scene._current_carrot_display);
-  QWidget::mousePressEvent(e);
+  int x = e->x();   // 430 - 500 : gap window
+  int y = height() - e->y();  // 60 - 180 : gap window
+  int ey = e->y();
+  printf("x=%d, y=%d, ey=%d\n", x, y, ey);
+  double now = millis_since_boot();
+  static double last_click_time = 0;
+  static int _click_count = 0;
+  // 40,150, 200, 150
+  Params	params;
+  if (x > 40 && x < 370 && ey > 30 && ey < 240) {   // date & time
+    int show_date_time = params.getInt("ShowDateTime");
+    params.putIntNonBlocking("ShowDateTime", (show_date_time + 1) % 3);
+  }
+  else if (x > 40 && x < 500 && y > 400 && y < 530) {   // device info
+    int show_device_state = params.getInt("ShowDeviceState");
+    params.putIntNonBlocking("ShowDeviceState", (show_device_state + 1) % 2);
+  }
+  else if (x > 40 && x < 200 && y > 20 && y < 150) {   // driving mode
+    int my_driving_mode = params.getInt("MyDrivingMode");
+    params.putIntNonBlocking("MyDrivingMode", (my_driving_mode) % 4 + 1);
+  }
+  else if (x > 350 && x < 550 && y > 20 && y < 250) { // gap control
+    int longitudinalPersonalityMax = params.getInt("LongitudinalPersonalityMax");
+    int personality = (params.getInt("LongitudinalPersonality") - 1 + longitudinalPersonalityMax) % longitudinalPersonalityMax;
+    params.putIntNonBlocking("LongitudinalPersonality", personality);
+
+  }
+  else {
+    if (now - last_click_time < 500) {
+      _click_count++;
+    }
+    else {
+      _click_count = 0;
+    }
+    last_click_time = now;
+    if (_click_count == 3) {
+      params.putIntNonBlocking("SoftRestartTriggered", 1);
+    }
+    
+    UIState* s = uiState();
+    s->scene._current_carrot_display = (s->scene._current_carrot_display % 3) + 1;  // 4번: full map은 안보여줌.
+    printf("_current_carrot_display1=%d\n", s->scene._current_carrot_display);
+    QWidget::mousePressEvent(e);
+  }
 }
 //OverlayDialog* mapDialog = nullptr;
 void OnroadWindow::offroadTransition(bool offroad) {

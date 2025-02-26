@@ -179,10 +179,11 @@ def calculate_curvature(p1, p2, p3):
 
 class CarrotMan:
   def __init__(self):
+    print("************************************************CarrotMan init************************************************")
     self.params = Params()
     self.params_memory = Params("/dev/shm/params")
-    self.sm = messaging.SubMaster(['deviceState', 'carState', 'controlsState', 'longitudinalPlan', 'modelV2', 'selfdriveState', 'carControl'])
-    self.pm = messaging.PubMaster(['carrotMan', "navRoute", "navInstruction"])
+    self.sm = messaging.SubMaster(['deviceState', 'carState', 'controlsState', 'longitudinalPlan', 'modelV2', 'selfdriveState', 'carControl', 'navRouteNavd', 'liveLocationKalman'])
+    self.pm = messaging.PubMaster(['carrotMan', "navRoute", "navInstructionCarrot"])
 
     self.carrot_serv = CarrotServ()
 
@@ -217,6 +218,7 @@ class CarrotMan:
     self.navi_points = []
     self.navi_points_start_index = 0
     self.navi_points_active = False
+    self.navd_active = False
 
     self.active_carrot_last = False
 
@@ -257,6 +259,8 @@ class CarrotMan:
     while self.is_running:
       try:
         self.sm.update(0)
+        if self.sm.updated['navRouteNavd']:
+          self.send_routes(self.sm['navRouteNavd'].coordinates, True)
         remote_addr = self.remote_addr
         remote_ip = remote_addr[0] if remote_addr is not None else ""
         vturn_speed = self.carrot_curve_speed(self.sm)
@@ -290,8 +294,9 @@ class CarrotMan:
 
             if remote_addr is None:
               print(f"Broadcasting: {self.broadcast_ip}:{msg}")
-              self.navi_points = []
-              self.navi_points_active = False
+              if not self.navd_active:
+                self.navi_points = []
+                self.navi_points_active = False
 
           except Exception as e:
             if self.connection:
@@ -309,14 +314,15 @@ class CarrotMan:
 
   def carrot_navi_route(self):
 
-    if not self.navi_points_active or not SHAPELY_AVAILABLE or self.carrot_serv.active_carrot <= 1:
+    if not self.navi_points_active or not SHAPELY_AVAILABLE or (self.carrot_serv.active_carrot <= 1 and not self.navd_active):
       #print(f"navi_points_active: {self.navi_points_active}, active_carrot: {self.carrot_serv.active_carrot}")
       #haversine_cache.clear()
       #curvature_cache.clear()
       self.navi_points = []
       self.navi_points_active = False
       if self.active_carrot_last > 1:
-        self.params.remove("NavDestination")
+        #self.params.remove("NavDestination")
+        pass
       self.active_carrot_last = self.carrot_serv.active_carrot
       return [],[],300
 
@@ -358,7 +364,8 @@ class CarrotMan:
                   speed = max(speed, self.carrot_serv.nRoadLimitSpeed)
                 speeds.append(speed)
                 distances.append(distance)
-
+            #print(f"curvatures= {[round(s, 4) for s in curvatures]}")
+            #print(f"speeds= {[round(s, 1) for s in speeds]}")
             # Apply acceleration limits in reverse to adjust speeds
             accel_limit = self.carrot_serv.autoNaviSpeedDecelRate # m/s^2
             accel_limit_kmh = accel_limit * 3.6  # Convert to km/h per second
@@ -393,12 +400,14 @@ class CarrotMan:
             #distance_advance = self.sm['carState'].vEgo * 3.0  # Advance distance by 3.0 seconds
             #out_speed = interp(distance_advance, distances, out_speeds)
             out_speed = out_speeds[0]
+            #print(f"out_speeds= {[round(s, 1) for s in out_speeds]}")
     else:
         resampled_points = []
+        resampled_distances = []
         curvatures = []
         speeds = []
         distances = []
-        self.params.remove("NavDestination")
+        #self.params.remove("NavDestination")
 
     return resampled_points, resampled_distances, out_speed #speeds, distances
 
@@ -675,6 +684,25 @@ class CarrotMan:
     return struct.unpack('!f', float_data)[0]
 
 
+  def send_routes(self, coords, from_navd=False):
+    if from_navd:
+      if len(coords) > 0:
+        self.navi_points = [(c.longitude, c.latitude) for c in coords]
+        self.navi_points_start_index = 0
+        self.navi_points_active = True
+        print("Received points from navd:", len(self.navi_points))
+        self.navd_active = True
+
+        coords = [{"latitude": c.latitude, "longitude": c.longitude} for c in coords]
+        #print("navdNaviPoints=", self.navi_points)
+      else:
+        print("Received points from navd: 0")
+        self.navd_active = False
+
+    msg = messaging.new_message('navRoute', valid=True)
+    msg.navRoute.coordinates = coords
+    self.pm.send('navRoute', msg)
+
   def carrot_route(self):
     host = '0.0.0.0'  # 혹은 다른 호스트 주소
     port = 7709  # 포트 번호
@@ -716,11 +744,23 @@ class CarrotMan:
             print("Received points:", len(self.navi_points))
             #print("Received points:", self.navi_points)
 
-            msg = messaging.new_message('navRoute', valid=True)
-            msg.navRoute.coordinates = coords
-            self.pm.send('navRoute', msg)
-            #self.carrot_route_active = True
-            #self.params.put_bool_nonblocking("CarrotRouteActive", True)
+            self.send_routes(coords)
+            """
+            try:
+              module_name = "route_engine"
+              class_name = "RouteEngine"
+              moduel = importlib.import_module(module_name)
+              cls = getattr(moduel, class_name)
+              route_engine_instance = cls(name="Loaded at Runtime")
+
+              route_engine_instance.send_route_coords(coords, True)
+            except Exception as e:
+              print(f"route_engine error: {e}")
+
+            #msg = messaging.new_message('navRoute', valid=True)
+            #msg.navRoute.coordinates = coords
+            #self.pm.send('navRoute', msg)
+            """
 
             if len(coords):
               dest = coords[-1]
@@ -807,6 +847,7 @@ class CarrotServ:
     self.params_memory = Params("/dev/shm/params")
 
     self.nRoadLimitSpeed = 30
+    self.nRoadLimitSpeed_counter = 0
 
     self.active_carrot = 0     ## 1: CarrotMan Active, 2: sdi active , 3: speed decel active, 4: section active, 5: bump active, 6: speed limit active
     self.active_count = 0
@@ -855,7 +896,6 @@ class CarrotServ:
     self.nPosAngle = 0.0
 
     self.diff_angle_count = 0
-    self.last_update_gps_time = 0
     self.last_calculate_gps_time = 0
     self.bearing_offset = 0.0
     self.bearing_measured = 0.0
@@ -908,6 +948,7 @@ class CarrotServ:
     self.autoNaviSpeedBumpSpeed = float(self.params.get_int("AutoNaviSpeedBumpSpeed"))
     self.autoNaviSpeedBumpTime = float(self.params.get_int("AutoNaviSpeedBumpTime"))
     self.autoNaviSpeedCtrlEnd = float(self.params.get_int("AutoNaviSpeedCtrlEnd"))
+    self.autoNaviSpeedCtrlMode = self.params.get_int("AutoNaviSpeedCtrlMode")
     self.autoNaviSpeedSafetyFactor = float(self.params.get_int("AutoNaviSpeedSafetyFactor")) * 0.01
     self.autoNaviSpeedDecelRate = float(self.params.get_int("AutoNaviSpeedDecelRate")) * 0.01
     self.autoNaviCountDownMode = self.params.get_int("AutoNaviCountDownMode")
@@ -926,11 +967,6 @@ class CarrotServ:
     if self.carrotCmdIndex != self.carrotCmdIndex_last:
       self.carrotCmdIndex_last = self.carrotCmdIndex
       command_handlers = {
-        "SPEED": self._handle_speed_command,
-        "CRUISE": self._handle_cruise_command,
-        "LANECHANGE": self._handle_lane_change,
-        "RECORD": self._handle_record_command,
-        "DISPLAY": self._handle_display_command,
         "DETECT": self._handle_detect_command,
       }
 
@@ -943,29 +979,6 @@ class CarrotServ:
     if self.traffic_light_count < 0:
       self.traffic_light_count = -1
       self.traffic_state = 0
-
-  def _handle_speed_command(self, xArg):
-    self.params_memory.put_nonblocking("CarrotManCommand", "SPEED " + xArg)
-
-  def _handle_cruise_command(self, xArg):
-    self.params_memory.put_nonblocking("CarrotManCommand", "CRUISE " + xArg)
-
-  def _handle_lane_change(self, xArg):
-    self.params_memory.put_nonblocking("CarrotManCommand", "LANECHANGE " + xArg)
-    #if xArg == "RIGHT":
-    #  pass
-    #elif xArg == "LEFT":
-    #  pass
-
-  def _handle_record_command(self, xArg):
-    self.params_memory.put_nonblocking("CarrotManCommand", "RECORD " + xArg)
-
-  def _handle_display_command(self, xArg):
-    self.params_memory.put_nonblocking("CarrotManCommand", "DISPLAY " + xArg)
-    display_commands = {"MAP": "3", "FULLMAP": "4", "DEFAULT": "1", "ROAD": "2", "TOGGLE": "5"}
-    command = display_commands.get(xArg)    
-    if command:
-      pass
 
   def _handle_detect_command(self, xArg):
     elements = [e.strip() for e in xArg.split(',')]
@@ -1193,16 +1206,17 @@ class CarrotServ:
     # 1: startOSEPS: 구간단속시작
     # 2: inOSEPS: 구간단속중
     # 3: endOSEPS: 구간단속종료
-    if self.nSdiType in [0,1,2,3,4,7,8, 75, 76] and self.nSdiSpeedLimit > 0:
+    # 0:감속안함,1:과속카메라,2:+사고방지턱,3:+이동식카메라
+    if self.nSdiType in [0,1,2,3,4,7,8, 75, 76] and self.nSdiSpeedLimit > 0 and self.autoNaviSpeedCtrlMode > 0:
       self.xSpdLimit = self.nSdiSpeedLimit * self.autoNaviSpeedSafetyFactor
       self.xSpdDist = self.nSdiDist
       self.xSpdType = self.nSdiType
       if self.nSdiBlockType in [2,3]:
         self.xSpdDist = self.nSdiBlockDist
         self.xSpdType = 4
-      elif self.nSdiType == 7: #이동식카메라
+      elif self.nSdiType == 7 and self.autoNaviSpeedCtrlMode < 3: #이동식카메라
         self.xSpdLimit = self.xSpdDist = 0
-    elif (self.nSdiPlusType == 22 or self.nSdiType == 22) and self.roadcate > 1: # speed bump, roadcate:0,1: highway
+    elif (self.nSdiPlusType == 22 or self.nSdiType == 22) and self.roadcate > 1 and self.autoNaviSpeedCtrlMode >= 2: # speed bump, roadcate:0,1: highway
       self.xSpdLimit = self.autoNaviSpeedBumpSpeed
       self.xSpdDist = self.nSdiPlusDist if self.nSdiPlusType == 22 else self.nSdiDist
       self.xSpdType = 22
@@ -1212,22 +1226,30 @@ class CarrotServ:
       self.xSpdDist = 0
 
   def _update_gps(self, v_ego, sm):
-    if not sm.updated['carState'] or not sm.updated['carControl']:
+    llk = 'liveLocationKalman'
+    location = sm[llk]
+    #print(f"location = {sm.valid[llk]}, {sm.updated[llk]}, {sm.recv_frame[llk]}, {sm.recv_time[llk]}")
+    if not sm.updated['carState'] or not sm.updated['carControl'] or not sm.updated[llk]:
       return self.nPosAngle
     CS = sm['carState']
     CC = sm['carControl']
-    if len(CC.orientationNED) == 3:
-      bearing = math.degrees(CC.orientationNED[2])
+    self.gps_valid = (location.status == log.LiveLocationKalman.Status.valid) and location.positionGeodetic.valid
+
+    now = time.monotonic()
+
+    if sm.valid[llk]:
+      bearing = math.degrees(location.calibratedOrientationNED.value[2])
     else:
-      bearing = 0.0
-      return self.nPosAngle
+      bearing = self.nPosAngle
 
-    if not self.gps_valid:
-      if self.params_memory.get("LastGPSPosition"):
-        self.gps_valid = True
-
+    #print(f"gps_valid = {self.gps_valid}, bearing = {bearing:.1f}, pos = {location.positionGeodetic.value[0]:.6f}, {location.positionGeodetic.value[1]:.6f}")
     if self.gps_valid:    # liveLocationKalman일때는 정확하나, livePose일때는 불안정함.
       self.bearing_offset = 0.0
+      if self.active_carrot <= 1:
+        self.vpPosPointLatNavi = location.positionGeodetic.value[0]
+        self.vpPosPointLonNavi = location.positionGeodetic.value[1]
+        self.last_calculate_gps_time = sm.recv_time[llk]
+        self.gpsDelayTimeAdjust = 0.0
     else:
       if abs(self.bearing_measured - bearing) < 0.1:
           self.diff_angle_count += 1
@@ -1243,10 +1265,14 @@ class CarrotServ:
 
     bearing_calculated = (bearing + self.bearing_offset) % 360
 
-    now = time.monotonic()
     dt = now - self.last_calculate_gps_time
-    #self.last_calculate_gps_time = now
-    self.vpPosPointLat, self.vpPosPointLon = self.estimate_position(float(self.vpPosPointLatNavi), float(self.vpPosPointLonNavi), v_ego, bearing_calculated, dt + self.gpsDelayTimeAdjust)
+    #print(f"dt = {dt:.1f}, {self.vpPosPointLatNavi}, {self.vpPosPointLonNavi}")
+    if dt > 5.0:
+      self.vpPosPointLat, self.vpPosPointLon = 0.0, 0.0
+    elif dt == 0:
+      self.vpPosPointLat, self.vpPosPointLon = self.vpPosPointLatNavi, self.vpPosPointLonNavi
+    else:
+      self.vpPosPointLat, self.vpPosPointLon = self.estimate_position(float(self.vpPosPointLatNavi), float(self.vpPosPointLonNavi), v_ego, bearing_calculated, dt + self.gpsDelayTimeAdjust)
 
     #self.debugText = " {} {:.1f},{:.1f}={:.1f}+{:.1f}".format(self.active_sdi_count, self.nPosAngle, bearing_calculated, bearing, self.bearing_offset)
     #print("nPosAngle = {:.1f},{:.1f} = {:.1f}+{:.1f}".format(self.nPosAngle, bearing_calculated, bearing, self.bearing_offset))
@@ -1307,9 +1333,13 @@ class CarrotServ:
       #print(f"x_dist_to_turn: {x_dist_to_turn}, atc_start_dist: {atc_start_dist}")
       #print(f"atc_activate_count: {self.atc_activate_count}")
       if self.atc_activate_count == 2:
-        self.params_memory.put_nonblocking("CarrotManCommand", "DISPLAY MAP")
+        self.carrotCmdIndex += 100
+        self.carrotCmd = "DISPLAY";
+        self.carrotArg = "MAP";
       elif self.atc_activate_count == -50:
-        self.params_memory.put_nonblocking("CarrotManCommand", "DISPLAY ROAD")
+        self.carrotCmdIndex += 100
+        self.carrotCmd = "DISPLAY";
+        self.carrotArg = "ROAD";
 
     if check_steer:
       if 0 <= x_dist_to_turn < atc_start_dist and atc_type in ["fork left", "fork right"]:
@@ -1381,7 +1411,7 @@ class CarrotServ:
 
     sdi_speed = 250
     hda_active = False
-    ### 과속카메라, 사고방지턱
+    ### 과속카메라, 사고방지턱    
     if self.xSpdDist > 0 and self.active_carrot > 0:
       safe_sec = self.autoNaviSpeedBumpTime if self.xSpdType == 22 else self.autoNaviSpeedCtrlEnd
       decel = self.autoNaviSpeedDecelRate
@@ -1456,7 +1486,7 @@ class CarrotServ:
         source = "gas"
         desired_speed = self.gas_override_speed
 
-      self.debugText = ""#f"desired={desired_speed:.1f},{source},g={self.gas_override_speed:.0f}"
+      self.debugText = f"route={route_speed:.1f}"#f"desired={desired_speed:.1f},{source},g={self.gas_override_speed:.0f}"
 
     left_spd_sec = 100
     left_tbt_sec = 100
@@ -1494,7 +1524,6 @@ class CarrotServ:
 
 
     self._update_cmd()
-
     msg = messaging.new_message('carrotMan')
     msg.valid = True
     msg.carrotMan.activeCarrot = self.active_carrot
@@ -1586,10 +1615,10 @@ class CarrotServ:
       249: ("", "", 6)   #TG
     }
 
-    msg = messaging.new_message('navInstruction')
+    msg = messaging.new_message('navInstructionCarrot')
     msg.valid = True
     
-    instruction = msg.navInstruction
+    instruction = msg.navInstructionCarrot
     instruction.distanceRemaining = self.nGoPosDist
     instruction.timeRemaining = self.nGoPosTime
     instruction.speedLimit = self.nRoadLimitSpeed / 3.6 if self.nRoadLimitSpeed > 0 else 0
@@ -1626,7 +1655,7 @@ class CarrotServ:
 
     instruction.allManeuvers = maneuvers
 
-    pm.send('navInstruction', msg)
+    pm.send('navInstructionCarrot', msg)
 
   def _update_system_time(self, epoch_time_remote, timezone_remote):
     epoch_time = int(time.time())
@@ -1694,10 +1723,11 @@ class CarrotServ:
       #self._update_system_time(int(json.get("epochTime")), timezone_remote)
 
     if "carrotCmd" in json:
-      print(json.get("carrotCmd"), json.get("carrotArg"))
+      #print(json.get("carrotCmd"), json.get("carrotArg"))
       self.carrotCmdIndex = self.carrotIndex
       self.carrotCmd = json.get("carrotCmd")
       self.carrotArg = json.get("carrotArg")
+      print(f"carrotCmd = {self.carrotCmd}, {self.carrotArg}")
 
     self.active_count = 80
 
@@ -1717,7 +1747,13 @@ class CarrotServ:
           nRoadLimitSpeed = 30
       else:
         nRoadLimitSpeed = 30
-      self.nRoadLimitSpeed = nRoadLimitSpeed
+      #self.nRoadLimitSpeed = nRoadLimitSpeed
+      if self.nRoadLimitSpeed != nRoadLimitSpeed:
+        self.nRoadLimitSpeed_counter += 1
+        if self.nRoadLimitSpeed_counter > 5:
+          self.nRoadLimitSpeed = nRoadLimitSpeed
+      else:
+        self.nRoadLimitSpeed_counter = 0
 
       ### SDI
       self.nSdiType = int(json.get("nSdiType", -1))
@@ -1779,6 +1815,8 @@ def main():
   print("CarrotManager Started")
   #print("Carrot GitBranch = {}, {}".format(Params().get("GitBranch"), Params().get("GitCommitDate")))
   carrot_man = CarrotMan()
+
+  print(f"CarrotMan {carrot_man}")
   while True:
     try:
       carrot_man.carrot_man_thread()
