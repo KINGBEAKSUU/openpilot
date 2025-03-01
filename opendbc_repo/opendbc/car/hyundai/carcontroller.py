@@ -102,14 +102,14 @@ class CarController(CarControllerBase):
         self.params.STEER_DELTA_DOWN = steerDeltaDown
       self.soft_hold_mode = 1 if params.get_int("AutoCruiseControl") > 1 else 2
       self.hapticFeedbackWhenSpeedCamera = int(params.get_int("HapticFeedbackWhenSpeedCamera"))
-      
+
       self.button_spam1 = params.get_int("CruiseButtonTest1")
       self.button_spam2 = params.get_int("CruiseButtonTest2")
       self.button_spam3 = params.get_int("CruiseButtonTest3")
       self.speed_from_pcm = params.get_int("SpeedFromPCM")
 
       self.canfd_debug = params.get_int("CanfdDebug")
-      
+
 
     actuators = CC.actuators
     hud_control = CC.hudControl
@@ -124,12 +124,12 @@ class CarController(CarControllerBase):
                                                                        MAX_ANGLE_CONSECUTIVE_FRAMES)
 
     apply_angle = apply_std_steer_angle_limits(actuators.steeringAngleDeg, self.apply_angle_last, CS.out.vEgoRaw, self.params)
-    
+
     if abs(CS.out.steeringTorqueEps) >= 100.0: # carrot. fault avoidance, test code
       apply_angle = CS.out.steeringAngleDeg
 
     # prevent steering error. carrot
-    error_limit = 5.0  
+    error_limit = 5.0
     apply_angle = np.clip(apply_angle, CS.out.steeringAngleDeg - error_limit, CS.out.steeringAngleDeg + error_limit)
 
     #max_torque = 200
@@ -137,7 +137,7 @@ class CarController(CarControllerBase):
     #self.driver_applied_torque_reducer = max(30, min(150, self.driver_applied_torque_reducer + (-1 if abs(CS.out.steeringTorque) > 200 else 1)))
     #self.lkas_max_torque = int(round(max_torque * ego_weight * (self.driver_applied_torque_reducer / 150)))
     MAX_TORQUE = self.angle_max_torque
-    ego_weight = np.interp(CS.out.vEgo, [0, 5, 10, 20], [0.2, 0.3, 0.5, 1.0])
+    ego_weight = np.interp(CS.out.vEgo, [0, 5, 10, 20], [0.1, 0.3, 0.5, 0.7])
     if abs(CS.out.steeringTorque) > 700:
       self.driver_applied_torque_reducer -= 1
       if self.driver_applied_torque_reducer < 30:
@@ -186,7 +186,7 @@ class CarController(CarControllerBase):
          left_lane_warning = right_lane_warning = self.hapticFeedbackWhenSpeedCamera
       if self.speedCameraHapticEndFrame < self.frame:
         self.speedCameraHapticEndFrame = -1
-     
+
     if self.frame % self.blinking_frame == 0:
       self.blinking_signal = True
     elif self.frame % self.blinking_frame == self.blinking_frame / 2:
@@ -268,7 +268,7 @@ class CarController(CarControllerBase):
 
       if self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl and camera_scc:
         self.hyundai_jerk.make_jerk(self.CP, CS, accel, actuators, hud_control)
-        jerk = 3.0 if actuators.longControlState == LongCtrlState.pid else 1.0
+        jerk = 1.5 if actuators.longControlState == LongCtrlState.pid else 1.0
         use_fca = self.CP.flags & HyundaiFlags.USE_FCA.value
         can_sends.extend(hyundaican.create_acc_commands_scc(self.packer, CC.enabled, accel, self.hyundai_jerk, int(self.frame / 2),
                                                         hud_control, set_speed_in_units, stopping,
@@ -276,7 +276,7 @@ class CarController(CarControllerBase):
       elif self.frame % 2 == 0 and self.CP.openpilotLongitudinalControl:
         self.hyundai_jerk.make_jerk(self.CP, CS, accel, actuators, hud_control)
         # TODO: unclear if this is needed
-        jerk = 3.0 if actuators.longControlState == LongCtrlState.pid else 1.0
+        jerk = 1.5 if actuators.longControlState == LongCtrlState.pid else 1.0
         use_fca = self.CP.flags & HyundaiFlags.USE_FCA.value
         can_sends.extend(hyundaican.create_acc_commands(self.packer, CC.enabled, accel, self.hyundai_jerk, int(self.frame / 2),
                                                         hud_control, set_speed_in_units, stopping,
@@ -326,7 +326,7 @@ class CarController(CarControllerBase):
         send_button = self.make_spam_button(CC, CS)
         if send_button > 0:
           can_sends.append(hyundaican.create_clu11_button(self.packer, self.frame, CS.clu11, send_button, self.CP))
-      
+
     else:
 
       # carrot.. 왜 alt_cruise_button는 값이 리스트일까?, 그리고 왜? 빈데이터가 들어오는것일까?
@@ -350,7 +350,7 @@ class CarController(CarControllerBase):
               #can_sends.append(hyundaicanfd.create_acc_cancel(self.packer, self.CP, self.CAN, CS.cruise_info))
               if self.cruise_buttons_msg_values is not None:
                 can_sends.append(hyundaicanfd.alt_cruise_buttons(self.packer, self.CP, self.CAN, Buttons.CANCEL, self.cruise_buttons_msg_values, self.cruise_buttons_msg_cnt))
-            
+
             else:
               for _ in range(20):
                 can_sends.append(hyundaicanfd.create_buttons(self.packer, self.CP, self.CAN, CS.buttons_counter+1, Buttons.CANCEL))
@@ -426,7 +426,7 @@ class CarController(CarControllerBase):
 
     if send_button == 0:
       self.button_spamming_count = 0
-      self.prev_clu_speed = current      
+      self.prev_clu_speed = current
       return 0
 
     speed_diff = self.prev_clu_speed - current

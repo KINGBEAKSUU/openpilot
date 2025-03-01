@@ -60,7 +60,7 @@ class CarInterface(CarInterfaceBase):
           if 0x110 in fingerprint[CAN.CAM]: # 0x110(272): LKAS_ALT
             ret.flags |= HyundaiFlags.CANFD_HDA2_ALT_STEERING.value
             print("$$$CANFD ALT_STEERING1")
-          ## carrot_todo: sorento: 
+          ## carrot_todo: sorento:
           if 0x2a4 not in fingerprint[CAN.CAM]: # 0x2a4(676): CAM_0x2a4
             ret.flags |= HyundaiFlags.CANFD_HDA2_ALT_STEERING.value
             print("$$$CANFD ALT_STEERING2")
@@ -94,7 +94,7 @@ class CarInterface(CarInterfaceBase):
       else:
         ret.extFlags |= HyundaiExtFlags.CANFD_GEARS_NONE.value
         print("$$$CANFD GEARS_NONE")
-          
+
       if 0x161 in fingerprint[CAN.ECAN]: # 0x161(353)
         ret.extFlags |= HyundaiExtFlags.CANFD_161.value
         print("$$$CANFD 161")
@@ -172,12 +172,14 @@ class CarInterface(CarInterfaceBase):
     else:
       print(f"$$$OenpilotLongitudinalControl = {experimental_long}")
 
-    #ret.radarUnavailable = False  # TODO: canfd... carrot, hyundai cars have radar 
+    #ret.radarUnavailable = False  # TODO: canfd... carrot, hyundai cars have radar
 
     ret.pcmCruise = not ret.openpilotLongitudinalControl
     ret.startingState = False # True  # carrot
-    ret.vEgoStarting = 0.1
-    ret.startAccel = 1.0
+    ret.vEgoStarting = 0.05
+    ret.vEgoStopping = 0.05
+    ret.stoppingDecelRate = 0.05
+    ret.startAccel = 0.
     ret.longitudinalActuatorDelay = 0.5
 
     ret.longitudinalTuning.kpBP = [0.]
@@ -219,8 +221,8 @@ class CarInterface(CarInterfaceBase):
     elif ret.flags & HyundaiFlags.EV:
       ret.safetyConfigs[-1].safetyParam |= Panda.FLAG_HYUNDAI_EV_GAS
 
-   
-    
+
+
     #ret.radarTimeStep = 0.05 if params.get_int("EnableRadarTracks") > 0 else 0.02 # SCC(50Hz), radar tracks(20Hz)
 
     # Car specific configuration overrides
@@ -278,7 +280,7 @@ def enable_radar_tracks(CP, logcan, sendcan):
         ret = True
         break
     except Exception as e:
-      print(f"Failed : {e}") 
+      print(f"Failed : {e}")
   except Exception as e:
     print("##############  Failed to enable tracks" + str(e))
   print("################ END Try to enable radar tracks")
