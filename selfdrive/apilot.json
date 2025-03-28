@@ -2,6 +2,32 @@
   "apilot": 20220111,
   "params": [
     {
+      "group": "조향일반",
+      "name": "PathOffset",
+      "title": "차선치우침 좌우보정(0)",
+      "descr": "(-)좌측,(+)우측",
+      "egroup": "LAT",
+      "etitle": "PathOffset (0)",
+      "edescr": "(-)Left,(+)Right",
+      "min": -150,
+      "max": 150,
+      "default": 0,
+      "unit": 1
+    },
+    {
+      "group": "조향튜닝",
+      "name": "PathFactor",
+      "title": "_PathFactor(95)",
+      "descr": "커브 안쪽으로 돌면 낮게",
+      "egroup": "LAT",
+      "etitle": "_PathFactor(95)",
+      "edescr": "",
+      "min": 70,
+      "max": 150,
+      "default": 95,
+      "unit": 5
+    },
+    {
       "group": "조향튜닝",
       "name": "LateralTorqueCustom",
       "title": "_LateralTorqueCustom(0)",
@@ -328,6 +354,19 @@
     },
     {
       "group": "주행튜닝",
+      "name": "TrafficStopDistanceAdjust",
+      "title": "신호정지 위치조정(200)cm",
+      "descr": "높을수록 신호정지선에서 멀리 정지함.",
+      "egroup": "LONG",
+      "etitle": "TrafficStopDistance adjust (200)cm",
+      "edescr": "",
+      "min": -1000,
+      "max": 1000,
+      "default": 160,
+      "unit": 10
+    },
+    {
+      "group": "주행튜닝",
       "name": "StopDistanceCarrot",
       "title": "StopDistance(600)cm",
       "descr": "",
@@ -402,6 +441,19 @@
       "min": 0,
       "max": 200,
       "default": 20,
+      "unit": 5
+    },
+    {
+      "group": "주행튜닝",
+      "name": "VEgoStopping",
+      "title": "정지출발민감도(50)x0.01",
+      "descr": "값을 올리면 늦게 출발함, 너무낮추면 추돌위험이 있을수 있음.",
+      "egroup": "LONG",
+      "etitle": "VEgoStopping(50)x0.01",
+      "edescr": "",
+      "min": 1,
+      "max": 100,
+      "default": 50,
       "unit": 5
     },
     {

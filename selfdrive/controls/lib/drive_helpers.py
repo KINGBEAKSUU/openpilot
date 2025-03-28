@@ -4,6 +4,7 @@ from opendbc.car.vehicle_model import ACCELERATION_DUE_TO_GRAVITY
 from openpilot.common.realtime import DT_CTRL, DT_MDL
 from openpilot.selfdrive.modeld.constants import ModelConstants
 import numpy as np
+from openpilot.common.params import Params
 
 MIN_SPEED = 1.0
 CONTROL_N = 17
@@ -44,7 +45,7 @@ def get_lag_adjusted_curvature(CP, v_ego, psis, curvatures, steer_actuator_delay
 
   # This is the "desired rate of the setpoint" not an actual desired rate
   max_curvature_rate = MAX_LATERAL_JERK / (v_ego**2) # inexact calculation, check https://github.com/commaai/openpilot/pull/24755
-  safe_desired_curvature = np.clip(desired_curvature,
+  safe_desired_curvature = np.clip(desired_curvature * (Params().get_float("PathFactor") * 0.01),
                                 current_curvature_desired - max_curvature_rate * DT_MDL,
                                 current_curvature_desired + max_curvature_rate * DT_MDL)
   return safe_desired_curvature
@@ -58,7 +59,7 @@ def clip_curvature(v_ego, prev_curvature, new_curvature, roll):
   # This function respects ISO lateral jerk and acceleration limits + a max curvature
   v_ego = max(v_ego, MIN_SPEED)
   max_curvature_rate = MAX_LATERAL_JERK / (v_ego ** 2)  # inexact calculation, check https://github.com/commaai/openpilot/pull/24755
-  new_curvature = np.clip(new_curvature,
+  new_curvature = np.clip(new_curvature * (Params().get_float("PathFactor") * 0.01),
                           prev_curvature - max_curvature_rate * DT_CTRL,
                           prev_curvature + max_curvature_rate * DT_CTRL)
 

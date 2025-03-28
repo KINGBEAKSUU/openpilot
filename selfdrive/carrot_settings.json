@@ -16,6 +16,19 @@
     },
     {
       "group": "조향튜닝",
+      "name": "PathFactor",
+      "title": "_PathFactor(95)",
+      "descr": "커브 안쪽으로 돌면 낮게",
+      "egroup": "LAT",
+      "etitle": "_PathFactor(95)",
+      "edescr": "",
+      "min": 70,
+      "max": 150,
+      "default": 95,
+      "unit": 5
+    },
+    {
+      "group": "조향튜닝",
       "name": "LateralTorqueCustom",
       "title": "_LateralTorqueCustom(0)",
       "descr": "0:LiveTorque, 1:CustomTorque",
@@ -232,7 +245,7 @@
       "edescr": "",
       "min": -10000,
       "max": 10000,
-      "default": 1,
+      "default": 0,
       "unit": 10
     },
     {
@@ -245,7 +258,7 @@
       "edescr": "",
       "min": 0,
       "max": 30000,
-      "default": 0,
+      "default": 300,
       "unit": 1
     },
     {
@@ -258,7 +271,7 @@
       "edescr": "",
       "min": 0,
       "max": 50,
-      "default": 0,
+      "default": 6,
       "unit": 1
     },
     {
@@ -271,7 +284,7 @@
       "edescr": "",
       "min": 0,
       "max": 50,
-      "default": 0,
+      "default": 10,
       "unit": 1
     },
     {
@@ -419,6 +432,19 @@
     },
     {
       "group": "주행튜닝",
+      "name": "TrafficStopDistanceAdjust",
+      "title": "신호정지 위치조정(200)cm",
+      "descr": "높을수록 신호정지선에서 멀리 정지함.",
+      "egroup": "LONG",
+      "etitle": "TrafficStopDistance adjust (200)cm",
+      "edescr": "",
+      "min": -1000,
+      "max": 1000,
+      "default": 120,
+      "unit": 10
+    },
+    {
+      "group": "주행튜닝",
       "name": "StopDistanceCarrot",
       "title": "StopDistance(600)cm",
       "descr": "",
@@ -446,10 +472,10 @@
     {
       "group": "주행튜닝",
       "name": "JLeadFactor",
-      "title": "JerkLeadFactor(0)",
+      "title": "JerkLeadFactor(30)",
       "descr": "x0.01, 값이 크면 전방차량의 Jerk에 민감하게 반응",
       "egroup": "LONG",
-      "etitle": "JerkLeadFactor(0)",
+      "etitle": "JerkLeadFactor(30)",
       "edescr": "",
       "min": 0,
       "max": 100,

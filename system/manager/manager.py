@@ -24,6 +24,7 @@ def get_default_params():
     # kans
     ("LongPitch", "1"),
     ("EVTable", "1"),
+    ("TrafficStopDistanceAdjust", "120"),
     ("CompletedTrainingVersion", "0"),
     ("DisengageOnAccelerator", "0"),
     ("GsmMetered", "1"),
@@ -158,6 +159,7 @@ def get_default_params():
     ("HotspotOnBoot", "0"),
     ("CustomSR", "0"),
     ("SteerRatioRate", "100"),
+    ("PathFactor", "90"),
     ("NNFF", "0"),
     ("NNFFLite", "0"),
   ]

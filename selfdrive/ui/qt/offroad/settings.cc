@@ -687,7 +687,7 @@ CarrotPanel::CarrotPanel(QWidget* parent) : QWidget(parent) {
   latLongToggles->addItem(new CValueControl("LaneChangeNeedTorque", "LaneChange need torque", "1:need torque, 2:no lanechange", "../assets/offroad/icon_logic.png", 0, 2, 1));
   latLongToggles->addItem(new CValueControl("StoppingAccel", "LONG: StoppingStartAccelx0.01(-40)", "", "../assets/offroad/icon_logic.png", -100, 0, 5));
   latLongToggles->addItem(new CValueControl("StopDistanceCarrot", "LONG: StopDistance (600)cm", "", "../assets/offroad/icon_logic.png", 300, 1000, 10));
-  //latLongToggles->addItem(new CValueControl("TraffStopDistanceAdjust", "LONG: TrafficStopDistance adjust(150)cm", "", "../assets/offroad/icon_road.png", -1000, 1000, 10));
+  latLongToggles->addItem(new CValueControl("TrafficStopDistanceAdjust", "LONG: TrafficStopDistance adjust(200)cm", "", "../assets/offroad/icon_logic.png", -1000, 1000, 10));
   latLongToggles->addItem(new CValueControl("ComfortBrake", "LONG: Comfort Brake (240)", "x0.01", "../assets/offroad/icon_logic.png", 200, 300, 1));
   latLongToggles->addItem(new CValueControl("JerkLeadFactor", "LONG: Jerk Lead Factor (0)", "x0.01", "../assets/offroad/icon_logic.png", 0, 100, 5));
   latLongToggles->addItem(new CValueControl("CruiseMaxVals1", "ACCEL:0km/h(160)", "속도별 가속도를 지정합니다.(x0.01m/s^2)", "../assets/offroad/icon_logic.png", 1, 250, 5));
