@@ -18,7 +18,6 @@ NetworkLocation = structs.CarParams.NetworkLocation
 
 CAM_MSG = 0x320  # AEBCmd
                  # TODO: Is this always linked to camera presence?
-ACCELERATOR_POS_MSG = 0xbe
 
 NON_LINEAR_TORQUE_PARAMS = {
   CAR.CHEVROLET_BOLT_EUV: [2.6531724862969748, 1.0, 0.1919764879840985, 0.009054123646805178],
@@ -382,9 +381,6 @@ class CarInterface(CarInterfaceBase):
       CanBus.CAMERA] and not candidate in SDGM_CAR:
       ret.flags |= GMFlags.NO_CAMERA.value
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.NO_CAMERA.value
-
-    if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
-      ret.flags |= GMFlags.NO_ACCELERATOR_POS_MSG.value
 
     if 608 in fingerprint[CanBus.POWERTRAIN]:
       ret.flags |= GMFlags.SPEED_RELATED_MSG.value

@@ -105,10 +105,7 @@ class CarState(CarStateBase):
     else:
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL2"]["PRNDL2"], None))
 
-    if self.CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value:
-      ret.brake = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"] / 0xd0
-    else:
-      ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
+    ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
       ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
     else:
@@ -224,21 +221,14 @@ class CarState(CarStateBase):
       ("PSCMSteeringAngle", 100),
       ("ECMAcceleratorPos", 80),
     ]
-    if CP.flags & GMFlags.SPEED_RELATED_MSG.value:
-      pt_messages.append(("SPEED_RELATED", 20))
 
     if CP.enableBsm:
       pt_messages.append(("BCMBlindSpotMonitor", 10))
 
-    # Used to read back last counter sent to PT by camera
     if CP.networkLocation == NetworkLocation.fwdCamera:
       pt_messages += [
         ("ASCMLKASteeringCmd", 0),
       ]
-    # 이 부분은 위 조건아래 들어와야 하는 것이 아니므로 내어쓰기 해야 합니다.
-    if CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value:
-      pt_messages.remove(("ECMAcceleratorPos", 80))
-      pt_messages.append(("EBCMBrakePedalPosition", 100))
 
     if CP.transmissionType == TransmissionType.direct:
       pt_messages += [
