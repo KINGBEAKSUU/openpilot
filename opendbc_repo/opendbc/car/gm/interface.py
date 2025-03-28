@@ -95,7 +95,10 @@ class CarInterface(CarInterfaceBase):
     ret.brand = "gm"
     ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.gm)]
     ret.autoResumeSng = False
-    ret.enableBsm = 0x142 in fingerprint[CanBus.POWERTRAIN] or 0x142 in fingerprint[CanBus.CAMERA]
+    if candidate == CAR.CHEVROLET_VOLT:
+      ret.enableBsm = 0x1079a379 in fingerprint[CanBus.LOWSPEED] or 0x1079f43b in fingerprint[CanBus.LOWSPEED]
+    else:
+      ret.enableBsm = 0x142 in fingerprint[CanBus.POWERTRAIN] or 0x142 in fingerprint[CanBus.CAMERA]
     ret.startAccel = 1.0
 
     useEVTables = Params().get_bool("EVTable")

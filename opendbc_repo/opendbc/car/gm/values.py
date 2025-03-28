@@ -115,6 +115,7 @@ class GMPlatformConfig(PlatformConfig):
     Bus.pt: 'gm_global_a_powertrain_volt',
     Bus.radar: 'gm_global_a_object',
     Bus.chassis: 'gm_global_a_chassis',
+    Bus.lowspeed: 'gm_global_a_lowspeed',
   })
 
 
@@ -293,6 +294,7 @@ class CanBus:
   CHASSIS = 2
   LOOPBACK = 128
   DROPPED = 192
+  LOWSPEED = 3
 
 class GMFlags(IntFlag):
   PEDAL_LONG = 1

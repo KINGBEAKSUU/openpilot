@@ -49,6 +49,7 @@ class CarController(CarControllerBase):
     self.packer_pt = CANPacker(DBC[self.CP.carFingerprint][Bus.pt])
     self.packer_obj = CANPacker(DBC[self.CP.carFingerprint][Bus.radar])
     self.packer_ch = CANPacker(DBC[self.CP.carFingerprint][Bus.chassis])
+    self.packer_lowspeed = CANPacker(DBC[self.CP.carFingerprint][Bus.lowspeed])
 
     self.long_pitch = False
     self.use_ev_tables = False
