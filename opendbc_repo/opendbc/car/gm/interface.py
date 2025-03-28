@@ -382,8 +382,4 @@ class CarInterface(CarInterfaceBase):
       ret.flags |= GMFlags.NO_CAMERA.value
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.NO_CAMERA.value
 
-    if 608 in fingerprint[CanBus.POWERTRAIN]:
-      ret.flags |= GMFlags.SPEED_RELATED_MSG.value
-
-
     return ret

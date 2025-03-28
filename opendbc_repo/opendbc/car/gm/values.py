@@ -283,7 +283,6 @@ class GMFlags(IntFlag):
   PEDAL_LONG = 1
   CC_LONG = 2
   NO_CAMERA = 4
-  SPEED_RELATED_MSG = 16
 
 
 # In a Data Module, an identifier is a string used to recognize an object,
