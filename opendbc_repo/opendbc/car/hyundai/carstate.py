@@ -464,6 +464,9 @@ class CarState(CarStateBase):
       cruise_button = [Buttons.LFA_BUTTON]
     else:
       cruise_button = cp.vl_all[self.cruise_btns_msg_canfd]["CRUISE_BUTTONS"]
+
+    if cp.vl[self.cruise_btns_msg_canfd]["CRUISE_BUTTONS"] in [Buttons.RES_ACCEL, Buttons.SET_DECEL] and self.CP.openpilotLongitudinalControl:
+      self.main_enabled = True
     self.cruise_buttons.extend(cruise_button)
     # }} carrot
     
