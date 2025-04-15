@@ -311,7 +311,7 @@ class LongitudinalMpc:
         self.solver.set(i, 'x', self.x0)
 
   @staticmethod
-  def extrapolate_lead_old(x_lead, v_lead, a_lead, a_lead_tau):
+  def extrapolate_lead(x_lead, v_lead, a_lead, a_lead_tau):
     a_lead_traj = a_lead * np.exp(-a_lead_tau * (T_IDXS**2)/2.)
     v_lead_traj = np.clip(v_lead + np.cumsum(T_DIFFS * a_lead_traj), 0.0, 1e8)
     x_lead_traj = x_lead + np.cumsum(T_DIFFS * v_lead_traj)
@@ -319,7 +319,7 @@ class LongitudinalMpc:
     return lead_xv
   
   @staticmethod
-  def extrapolate_lead(x_lead, v_lead, a_lead, j_lead, a_lead_tau):
+  def extrapolate_lead_with_j(x_lead, v_lead, a_lead, j_lead, a_lead_tau):
     a_lead_traj = np.zeros_like(T_IDXS)
     a_lead_traj[0] = a_lead 
 
@@ -372,10 +372,15 @@ class LongitudinalMpc:
 
     j_lead *=  carrot.j_lead_factor
     if j_lead > 0 and a_lead < 0 and (v_lead - v_ego) > 0 and x_lead > 8.0:
-      a_lead += min(j_lead * 10.0, 0.5)
+      a_lead += min(j_lead, 0.5)
       a_lead = min(a_lead, 0.0)
+
+    if j_lead < 0 and a_lead < -0.5:
+      drop = min(abs(j_lead), 0.5)
+      a_lead -= drop
     
-    lead_xv = self.extrapolate_lead(x_lead, v_lead, a_lead, j_lead, a_lead_tau)
+    lead_xv = self.extrapolate_lead(x_lead, v_lead, a_lead, a_lead_tau)
+    #lead_xv = self.extrapolate_lead_with_j(x_lead, v_lead, a_lead, j_lead, a_lead_tau)
     return lead_xv, v_lead
 
   def set_accel_limits(self, min_a, max_a):
