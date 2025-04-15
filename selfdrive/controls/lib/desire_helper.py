@@ -289,12 +289,13 @@ class DesireHelper:
         self.lane_change_direction = LaneChangeDirection.left if \
           blinker_state == BLINKER_LEFT else LaneChangeDirection.right
 
-        torque_applied = carstate.steeringPressed and \
-                         ((carstate.steeringTorque > 0 and self.lane_change_direction == LaneChangeDirection.left) or
-                          (carstate.steeringTorque < 0 and self.lane_change_direction == LaneChangeDirection.right))
-
-        blindspot_detected = ((carstate.leftBlindspot and self.lane_change_direction == LaneChangeDirection.left) or
-                              (carstate.rightBlindspot and self.lane_change_direction == LaneChangeDirection.right))
+        dir_map = {
+            LaneChangeDirection.left:  (carstate.steeringTorque > 0, carstate.leftBlindspot),
+            LaneChangeDirection.right: (carstate.steeringTorque < 0, carstate.rightBlindspot),
+        }
+        torque_cond, blindspot_cond = dir_map.get(self.lane_change_direction, (False, False))
+        torque_applied = carstate.steeringPressed and torque_cond
+        blindspot_detected = blindspot_cond
 
         if blindspot_detected:
           self.blindspot_detected_counter = int(0.5 / DT_MDL)
