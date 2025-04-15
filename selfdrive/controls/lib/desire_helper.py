@@ -136,6 +136,7 @@ class DesireHelper:
 
     self.turn_desire_state = False
     self.desire_disable_count = 0
+    self.blindspot_detected_counter = 0
 
   def check_lane_state(self, modeldata):
     self.lane_width_left, self.distance_to_road_edge_left, self.distance_to_road_edge_left_far, lane_prob_left = calculate_lane_width(modeldata.laneLines[0], modeldata.laneLineProbs[0],
@@ -180,6 +181,8 @@ class DesireHelper:
     driver_desire_enabled = driver_blinker_state in [BLINKER_LEFT, BLINKER_RIGHT]
     if self.laneChangeNeedTorque == 2:
       driver_desire_enabled = False
+
+    self.blindspot_detected_counter = max(0, self.blindspot_detected_counter - 1)
 
     ##### check ATC's blinker state
     atc_type = carrotMan.atcType
@@ -293,10 +296,12 @@ class DesireHelper:
         blindspot_detected = ((carstate.leftBlindspot and self.lane_change_direction == LaneChangeDirection.left) or
                               (carstate.rightBlindspot and self.lane_change_direction == LaneChangeDirection.right))
 
+        if blindspot_detected:
+          self.blindspot_detected_counter = int(0.5 / DT_MDL)
         if not desire_enabled or below_lane_change_speed:
           self.lane_change_state = LaneChangeState.off
           self.lane_change_direction = LaneChangeDirection.none
-        elif not blindspot_detected:
+        elif self.blindspot_detected_counter == 0:
           if self.laneChangeNeedTorque > 0:
             if torque_applied and lane_available:
               self.lane_change_state = LaneChangeState.laneChangeStarting
