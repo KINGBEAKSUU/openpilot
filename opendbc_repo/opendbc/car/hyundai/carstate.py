@@ -399,8 +399,9 @@ class CarState(CarStateBase):
       if self.CP.flags & HyundaiFlags.CAMERA_SCC.value:
         self.MainMode_ACC = cp_cam.vl["SCC_CONTROL"]["MainMode_ACC"] == 1
         self.LFA_ICON = cp_cam.vl["LFAHDA_CLUSTER"]["LFA_ICON"]
-        if self.MainMode_ACC:
-          self.main_enabled = True
+        # 크루즈가 자동으로 켜져서 삭제함. 20250416
+        #if self.MainMode_ACC:
+        #  self.main_enabled = True
     else:
       cp_cruise_info = cp_cam if self.CP.flags & HyundaiFlags.CANFD_CAMERA_SCC else cp
       ret.cruiseState.enabled = cp_cruise_info.vl["SCC_CONTROL"]["ACCMode"] in (1, 2)
