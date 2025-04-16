@@ -1189,7 +1189,7 @@
       "group": "시작",
       "name": "EnableRadarTracks",
       "title": "레이더트랙,SCC레이더설정(0)",
-      "descr": "일부차량만 지원됨, -1: SCC항상사용 안함",
+      "descr": "일부차량만 지원됨, -1, 2: SCC항상사용 안함",
       "egroup": "START",
       "etitle": "Enable radar tracks(0)",
       "edescr": "",
