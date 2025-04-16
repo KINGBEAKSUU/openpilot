@@ -361,10 +361,15 @@ class RadarD:
 
     self.vision_tracks = [VisionTrack(DT_MDL), VisionTrack(DT_MDL)]
 
+    self.params = Params()
+    self.enable_radar_tracks = self.params.get_int("EnableRadarTracks")
+
 
   def update(self, sm: messaging.SubMaster, rr: car.RadarData):
     self.ready = sm.seen['modelV2']
     self.current_time = 1e-9*max(sm.logMonoTime.values())
+
+    self.enable_radar_tracks = self.params.get_int("EnableRadarTracks")
 
 
     leads_v3 = sm['modelV2'].leadsV3
@@ -465,8 +470,9 @@ class RadarD:
 
     ### 240807, SCC레이더가 옆차선의것을 많이 가져옴... 사용하지 말아야겠다...
     # 250415: scc radar정보가 있지만.. vision 미검출시, 오류
-    if track_scc is not None and track is None:
-      track = track_scc
+    if self.enable_radar_tracks >= 0:  
+      if track_scc is not None and track is None:
+        track = track_scc
     #  if self.vision_tracks[index].prob > .5:
     #    if self.vision_tracks[index].dRel < track.dRel - 10.0: #끼어드는 차량이 있는 경우 처리..  5-> 10M바꿔보자... 240427
     #      track = None
