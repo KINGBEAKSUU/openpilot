@@ -470,7 +470,7 @@ class RadarD:
 
     ### 240807, SCC레이더가 옆차선의것을 많이 가져옴... 사용하지 말아야겠다...
     # 250415: scc radar정보가 있지만.. vision 미검출시, 오류
-    if self.enable_radar_tracks >= 0:  
+    if self.enable_radar_tracks in [-1, 2]:  
       if track_scc is not None and track is None:
         track = track_scc
     #  if self.vision_tracks[index].prob > .5:
