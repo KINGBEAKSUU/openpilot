@@ -362,7 +362,9 @@ class VCruiseCarrot:
           ButtonType.decelCruise,
           ButtonType.gapAdjustCruise,
           ButtonType.cancel,
-          ButtonType.lfaButton
+          ButtonType.lfaButton,
+          ButtonType.paddleLeft,
+          ButtonType.paddleRight
         ]
       ):
         self.button_cnt = 1
@@ -384,6 +386,10 @@ class VCruiseCarrot:
           button_type = ButtonType.gapAdjustCruise
         elif not self.long_pressed and b.type == ButtonType.lfaButton:
           button_type = ButtonType.lfaButton
+        elif not self.long_pressed and b.type == ButtonType.paddleLeft:
+          button_type = ButtonType.paddleLeft
+        elif not self.long_pressed and b.type == ButtonType.paddleRight:
+          button_type = ButtonType.paddleRight
 
         self.long_pressed = False
         self.button_cnt = 0
@@ -406,6 +412,12 @@ class VCruiseCarrot:
         self.button_cnt %= self.button_long_time
       elif self.button_prev == ButtonType.lfaButton:
         button_type = ButtonType.lfaButton
+        self.button_cnt %= self.button_long_time
+      elif self.button_prev == ButtonType.paddleLeft:
+        button_type = ButtonType.paddleLeft
+        self.button_cnt %= self.button_long_time
+      elif self.button_prev == ButtonType.paddleRight:
+        button_type = ButtonType.paddleRight
         self.button_cnt %= self.button_long_time
 
     #button_kph = clip(button_kph, self._cruise_speed_min, self._cruise_speed_max)
