@@ -92,6 +92,7 @@ class CarState(CarStateBase):
     self.cruise_buttons_alt = False # for CASPER_EV
     self.MainMode_ACC = False
     self.LFA_ICON = 0
+    self.paddle_button_prev = False
 
   def update(self, can_parsers) -> structs.CarState:
     cp = can_parsers[Bus.pt]
@@ -459,10 +460,6 @@ class CarState(CarStateBase):
     #self.cruise_buttons.extend(cp.vl_all[self.cruise_btns_msg_canfd]["CRUISE_BUTTONS"])
     #carrot {{
 
-    if self.cruise_btns_msg_canfd == "CRUISE_BUTTONS":
-      if cp.vl["CRUISE_BUTTONS"]["RIGHT_PADDLE"] == 1 or cp.vl["CRUISE_BUTTONS"]["LEFT_PADDLE"] == 1:
-        self.main_enabled = False
-
     if cp.vl[self.cruise_btns_msg_canfd]["LFA_BTN"]:
       cruise_button = [Buttons.LFA_BUTTON]
     else:
@@ -503,8 +500,15 @@ class CarState(CarStateBase):
 
     self.update_speed_limit(ret)
 
+    paddle_button = False
+    if self.cruise_btns_msg_canfd == "CRUISE_BUTTONS":
+      paddle_button = cp.vl["CRUISE_BUTTONS"]["RIGHT_PADDLE"] == 1 or cp.vl["CRUISE_BUTTONS"]["LEFT_PADDLE"] == 1
+
     ret.buttonEvents = [*create_button_events(self.cruise_buttons[-1], prev_cruise_buttons, BUTTONS_DICT),
+                        *create_button_events(self.paddle_button_prev, paddle_button, {6: ButtonType.altButton2}),
                         *create_button_events(self.main_buttons[-1], prev_main_buttons, {1: ButtonType.mainCruise})]
+
+    self.paddle_button_prev = paddle_button
 
     return ret
 
