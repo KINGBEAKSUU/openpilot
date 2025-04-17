@@ -86,9 +86,7 @@ class LateralPlanner:
       self.useLaneLineSpeedApply = self.params.get_int("UseLaneLineSpeedApply")
       self.pathOffset = float(self.params.get_int("PathOffset")) * 0.01
       self.lateralPathCost = self.params.get_float("LatMpcPathCost") * 0.01
-      self.lateralPathCostTurn = self.params.get_float("LatMpcPathCostTurn") * 0.01
       self.lateralMotionCost = self.params.get_float("LatMpcMotionCost") * 0.01
-      self.lateralMotionCostTurn = self.params.get_float("LatMpcMotionCostTurn") * 0.01
       LATERAL_ACCEL_COST = self.params.get_float("LatMpcAccelCost") * 0.01
       LATERAL_JERK_COST = self.params.get_float("LatMpcJerkCost") * 0.01
       STEERING_RATE_COST = self.params.get_float("LatMpcSteeringRateCost")
@@ -136,13 +134,6 @@ class LateralPlanner:
 
     lateral_motion_cost = self.lateralMotionCost
     path_cost = self.lateralPathCost
-    if carrot.atc_active:
-      if carrot.atcType == "turn left" or abs(self.curve_speed) < 20: # and (md.orientationRate.z[-1] > 0.1 or md.meta.desireState[1] > 0.01):
-        lateral_motion_cost = self.lateralMotionCostTurn
-        path_cost = self.lateralPathCostTurn
-      elif carrot.atcType == "turn right" or abs(self.curve_speed) < 20: # and (md.orientationRate.z[-1] < -0.1 or md.meta.desireState[2] > 0.01):
-        lateral_motion_cost = self.lateralMotionCostTurn
-        path_cost = self.lateralPathCostTurn
 
     # lanelines calculation?
     self.LP.lanefull_mode = self.useLaneLineMode
