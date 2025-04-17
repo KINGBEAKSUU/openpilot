@@ -246,6 +246,7 @@ class VCruiseCarrot:
       self.useLaneLineSpeed = useLaneLineSpeed
       self.speed_from_pcm = self.params.get_int("SpeedFromPCM")
       self._cruise_speed_unit = self.params.get_int("CruiseSpeedUnit")
+      self._paddle_mode = self.params.get_int("PaddleMode")
       self._cruise_button_mode = self.params.get_int("CruiseButtonMode")
       self.cruiseOnDist = self.params.get_float("CruiseOnDist") * 0.01
 
@@ -537,7 +538,7 @@ class VCruiseCarrot:
         self._cruise_cancel_state = True
         self._lat_enabled = False
 
-    if button_type in [ButtonType.paddleLeft, ButtonType.paddleRight]:  # paddle button
+    if self._paddle_mode > 0 and button_type in [ButtonType.paddleLeft, ButtonType.paddleRight]:  # paddle button
       self._cruise_control(-2, -1, "Cruise off & Ready (paddle)")
 
     v_cruise_kph = self._update_cruise_state(CS, CC, v_cruise_kph)

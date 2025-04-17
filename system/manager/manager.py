@@ -90,6 +90,7 @@ def get_default_params():
     ("CruiseButtonTest2", "30"),
     ("CruiseButtonTest3", "1"),
     ("CruiseSpeedUnit", "10"),
+    ("PaddleMode", "0"),
     ("MyDrivingMode", "3"),
     ("MyDrivingModeAuto", "0"),
     ("TrafficLightDetectMode", "2"),
