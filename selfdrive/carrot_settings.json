@@ -621,7 +621,7 @@
       "etitle": "Cruise Speed Unit(10)",
       "edescr": "SET/DECEL up/down speed rate",
       "min": 1,
-      "max": 20,
+      "max": 100,
       "default": 10,
       "unit": 1
     },
