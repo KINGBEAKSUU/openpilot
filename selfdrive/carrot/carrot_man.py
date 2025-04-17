@@ -979,8 +979,6 @@ class CarrotServ:
     self.gas_override_speed = 0
     self.source_last = "none"
 
-    self.gpsDelayTimeAdjust = 2.0
-
     self.debugText = ""
 
     self.update_params()
@@ -1000,7 +998,6 @@ class CarrotServ:
     self.autoTurnMapChange = self.params.get_int("AutoTurnMapChange")
     self.autoTurnControl = self.params.get_int("AutoTurnControl")
     self.autoTurnControlTurnEnd = self.params.get_int("AutoTurnControlTurnEnd")
-    self.gpsDelayTimeAdjust = self.params.get_float("GpsDelayTimeAdjust") * 0.01
     #self.autoNaviSpeedDecelRate = float(self.params.get_int("AutoNaviSpeedDecelRate")) * 0.01
     self.autoCurveSpeedLowerLimit = int(self.params.get("AutoCurveSpeedLowerLimit"))
 
@@ -1295,7 +1292,7 @@ class CarrotServ:
     #print(f"bearing = {bearing:.1f}, posA=={self.nPosAngle:.1f}, posP=={self.nPosAnglePhone:.1f}, offset={self.bearing_offset:.1f}, {gps_updated_phone}, {gps_updated_navi}")
     gpsDelayTimeAdjust = 0.0
     if gps_updated_navi:
-      gpsDelayTimeAdjust = self.gpsDelayTimeAdjust
+      gpsDelayTimeAdjust = 1.0
 
     external_gps_update_timedout = not (gps_updated_phone or gps_updated_navi)
     #print(f"gps_valid = {self.gps_valid}, bearing = {bearing:.1f}, pos = {location.positionGeodetic.value[0]:.6f}, {location.positionGeodetic.value[1]:.6f}")
