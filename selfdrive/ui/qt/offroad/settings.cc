@@ -209,51 +209,21 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   //QObject::connect(init_btn, &QPushButton::clicked, this, &DevicePanel::reboot);
   QObject::connect(init_btn, &QPushButton::clicked, [&]() {
     if (ConfirmationDialog::confirm(tr("Git pull & Reboot?"), tr("Yes"), this)) {
+      QString cmd =
+        "bash -c 'cd /data/openpilot && "
+        "git fetch && "
+        "if git status -uno | grep -q \"Your branch is behind\"; then "
+        "git pull && reboot; "
+        "else "
+        "echo \"Already up to date.\"; "
+        "fi'";
 
-      QProcess process;
-      process.start("git", QStringList() << "fetch");
-      if (!process.waitForFinished()) {
-        ConfirmationDialog::alert(tr("Git fetch process timed out."), this);
-        return;
+      if (!QProcess::startDetached(cmd)) {
+        ConfirmationDialog::alert(tr("Failed to start update process."), this);
       }
-      if (process.exitStatus() != QProcess::NormalExit) {
-        ConfirmationDialog::alert(tr("Git fetch process crashed."), this);
-        return;
+      else {
+        ConfirmationDialog::alert(tr("Update process started. Device will reboot if updates are applied."), this);
       }
-      if (process.exitCode() != 0) {
-        ConfirmationDialog::alert(tr("Failed to fetch updates."), this);
-        return;
-      }
-
-      // Git status to check if there are new updates
-      process.start("git", QStringList() << "status" << "-uno");
-      process.waitForFinished();
-
-      QString output = process.readAllStandardOutput();
-      if (output.isEmpty()) {
-        ConfirmationDialog::alert(tr("Failed to read Git status."), this);
-        return;
-      }
-      if (!output.contains("Your branch is behind")) {
-        ConfirmationDialog::alert(tr("Already up to date."), this);
-        return;
-      }
-
-      // Git pull to apply updates
-      process.start("git", QStringList() << "pull");
-      process.waitForFinished();
-
-      if (process.exitCode() != 0) {
-        ConfirmationDialog::alert(tr("Git pull failed. Please check the logs."), this);
-        return;
-      }
-
-      ConfirmationDialog::alert(tr("Git pull successful. Rebooting..."), this);
-
-      //emit parent->closeSettings();
-      //DevicePanel::reboot();
-      params.putBool("DoReboot", true);
-
     }
     });
 
