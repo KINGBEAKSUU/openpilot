@@ -55,6 +55,8 @@ BO_ 69 GEAR: 24 XXX
  SG_ CHECKSUM : 0|16@1+ (1,0) [0|65535] "" XXX
  SG_ COUNTER : 16|8@1+ (1,0) [0|255] "" XXX
  SG_ GEAR : 44|3@1+ (1,0) [0|7] "" XXX
+ SG_ RIGHT_PADDLE : 57|1@0+ (1,0) [0|1] "" XXX
+ SG_ LEFT_PADDLE : 58|1@0+ (1,0) [0|1] "" XXX
  SG_ GEAR_STEP : 146|5@1+ (1,0) [0|31] "" XXX
  SG_ GEAR_STEP1 : 154|5@1+ (1,0) [0|31] "" XXX
 
