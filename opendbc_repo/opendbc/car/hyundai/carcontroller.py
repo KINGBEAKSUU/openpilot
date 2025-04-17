@@ -87,7 +87,7 @@ class CarController(CarControllerBase):
 
     self.apply_angle_last = 0
     self.lkas_max_torque = 0
-    self.angle_max_torque = 200
+    self.angle_max_torque = 240
 
     self.canfd_debug = 0
     self.MainMode_ACC_trigger = 0
@@ -105,9 +105,6 @@ class CarController(CarControllerBase):
       steerDeltaDown = params.get_int("CustomSteerDeltaDown")
       if steerMax > 0:
         self.params.STEER_MAX = steerMax
-        self.angle_max_torque = steerMax
-      else:
-        self.angle_max_torque = 200
       if steerDeltaUp > 0:
         self.params.STEER_DELTA_UP = steerDeltaUp
         #self.params.ANGLE_TORQUE_UP_RATE = steerDeltaUp
