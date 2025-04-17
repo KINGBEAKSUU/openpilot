@@ -82,7 +82,6 @@ class LatControlTorque(LatControl):
     self.latAccelFactor_default = self.torque_params.latAccelFactor
     self.latAccelOffset_default = self.torque_params.latAccelOffset
     self.friction_default = self.torque_params.friction
-    self.dampingFactor = 0
     self.error_last = 0.0
 
     # Twilsonco's Lateral Neural Network Feedforward
@@ -145,7 +144,6 @@ class LatControlTorque(LatControl):
     self.frame += 1
     if self.frame % 10 == 0:
       lateralTorqueCustom = self.params.get_int("LateralTorqueCustom")
-      self.dampingFactor = self.params.get_float("DampingFactor") * 0.01
       if lateralTorqueCustom > 0:
         self.torque_params.latAccelFactor = self.params.get_float("LateralTorqueAccelFactor")*0.001
         self.torque_params.friction = self.params.get_float("LateralTorqueFriction")*0.001
@@ -294,9 +292,6 @@ class LatControlTorque(LatControl):
                                       feedforward=ff,
                                       speed=CS.vEgo,
                                       freeze_integrator=freeze_integrator)
-
-      damping_torque = - self.dampingFactor * steeringRate
-      output_torque += damping_torque
 
       self.error_last = pid_log.error
       pid_log.active = True

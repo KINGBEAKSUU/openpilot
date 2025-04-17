@@ -237,7 +237,6 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"LatMpcAccelCost", PERSISTENT},
     {"LatMpcJerkCost", PERSISTENT},
     {"LatMpcSteeringRateCost", PERSISTENT},
-    {"DampingFactor", PERSISTENT},
     {"PathOffset", PERSISTENT},
     {"LateralTorqueCustom", PERSISTENT},
     {"LateralTorqueAccelFactor", PERSISTENT},

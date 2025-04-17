@@ -185,19 +185,6 @@
     },
     {
       "group": "조향튜닝",
-      "name": "DampingFactor",
-      "title": "조향댐핑팩터(25)",
-      "descr": "",
-      "egroup": "LAT",
-      "etitle": "DampingFactor(25)",
-      "edescr": "",
-      "min": -10000,
-      "max": 10000,
-      "default": 1,
-      "unit": 10
-    },
-    {
-      "group": "조향튜닝",
       "name": "CustomSteerMax",
       "title": "_CustomSteerMax(0)",
       "descr": "토크제어: 270,384,409",
