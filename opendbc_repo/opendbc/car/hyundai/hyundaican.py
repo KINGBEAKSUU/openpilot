@@ -128,9 +128,6 @@ def create_lfahda_mfc(packer, CC, blinking_signal):
 
 def create_acc_commands_scc(packer, enabled, accel, jerk, idx, hud_control, set_speed, stopping, long_override, use_fca, CS, soft_hold_mode):
   from opendbc.car.hyundai.carcontroller import HyundaiJerk
-  cruise_available = CS.out.cruiseState.available
-  if CS.paddle_button_prev > 0:
-    cruise_available = False
   soft_hold_active = CS.softHoldActive
   soft_hold_info = soft_hold_active > 1 and enabled
   #soft_hold_mode = 2 ## some cars can't enable while braking
