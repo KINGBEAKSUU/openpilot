@@ -305,6 +305,8 @@ struct CarState {
       gapAdjustCruise @11;
 
       lfaButton @12;
+      paddleLeft @13;
+      paddleRight @14;
     }
   }
 
