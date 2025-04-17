@@ -489,9 +489,6 @@ class VCruiseCarrot:
           #self.events.append(EventName.audioPrompt)
         self._v_cruise_kph_at_brake = 0
 
-      elif button_type in [ButtonType.paddleLeft, ButtonType.paddleRight]:  # paddle button
-        self._cruise_control(-2, -1, "Cruise off & Ready (paddle)")
-
       elif button_type == ButtonType.gapAdjustCruise:
         longitudinalPersonalityMax = self.params.get_int("LongitudinalPersonalityMax")
         if CS.pcmCruiseGap == 0:
@@ -527,6 +524,9 @@ class VCruiseCarrot:
       elif button_type == ButtonType.cancel:
         self._cruise_cancel_state = True
         self._lat_enabled = False
+
+    if button_type in [ButtonType.paddleLeft, ButtonType.paddleRight]:  # paddle button
+      self._cruise_control(-2, -1, "Cruise off & Ready (paddle)")
 
     v_cruise_kph = self._update_cruise_state(CS, CC, v_cruise_kph)
     return v_cruise_kph
