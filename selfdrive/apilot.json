@@ -120,19 +120,6 @@
     },
     {
       "group": "Á¶ÇâÆ©´×",
-      "name": "DampingFactor",
-      "title": "Á¶Çâ´ïÇÎÆÑÅÍ(25)",
-      "descr": "",
-      "egroup": "LAT",
-      "etitle": "DampingFactor(25)",
-      "edescr": "",
-      "min": -10000,
-      "max": 10000,
-      "default": 1,
-      "unit": 10
-    },
-    {
-      "group": "Á¶ÇâÆ©´×",
       "name": "CustomSteerMax",
       "title": "_CustomSteerMax(0)",
       "descr": "",
