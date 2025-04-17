@@ -132,9 +132,6 @@ class LateralPlanner:
     else:
       self.LP.lane_change_multiplier = 1.0
 
-    lateral_motion_cost = self.lateralMotionCost
-    path_cost = self.lateralPathCost
-
     # lanelines calculation?
     self.LP.lanefull_mode = self.useLaneLineMode
     self.LP.lane_width_left = md.meta.laneWidthLeft
@@ -148,7 +145,7 @@ class LateralPlanner:
 
     self.path_xyz[:, 1] += self.pathOffset
 
-    self.lat_mpc.set_weights(path_cost, lateral_motion_cost,
+    self.lat_mpc.set_weights(self.lateralPathCost, self.lateralMotionCost,
                              LATERAL_ACCEL_COST, LATERAL_JERK_COST,
                              STEERING_RATE_COST)
 
