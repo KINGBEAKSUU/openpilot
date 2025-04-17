@@ -344,84 +344,69 @@ class VCruiseCarrot:
     self.v_cruise_cluster_kph = self.v_cruise_kph
 
   def _prepare_buttons(self, CS, v_cruise_kph):
-    ## ButtonEvent process
     button_kph = v_cruise_kph
-    buttonEvents = CS.buttonEvents
-    button_speed_up_diff = 1
-    button_speed_dn_diff = self._cruise_speed_unit if self._cruise_button_mode in [1, 2, 3] else 1
-
     button_type = 0
-    #self.long_pressed = False
+    buttonEvents = CS.buttonEvents
+
+    SPEED_UP_UNIT = 1
+    SPEED_DOWN_UNIT = self._cruise_speed_unit if self._cruise_button_mode in [1, 2, 3] else 1
+    V_CRUISE_DELTA = 10
+    is_metric = self.is_metric
+
+    # long press tracking
     if self.button_cnt > 0:
       self.button_cnt += 1
-    for b in buttonEvents:
-      if (
-        b.pressed and
-        self.button_cnt==0 and
-        b.type in [
-          ButtonType.accelCruise,
-          ButtonType.decelCruise,
-          ButtonType.gapAdjustCruise,
-          ButtonType.cancel,
-          ButtonType.lfaButton,
-          ButtonType.paddleLeft,
-          ButtonType.paddleRight
-        ]
-      ):
-        self.button_cnt = 1
-        self.button_prev = b.type
-        if b.type in [ButtonType.accelCruise, ButtonType.decelCruise]:
-          self.button_long_time = 40
-        else:
-          self.button_long_time = 70
-      elif not b.pressed and self.button_cnt > 0:
-        if b.type == ButtonType.cancel:
-          button_type = ButtonType.cancel
-        elif not self.long_pressed and b.type == ButtonType.accelCruise:
-          button_kph += button_speed_up_diff if self.is_metric else button_speed_up_diff * CV.MPH_TO_KPH
-          button_type = ButtonType.accelCruise
-        elif not self.long_pressed and b.type == ButtonType.decelCruise:
-          button_kph -= button_speed_dn_diff if self.is_metric else button_speed_dn_diff * CV.MPH_TO_KPH
-          button_type = ButtonType.decelCruise
-        elif not self.long_pressed and b.type == ButtonType.gapAdjustCruise:
-          button_type = ButtonType.gapAdjustCruise
-        elif not self.long_pressed and b.type == ButtonType.lfaButton:
-          button_type = ButtonType.lfaButton
-        elif not self.long_pressed and b.type == ButtonType.paddleLeft:
-          button_type = ButtonType.paddleLeft
-        elif not self.long_pressed and b.type == ButtonType.paddleRight:
-          button_type = ButtonType.paddleRight
 
+    for b in buttonEvents:
+      bt = b.type
+
+      if bt in [ButtonType.paddleLeft, ButtonType.paddleRight] and b.pressed:
+        # Paddle: 즉시 이벤트 발생
+        button_type = bt
         self.long_pressed = False
         self.button_cnt = 0
+        continue
+
+      if b.pressed and self.button_cnt == 0 and bt in [
+        ButtonType.accelCruise, ButtonType.decelCruise,
+        ButtonType.gapAdjustCruise, ButtonType.cancel,
+        ButtonType.lfaButton
+      ]:
+        self.button_cnt = 1
+        self.button_prev = bt
+        self.button_long_time = 40 if bt in [ButtonType.accelCruise, ButtonType.decelCruise] else 70
+
+      elif not b.pressed and self.button_cnt > 0 and bt == self.button_prev:
+        if bt == ButtonType.cancel:
+          button_type = bt
+        elif not self.long_pressed:
+          if bt == ButtonType.accelCruise:
+            button_kph += SPEED_UP_UNIT if is_metric else SPEED_UP_UNIT * CV.MPH_TO_KPH
+          elif bt == ButtonType.decelCruise:
+            button_kph -= SPEED_DOWN_UNIT if is_metric else SPEED_DOWN_UNIT * CV.MPH_TO_KPH
+          button_type = bt
+        self.long_pressed = False
+        self.button_cnt = 0
+
+    # Long press 처리
     if self.button_cnt > self.button_long_time:
       self.long_pressed = True
-      V_CRUISE_DELTA = 10
-      if self.button_prev == ButtonType.cancel:
-        button_type = ButtonType.cancel
-        self.button_cnt = 0
-      elif self.button_prev == ButtonType.accelCruise:
-        button_kph += V_CRUISE_DELTA - button_kph % V_CRUISE_DELTA
-        button_type = ButtonType.accelCruise
-        self.button_cnt %= self.button_long_time
-      elif self.button_prev == ButtonType.decelCruise:
-        button_kph -= V_CRUISE_DELTA - -button_kph % V_CRUISE_DELTA
-        button_type = ButtonType.decelCruise
-        self.button_cnt %= self.button_long_time
-      elif self.button_prev == ButtonType.gapAdjustCruise:
-        button_type = ButtonType.gapAdjustCruise
-        self.button_cnt %= self.button_long_time
-      elif self.button_prev == ButtonType.lfaButton:
-        button_type = ButtonType.lfaButton
-        self.button_cnt %= self.button_long_time
-      elif self.button_prev == ButtonType.paddleLeft:
-        button_type = ButtonType.paddleLeft
-        self.button_cnt %= self.button_long_time
-      elif self.button_prev == ButtonType.paddleRight:
-        button_type = ButtonType.paddleRight
-        self.button_cnt %= self.button_long_time
+      bt = self.button_prev
 
-    #button_kph = clip(button_kph, self._cruise_speed_min, self._cruise_speed_max)
+      if bt == ButtonType.cancel:
+        button_type = bt
+        self.button_cnt = 0
+      elif bt in [ButtonType.accelCruise, ButtonType.decelCruise]:
+        mod = button_kph % V_CRUISE_DELTA
+        if bt == ButtonType.accelCruise:
+          button_kph += V_CRUISE_DELTA - mod
+        else:
+          button_kph -= V_CRUISE_DELTA - (-mod % V_CRUISE_DELTA)
+        button_type = bt
+        self.button_cnt %= self.button_long_time
+      elif bt in [ButtonType.gapAdjustCruise, ButtonType.lfaButton]:
+        button_type = bt
+        self.button_cnt %= self.button_long_time
 
     return button_kph, button_type, self.long_pressed
 
