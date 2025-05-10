@@ -49,6 +49,8 @@ int main(int argc, char *argv[]) {
 
   printf("##########main2\n");
   setenv("QT_QPA_PLATFORM", "xcb", 1);
+  setenv("QT_QPA_PLATFORM", "minimal", 1);
+
   setenv("LIBGL_ALWAYS_SOFTWARE", "1", 1);
   setenv("QT_LOGGING_RULES", "qt.qpa.*=true;qt.opengl.*=true", 1);
 
