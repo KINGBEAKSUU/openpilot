@@ -38,6 +38,7 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext& context, con
 
 int main(int argc, char *argv[]) {
 	printf("##########main\n");
+  setenv("QT_DEBUG_PLUGINS", "1", 1);
   Hardware::config_cpu_rendering(true);
 
   printf("##########main1\n");
