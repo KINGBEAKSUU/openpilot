@@ -8,13 +8,13 @@ enum {
   GM_BTN_UNPRESS = 1,
   GM_BTN_RESUME = 2,
   GM_BTN_SET = 3,
-  GM_BTN_MAIN = 5,
   GM_BTN_CANCEL = 6,
 };
 
 typedef enum {
   GM_ASCM,
-  GM_CAM
+  GM_CAM,
+  GM_SDGM
 } GmHardware;
 static GmHardware gm_hw = GM_ASCM;
 static bool gm_cam_long = false;
@@ -24,6 +24,7 @@ static bool gm_pedal_long = false;
 static bool gm_cc_long = false;
 static bool gm_skip_relay_check = false;
 static bool gm_force_ascm = false;
+static bool gm_sdgm = false;
 
 static void gm_rx_hook(const CANPacket_t *to_push) {
 
@@ -53,7 +54,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    if ((addr == 0x1E1) && (!gm_pcm_cruise || gm_cc_long)) {
+    if ((addr == 0x1E1) && (!gm_pcm_cruise || gm_cc_long) && (gm_hw != GM_SDGM)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // enter controls on falling edge of set or rising edge of resume (avoids fault)
@@ -112,7 +113,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       int gas_interceptor = GM_GET_INTERCEPTOR(to_push);
       gas_pressed = gas_interceptor > GM_GAS_INTERCEPTOR_THRESHOLD;
       gas_interceptor_prev = gas_interceptor;
-//      gm_pcm_cruise = false;
+      // gm_pcm_cruise = false;
     }
 
     bool stock_ecu_detected = (addr == 0x180);  // ASCMLKASteeringCmd
@@ -208,7 +209,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 static int gm_fwd_hook(int bus_num, int addr) {
   int bus_fwd = -1;
 
-  if (gm_hw == GM_CAM) {
+  if ((gm_hw == GM_CAM) || (gm_hw == GM_SDGM)) {
     if (bus_num == 0) {
       // block PSCMStatus; forwarded through openpilot to hide an alert from the camera
       bool is_pscm_msg = (addr == 0x184);
@@ -238,6 +239,15 @@ static safety_config gm_init(uint16_t param) {
   const uint16_t GM_PARAM_HW_ASCM_LONG = 16;
   const uint16_t GM_PARAM_NO_ACC = 32;
   const uint16_t GM_PARAM_PEDAL_LONG = 64;  // TODO: this can be inferred
+  const uint16_t GM_PARAM_HW_SDGM = 256;
+
+  if GET_FLAG(param, GM_PARAM_HW_CAM) {
+    gm_hw = GM_CAM;
+  } else if GET_FLAG(param, GM_PARAM_HW_SDGM) {
+    gm_hw = GM_SDGM;
+  } else {
+    gm_hw = GM_ASCM;
+  }
 
   static const LongitudinalLimits GM_ASCM_LONG_LIMITS = {
     .max_gas = 3072,
@@ -263,7 +273,9 @@ static safety_config gm_init(uint16_t param) {
   };
 
   static const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7},  // pt bus
-                                               {0x184, 2, 8}};  // camera bus
+                                               {0x315, 2, 5}, {0x184, 2, 8}};  // camera bus
+  static const CanMsg GM_SDGM_TX_MSGS[] = {{0x180, 0, 4}, {0x1E1, 0, 7},  // pt bus
+                                           {0x184, 2, 8}, {0x1E1, 2, 7}};  // add 0x1E1 to camera bus
 
 
   // TODO: do checksum and counter checks. Add correct timestep, 0.1s for now.
@@ -283,13 +295,14 @@ static safety_config gm_init(uint16_t param) {
                                           {0x1E1, 2, 7}, {0x184, 2, 8}};  // camera bus
 
 
-  gm_hw = GET_FLAG(param, GM_PARAM_HW_CAM) ? GM_CAM : GM_ASCM;
+  //gm_hw = GET_FLAG(param, GM_PARAM_HW_CAM) ? GM_CAM : GM_ASCM;
   gm_force_ascm = GET_FLAG(param, GM_PARAM_HW_ASCM_LONG);
+  gm_sdgm = GET_FLAG(param, GM_PARAM_HW_SDGM);
 
   if ((gm_hw == GM_ASCM) || gm_force_ascm) {
     gm_long_limits = &GM_ASCM_LONG_LIMITS;
-  } else if (gm_hw == GM_CAM) {
-    gm_long_limits = &GM_CAM_LONG_LIMITS;
+  } else if ((gm_hw == GM_CAM) || gm_sdgm) {
+      gm_long_limits = &GM_CAM_LONG_LIMITS;
   } else {
   }
 
@@ -299,7 +312,7 @@ static safety_config gm_init(uint16_t param) {
 #endif
   gm_pedal_long = GET_FLAG(param, GM_PARAM_PEDAL_LONG);
   gm_cc_long = GET_FLAG(param, GM_PARAM_CC_LONG);
-  gm_pcm_cruise = (gm_hw == GM_CAM) && !gm_cam_long && !gm_force_ascm && !gm_pedal_long;
+  gm_pcm_cruise = ((gm_hw == GM_CAM) && !gm_cam_long && !gm_force_ascm && !gm_pedal_long) || (gm_hw == GM_SDGM);
   gm_skip_relay_check = GET_FLAG(param, GM_PARAM_NO_CAMERA);
   gm_has_acc = !GET_FLAG(param, GM_PARAM_NO_ACC);
 
@@ -322,6 +335,8 @@ static safety_config gm_init(uint16_t param) {
       ret = BUILD_SAFETY_CFG(gm_rx_checks, GM_CAM_TX_MSGS);
       print("GM CAM\n");
     }
+  } else if (gm_hw == GM_SDGM) {
+    ret = BUILD_SAFETY_CFG(gm_rx_checks, GM_SDGM_TX_MSGS);
   }
   return ret;
 }
