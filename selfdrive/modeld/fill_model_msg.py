@@ -41,7 +41,21 @@ def fill_xyvat(builder, t, x, y, v, a, x_std=None, y_std=None, v_std=None, a_std
   if a_std is not None:
     builder.aStd = a_std.tolist()
 
-def fill_model_msg(msg: capnp._DynamicStructBuilder, net_output_data: dict[str, np.ndarray], publish_state: PublishState,
+def fill_xyz_poly(builder, degree, x, y, z):
+  xyz = np.stack([x, y, z], axis=1)
+  coeffs = np.polynomial.polynomial.polyfit(ModelConstants.T_IDXS, xyz, deg=degree)
+  builder.xCoefficients = coeffs[:, 0].tolist()
+  builder.yCoefficients = coeffs[:, 1].tolist()
+  builder.zCoefficients = coeffs[:, 2].tolist()
+
+def fill_lane_line_meta(builder, lane_lines, lane_line_probs):
+  builder.leftY = lane_lines[1].y[0]
+  builder.leftProb = lane_line_probs[1]
+  builder.rightY = lane_lines[2].y[0]
+  builder.rightProb = lane_line_probs[2]
+
+def fill_model_msg(msg: capnp._DynamicStructBuilder, net_output_data: dict[str, np.ndarray],  action: log.ModelDataV2.Action, 
+                   publish_state: PublishState,
                    vipc_frame_id: int, vipc_frame_id_extra: int, frame_id: int, frame_drop: float,
                    timestamp_eof: int, timestamp_llk: int, model_execution_time: float,
                    nav_enabled: bool, valid: bool) -> None:
@@ -71,8 +85,9 @@ def fill_model_msg(msg: capnp._DynamicStructBuilder, net_output_data: dict[str, 
   fill_xyzt(orientation_rate, ModelConstants.T_IDXS, *net_output_data['plan'][0,:,Plan.ORIENTATION_RATE].T)
 
   # lateral planning
-  action = modelV2.action
-  action.desiredCurvature = float(net_output_data['desired_curvature'][0,0])
+  modelV2.action = action
+  #action = modelV2.action
+  #action.desiredCurvature = float(net_output_data['desired_curvature'][0,0])
 
   # times at X_IDXS according to model plan
   PLAN_T_IDXS = [np.nan] * ModelConstants.IDX_N

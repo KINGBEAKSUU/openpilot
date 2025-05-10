@@ -35,6 +35,24 @@ MODEL_PATHS = {
 METADATA_PATH = Path(__file__).parent / 'models/supercombo_metadata.pkl'
 
 LAT_SMOOTH_SECONDS = 0.13
+LONG_SMOOTH_SECONDS = 0.3
+
+
+def get_action_from_model(model_output: dict[str, np.ndarray], prev_action: log.ModelDataV2.Action,
+                          lat_action_t: float, long_action_t: float, lat_smooth_seconds: float) -> log.ModelDataV2.Action:
+    plan = model_output['plan'][0]
+    desired_accel, should_stop = get_accel_from_plan(plan[:,Plan.VELOCITY][:,0],
+                                                     plan[:,Plan.ACCELERATION][:,0],
+                                                     ModelConstants.T_IDXS,
+                                                     action_t=long_action_t)
+    desired_accel = smooth_value(desired_accel, prev_action.desiredAcceleration, LONG_SMOOTH_SECONDS)
+
+    desired_curvature = model_output['desired_curvature'][0, 0]
+    desired_curvature = smooth_value(desired_curvature, prev_action.desiredCurvature, lat_smooth_seconds)
+
+    return log.ModelDataV2.Action(desiredCurvature=float(desired_curvature),
+                                  desiredAcceleration=float(desired_accel),
+                                  shouldStop=bool(should_stop))
 
 class FrameMeta:
   frame_id: int = 0
@@ -186,6 +204,8 @@ def main(demo=False):
   # TODO this needs more thought, use .2s extra for now to estimate other delays
   #steer_delay = params.get_float("SteerActuatorDelay") * 0.01 #CP.steerActuatorDelay + .2
   lat_delay = CP.steerActuatorDelay + .2 + LAT_SMOOTH_SECONDS
+  long_delay = CP.longitudinalActuatorDelay + LONG_SMOOTH_SECONDS
+  prev_action = log.ModelDataV2.Action()
 
   DH = DesireHelper()
 
@@ -308,8 +328,13 @@ def main(demo=False):
     if model_output is not None:
       modelv2_send = messaging.new_message('modelV2')
       posenet_send = messaging.new_message('cameraOdometry')
-      fill_model_msg(modelv2_send, model_output, publish_state, meta_main.frame_id, meta_extra.frame_id, frame_id, frame_drop_ratio,
-                      meta_main.timestamp_eof, timestamp_llk, model_execution_time, nav_enabled, live_calib_seen)
+
+      action = get_action_from_model(model_output, prev_action, lat_delay + DT_MDL, long_delay + DT_MDL, lat_smooth_seconds)
+      prev_action = action
+      fill_model_msg(modelv2_send, model_output, action, 
+                      publish_state, meta_main.frame_id, meta_extra.frame_id, frame_id, 
+                      frame_drop_ratio, meta_main.timestamp_eof, timestamp_llk, model_execution_time, nav_enabled, live_calib_seen)
+
 
       desire_state = modelv2_send.modelV2.meta.desireState
       l_lane_change_prob = desire_state[log.Desire.laneChangeLeft]
