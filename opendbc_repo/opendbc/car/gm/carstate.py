@@ -124,6 +124,11 @@ class CarState(CarStateBase):
       ret.regenBraking = pt_cp.vl["EBCMRegenPaddle"]["RegenPaddle"] != 0
       self.single_pedal_mode = ret.gearShifter == GearShifter.low or pt_cp.vl["EVDriveMode"]["SinglePedalModeActive"] == 1
 
+    ret.tpms.rr = pt_cp.vl["TPMS"]["PRESSURE_RR"]
+    ret.tpms.rl = pt_cp.vl["TPMS"]["PRESSURE_RL"]
+    ret.tpms.fl = pt_cp.vl["TPMS"]["PRESSURE_FL"]
+    ret.tpms.fr = pt_cp.vl["TPMS"]["PRESSURE_FR"]
+
     if self.CP.enableGasInterceptorDEPRECATED:
       ret.gas = (pt_cp.vl["GAS_SENSOR"]["INTERCEPTOR_GAS"] + pt_cp.vl["GAS_SENSOR"]["INTERCEPTOR_GAS2"]) / 2.
       threshold = 20 if self.CP.carFingerprint in CAMERA_ACC_CAR else 4
