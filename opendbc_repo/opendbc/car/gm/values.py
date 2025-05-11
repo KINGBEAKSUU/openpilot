@@ -269,7 +269,7 @@ class CAR(Platforms):
   )
   CADILLAC_CT6_CC = GMPlatformConfig(
     [GMCarDocs("Cadillac CT6 No ACC")],
-    GMCarSpecs(mass=2358, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
+    CarSpecs(mass=2358, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
   )
   CHEVROLET_TRAILBLAZER_CC = GMPlatformConfig(
     [GMCarDocs("Chevrolet Trailblazer NO ACC 2021-22")],
@@ -277,7 +277,7 @@ class CAR(Platforms):
   )
   CHEVROLET_MALIBU_CC = GMPlatformConfig(
     [GMCarDocs("Chevrolet Malibu No ACC")],
-    GMCarSpecs(mass=1450, wheelbase=2.8, steerRatio=15.8, centerToFrontRatio=0.4),
+    CarSpecs(mass=1450, wheelbase=2.8, steerRatio=15.8, centerToFrontRatio=0.4),
   )
   CADILLAC_XT5_CC = GMPlatformConfig(
     [GMCarDocs("Cadillac XT5 No ACC")],

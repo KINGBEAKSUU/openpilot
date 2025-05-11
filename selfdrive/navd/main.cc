@@ -38,7 +38,6 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext& context, con
 
 int main(int argc, char *argv[]) {
 	printf("##########main\n");
-  setenv("QT_DEBUG_PLUGINS", "1", 1);
   Hardware::config_cpu_rendering(true);
 
   printf("##########main1\n");
@@ -49,9 +48,6 @@ int main(int argc, char *argv[]) {
 
   printf("##########main2\n");
   setenv("QT_QPA_PLATFORM", "xcb", 1);
-  setenv("QT_QPA_PLATFORM", "minimal", 1);
-  setenv("QT_QPA_PLATFORM", "eglfs", 1);
-
   setenv("LIBGL_ALWAYS_SOFTWARE", "1", 1);
   setenv("QT_LOGGING_RULES", "qt.qpa.*=true;qt.opengl.*=true", 1);
 

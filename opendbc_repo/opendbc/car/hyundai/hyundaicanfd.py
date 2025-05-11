@@ -3,6 +3,7 @@ import numpy as np
 from opendbc.car import CanBusBase
 from opendbc.car.hyundai.values import HyundaiFlags, HyundaiExtFlags
 from openpilot.common.params import Params
+from opendbc.car.common.conversions import Conversions as CV
 
 def hyundai_crc8(data: bytes) -> int:
   poly = 0x2F
@@ -97,7 +98,7 @@ def create_steering_messages_camera_scc(frame, packer, CP, CAN, CC, lat_active, 
       values["LKA_ACTIVE"] = 1 if CS.lfa_info["STEER_REQ"] == 1 else 0
 
   if frame % 1000 < 40:
-    values["STEERING_COL_TORQUE"] += 120
+    values["STEERING_COL_TORQUE"] += 220
   ret.append(packer.make_can_msg("MDPS", CAN.CAM, values))
 
   if frame % 10 == 0:
@@ -416,10 +417,10 @@ def create_ccnc_messages(CP, packer, CAN, frame, CC, CS, hud_control, disp_angle
     if frame % 2 == 0:
       if CS.adrv_info_160 is not None:
         values = CS.adrv_info_160
-        values["NEW_SIGNAL_1"] = 0 # steer_temp관련없음, 계기판에러
-        values["SET_ME_9"] = 17 # steer_temp관련없음, 계기판에러
-        values["SET_ME_2"] = 0   #커멘트해도 steer_temp에러남, 2값은 콤마에서 찾은거니...
-        values["DATA102"] = 0  # steer_temp관련없음
+        #values["NEW_SIGNAL_1"] = 0 # steer_temp관련없음, 계기판에러
+        #values["SET_ME_9"] = 17 # steer_temp관련없음, 계기판에러
+        #values["SET_ME_2"] = 0   #커멘트해도 steer_temp에러남, 2값은 콤마에서 찾은거니...
+        #values["DATA102"] = 0  # steer_temp관련없음
         ret.append(packer.make_can_msg("ADRV_0x160", CAN.ECAN, values))
 
       if CS.cruise_buttons_msg is not None:
@@ -453,7 +454,8 @@ def create_ccnc_messages(CP, packer, CAN, frame, CC, CS, hud_control, disp_angle
 
           values["SETSPEED"] = 6 if hdp_active else 3 if main_enabled else 0
           values["SETSPEED_HUD"] = 5 if hdp_active else 2 if cruise_enabled else 1
-          values["vSetDis"] = int(hud_control.setSpeed * 3.6 + 0.5)
+          set_speed_in_units = hud_control.setSpeed * (CV.MS_TO_KPH if CS.is_metric else CV.MS_TO_MPH)
+          values["vSetDis"] = int(set_speed_in_units + 0.5)
 
           values["DISTANCE"] = 4 if hdp_active else hud_control.leadDistanceBars
           values["DISTANCE_LEAD"] = 2 if cruise_enabled and hud_control.leadVisible else 0
