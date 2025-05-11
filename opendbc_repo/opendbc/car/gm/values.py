@@ -263,6 +263,10 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Suburban 2016-20")],
     CHEVROLET_SUBURBAN.specs,
   )
+  GMC_YUKON_CC = GMPlatformConfig(
+    [GMCarDocs("GMC Yukon No ACC")],
+    CarSpecs(mass=2541, wheelbase=2.95, steerRatio=16.3, centerToFrontRatio=0.4),
+  )
   CADILLAC_CT6_CC = GMPlatformConfig(
     [GMCarDocs("Cadillac CT6 No ACC")],
     GMCarSpecs(mass=2358, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
