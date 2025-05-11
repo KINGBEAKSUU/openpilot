@@ -78,22 +78,22 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       handle_gm_wheel_buttons(to_push);
     }
 
-      // exit controls on cancel press
-      if (button == GM_BTN_CANCEL) {
-        controls_allowed = false;
-      }
-
-      cruise_button_prev = button;
-    }
-
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if ((addr == 0xBE) && (gm_hw == GM_ASCM)) {
-      brake_pressed = GET_BYTE(to_push, 1) >= 10U;
+    if (gm_hw == GM_ASCM) {
+      if (addr == 0xBE) {
+        brake_pressed = GET_BYTE(to_push, 1) >= 10U; //핑거190 브레이크답력
+      }
+      if (addr == 0xF1) {
+        brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거241 브레이크답력
+      }
     }
 
-    if ((addr == 0xC9) && (gm_hw == GM_CAM)) {
-      brake_pressed = GET_BIT(to_push, 40U);
+    if (addr == 0xC9) {
+      if ((gm_hw == GM_CAM) || (gm_hw == GM_SDGM)) {
+        brake_pressed = GET_BIT(to_push, 40U);  // Bolt,SDGM용 브레이크 체크(201핑거 40번째 비트)
+      }
+      acc_main_on = GET_BIT(to_push, 29U);  // (오토)크루즈 메인스위치 체크(201핑거 29번째 비트)
     }
 
     if (addr == 0x1C4) {
