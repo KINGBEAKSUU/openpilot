@@ -146,7 +146,6 @@ def get_default_params():
     ("SpeedFromPCM", "2"),
     ("SteerActuatorDelay", "0"),
     ("SteerSmoothSec", "13"),
-    ("SteerSmoothSecLane", "13"),
     ("SteerLagGain", "200"),
     ("MaxTimeOffroadMin", "60"),
     ("DisableDM", "0"),
