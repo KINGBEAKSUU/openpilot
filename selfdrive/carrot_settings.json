@@ -236,6 +236,32 @@
       "unit": 1
     },
     {
+      "group": "조향튜닝",
+      "name": "SteerSmoothSecLane",
+      "title": "조향필터링타임(레인모드)x0.01(13)",
+      "descr": "값이커지면 필터링을 더 많이 함.",
+      "egroup": "LAT",
+      "etitle": "SteerSmoothSecLanex0.01(13)",
+      "edescr": "",
+      "min": 1,
+      "max": 100,
+      "default": 13,
+      "unit": 1
+    },
+    {
+      "group": "조향튜닝",
+      "name": "SteerLagGain",
+      "title": "조향래그게인x0.01(200)",
+      "descr": "레인모드 시험용",
+      "egroup": "LAT",
+      "etitle": "SteerLagGainx0.01(200)",
+      "edescr": "",
+      "min": 1,
+      "max": 300,
+      "default": 200,
+      "unit": 10
+    },
+    {
       "group": "크루즈",
       "name": "CruiseOnDist",
       "title": "크루즈ON거리(0cm)",

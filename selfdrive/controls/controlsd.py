@@ -134,7 +134,9 @@ class Controls:
     self.lanefull_mode_enabled = (lat_plan.useLaneLines and self.params.get_int("UseLaneLineSpeedApply") > 0 and
                                   curve_speed_abs > self.params.get_int("UseLaneLineCurveSpeed"))
     lat_smooth_seconds = self.params.get_float("SteerSmoothSec") * 0.01
+    lat_smooth_seconds_lane = self.params.get_float("SteerSmoothSecLane") * 0.01
     steer_actuator_delay = self.params.get_float("SteerActuatorDelay") * 0.01
+    lag_gain = self.params.get_float("SteerLagGain") * 0.01
     if steer_actuator_delay == 0.0:
       steer_actuator_delay = self.sm['liveDelay'].lateralDelay 
 
@@ -154,9 +156,9 @@ class Controls:
           alpha = 1 - np.exp(-DT_CTRL / tau) if tau > 0 else 1
           return alpha * val + (1 - alpha) * prev_val
 
-        curvature = get_lag_adjusted_curvature(self.CP, CS.vEgo, lat_plan.psis, lat_plan.curvatures, steer_actuator_delay + lat_smooth_seconds)
+        curvature = get_lag_adjusted_curvature(self.CP, CS.vEgo, lat_plan.psis, lat_plan.curvatures, steer_actuator_delay + lat_smooth_seconds_lane, lat_plan.distances, lag_gain)
 
-        new_desired_curvature = smooth_value(curvature, self.desired_curvature, lat_smooth_seconds)
+        new_desired_curvature = smooth_value(curvature, self.desired_curvature, lat_smooth_seconds_lane)
     else:
       new_desired_curvature = model_v2.action.desiredCurvature
 
