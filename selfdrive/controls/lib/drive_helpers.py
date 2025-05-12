@@ -41,7 +41,7 @@ def get_lag_adjusted_curvature(CP, v_ego, psis, curvatures, steer_actuator_delay
   # psi to calculate a simple linearization of desired curvature
   current_curvature_desired = curvatures[0]
   psi = np.interp(delay, ModelConstants.T_IDXS[:CONTROL_N], psis)
-  distance = max(interp(delay, ModelConstants.T_IDXS[:CONTROL_N], distances), 0.001)
+  distance = max(np.interp(delay, ModelConstants.T_IDXS[:CONTROL_N], distances), 0.001)
   #average_curvature_desired = psi / (v_ego * delay)
   average_curvature_desired = psi / distance
   #desired_curvature = 2 * average_curvature_desired - current_curvature_desired
