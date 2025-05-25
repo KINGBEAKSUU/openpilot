@@ -6,7 +6,7 @@ from openpilot.common.conversions import Conversions as CV
 
 from opendbc.car import structs
 GearShifter = structs.CarState.GearShifter
-
+from opendbc.car.gm.values import CAR, A_CRUISE_CAR
 
 # WARNING: this value was determined based on the model's training distribution,
 #          model predictions above this speed can be unpredictable
@@ -470,7 +470,7 @@ class VCruiseCarrot:
         self._pause_auto_speed_up = False
         if self._soft_hold_active > 0:
           self._soft_hold_active = 0
-        elif self._cruise_ready or not CC.enabled:
+        elif self._cruise_ready or not CC.enabled or CS.cruiseState.standstill:
           pass
         elif self._v_cruise_kph_at_brake > 0 and v_cruise_kph < self._v_cruise_kph_at_brake:
           v_cruise_kph = self._v_cruise_kph_at_brake
@@ -629,7 +629,7 @@ class VCruiseCarrot:
         self._soft_hold_active = 2
         self._cruise_control(1, -1, "Cruise on (soft hold)")
       # GM: autoResume
-      elif self.params.get_bool("ActivateCruiseAfterBrake"):
+      elif self.params.get_bool("ActivateCruiseAfterBrake") and A_CRUISE_CAR:
         self.params.put_bool_nonblocking("ActivateCruiseAfterBrake", False)
         self._cruise_control(1, -1, "Cruise on (brake)")
       elif self.v_cruise_kph < self.v_ego_kph_set:

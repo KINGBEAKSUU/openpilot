@@ -129,10 +129,8 @@ class CarInterface(CarInterfaceBase):
       ret.longitudinalTuning.kpV = [1.0]
       ret.longitudinalTuning.kiV = [1.0]
       ret.stoppingDecelRate = 2.0  # reach brake quickly after enabling
-      ret.vEgoStopping = 0.25
-      ret.vEgoStarting = 0.2
       ret.stopAccel = -0.4
-      ret.startingState = True
+      ret.startingState = False
       ret.startAccel = 1.5
 
       if alpha_long:
@@ -175,40 +173,18 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalActuatorDelay = Params().get_float("LongActuatorDelay")*0.01 # 0.5  # large delay to initially start braking
 
     if candidate == CAR.CHEVROLET_VOLT:
-      ret.steerActuatorDelay = 0.45 if useEVTables else 0.3
       ret.longitudinalTuning.kpBP = [0.]
       ret.longitudinalTuning.kpV = [1.0]
       ret.longitudinalTuning.kiBP = [0.]
       ret.longitudinalTuning.kiV = [.35]
       ret.longitudinalTuning.kf = 1.0
       ret.stoppingDecelRate = 0.2 # brake_travel/s while trying to stop
-      ret.vEgoStopping = 0.15
-      ret.vEgoStarting = 0.1
+      ret.vEgoStopping = 0.2
+      ret.vEgoStarting = 0.15
       ret.stopAccel = -0.7
       ret.startingState = True
       ret.startAccel = 2.0
-
-      # softer long tune for ev table
-      if useEVTables:
-        ret.longitudinalTuning.kpBP = [0.]
-        ret.longitudinalTuning.kpV = [1.0]
-        ret.longitudinalTuning.kiBP = [0.]
-        ret.longitudinalTuning.kiV = [.35]
-        ret.longitudinalTuning.kf = 1.0
-        ret.stoppingDecelRate = 1.0 # brake_travel/s while trying to stop
-        ret.stopAccel = -0.7
-        ret.startAccel = 1.9
-
-      useTorque = Params().get_bool("LateralTorqueCustom")
-      if useTorque:
-        CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
-      else:
-        ret.lateralTuning.pid.kpBP = [0., 40.]
-        ret.lateralTuning.pid.kpV = [0., 0.17]
-        ret.lateralTuning.pid.kiBP = [0.]
-        ret.lateralTuning.pid.kiV = [0.]
-        ret.lateralTuning.pid.kf = 1.
-
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.GMC_ACADIA:
       ret.minEnableSpeed = -1.  # engage speed is decided by pcm
@@ -220,7 +196,7 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
-      ret.steerActuatorDelay = 0.2
+      ret.minEnableSpeed = -1
       ret.longitudinalTuning.kpBP = [0.]
       ret.longitudinalTuning.kpV = [1.0]
       ret.longitudinalTuning.kiBP = [0.]
@@ -230,18 +206,13 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStopping = 0.5
       ret.vEgoStarting = 0.4
       ret.stopAccel = -0.4
-      ret.startingState = True
-      ret.startAccel = 1.9
-      useTorque = Params().get_bool("LateralTorqueCustom")
-      if useTorque:
-        CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
-      else:
-        ret.lateralTuning.pid.kpBP = [0., 40.]
-        ret.lateralTuning.pid.kpV = [0., 0.17]
-        ret.lateralTuning.pid.kiBP = [0.]
-        ret.lateralTuning.pid.kiV = [0.]
-        ret.lateralTuning.pid.kf = 1.
 
+      useAutoCruise = Params().get_int("AutoCruiseControl")
+      if useAutoCruise == 1:
+        ret.startingState = True
+        ret.startAccel = 1.9
+
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
     elif candidate == CAR.BUICK_LACROSSE:
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -283,7 +254,6 @@ class CarInterface(CarInterfaceBase):
 
     elif candidate in (CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_EQUINOX_CC):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
-      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
       ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
       ret.stopAccel = -0.7
@@ -293,11 +263,6 @@ class CarInterface(CarInterfaceBase):
     elif candidate in (CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAILBLAZER_CC):
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
-      ret.stoppingDecelRate = 1.0
-      ret.minEnableSpeed = -1.
-      ret.stopAccel = -0.7
-      ret.startingState = True
-      ret.startAccel = 1.9
 
     elif candidate in (CAR.CHEVROLET_SUBURBAN, CAR.CHEVROLET_SUBURBAN_CC):
       ret.steerActuatorDelay = 0.075
@@ -313,10 +278,23 @@ class CarInterface(CarInterfaceBase):
       ret.minSteerSpeed = 30 * CV.MPH_TO_MS
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
     elif candidate == CAR.CADILLAC_CT6_2019:
-      ret.steerActuatorDelay = 0.2
-      ret.minEnableSpeed = -1.  # engage speed is decided by pcm
+      ret.minEnableSpeed = -1
+      ret.longitudinalTuning.kpBP = [0.]
+      ret.longitudinalTuning.kpV = [1.0]
+      ret.longitudinalTuning.kiBP = [0.]
+      ret.longitudinalTuning.kiV = [.1]
+      ret.longitudinalTuning.kf = 1.0
+      ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
+      ret.vEgoStopping = 0.5
+      ret.vEgoStarting = 0.4
+      ret.stopAccel = -0.4
 
+      useAutoCruise = Params().get_int("AutoCruiseControl")
+      if useAutoCruise == 1:
+        ret.startingState = True
+        ret.startAccel = 1.9
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
     elif candidate == CAR.CHEVROLET_VOLT_2019:
       ret.steerActuatorDelay = 0.2
       ret.minEnableSpeed = -1.  # engage speed is decided by pcm

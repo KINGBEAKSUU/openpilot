@@ -78,10 +78,11 @@ class GMSafetyFlags(IntFlag):
   HW_CAM = 1
   HW_CAM_LONG = 2
   CC_LONG = 4
-  HW_ASCM_LONG = 8
-  NO_ACC = 16
-  PEDAL_LONG = 32  # TODO: This can be inferred
-  GAS_INTERCEPTOR = 64
+  NO_CAMERA = 8
+  HW_ASCM_LONG = 16
+  NO_ACC = 32
+  PEDAL_LONG = 64  # TODO: This can be inferred
+  GAS_INTERCEPTOR = 128
 
 @dataclass
 class GMCarDocs(CarDocs):
@@ -110,16 +111,12 @@ class GMPlatformConfig(PlatformConfig):
     Bus.chassis: 'gm_global_a_chassis',
   })
 
-
 @dataclass
 class GMASCMPlatformConfig(GMPlatformConfig):
-  # car_docs, specs, dbc_dict 는 부모에서 정의된 대로 유지
   def init(self):
     # ASCM is supported, but due to a janky install and hardware configuration, we are not showing in the car docs
     #self.car_docs = []
     pass
-
-
 
 @dataclass
 class GMSDGMPlatformConfig(GMPlatformConfig):
@@ -127,7 +124,6 @@ class GMSDGMPlatformConfig(GMPlatformConfig):
     # Don't show in docs until the harness is sold. See https://github.com/commaai/openpilot/issues/32471
     #self.car_docs = []
     pass
-
 
 
 class CAR(Platforms):
@@ -147,9 +143,9 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Malibu Premier 2017")],
     GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
-  CHEVROLET_MALIBU_2019 = GMCAMACCPlatformConfig(
+  CHEVROLET_MALIBU_2019 = GMPlatformConfig(
     [GMCarDocs("Chevrolet The New Malibu 2019")],
-    GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
+    GMCarSpecs(mass=1470, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
   GMC_ACADIA = GMASCMPlatformConfig(
     [GMCarDocs("GMC Acadia 2018", video_link="https://www.youtube.com/watch?v=0ZN6DdsBUZo")],
@@ -201,7 +197,7 @@ class CAR(Platforms):
     [GMCarDocs("Cadillac XT4 2023", "Driver Assist Package")],
     GMCarSpecs(mass=1660, wheelbase=2.78, steerRatio=14.4, centerToFrontRatio=0.4),
   )
-  CADILLAC_CT6_2019 = GMCAMACCPlatformConfig(
+  CADILLAC_CT6_2019 = GMPlatformConfig(
     [GMCarDocs("Cadillac CT6 2019", "Driver Assist Package")],
     GMCarSpecs(mass=2358, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
   ) 
@@ -284,6 +280,7 @@ class CruiseButtons:
 class AccState:
   OFF = 0
   ACTIVE = 1
+  STANDBY = 2
   FAULTED = 3
   STANDSTILL = 4
 
@@ -352,13 +349,14 @@ FW_QUERY_CONFIG = FwQueryConfig(
 )
 
 EV_CAR = {CAR.CHEVROLET_VOLT, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC}
+A_CRUISE_CAR = {CAR.CHEVROLET_VOLT, CAR.CADILLAC_CT6_2019}
 CC_ONLY_CAR = {CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_EQUINOX_CC, CAR.CHEVROLET_SUBURBAN_CC, CAR.GMC_YUKON_CC, CAR.CADILLAC_CT6_CC, CAR.CHEVROLET_TRAILBLAZER_CC, CAR.CADILLAC_XT5_CC, CAR.CHEVROLET_MALIBU_CC}
 CC_REGEN_PADDLE_CAR = {CAR.CHEVROLET_BOLT_CC}
 # We're integrated at the Safety Data Gateway Module on these cars
 SDGM_CAR = {CAR.CADILLAC_XT4, CAR.CHEVROLET_TRAVERSE, CAR.BUICK_BABYENCLAVE, CAR.CHEVROLET_VOLT_2019}
 
 # We're integrated at the camera with VOACC on these cars (instead of ASCM w/ OBD-II harness)
-CAMERA_ACC_CAR = {CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_SILVERADO, CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAX}
+CAMERA_ACC_CAR = {CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_SILVERADO, CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAX, CAR.CADILLAC_CT6_2019, CAR.CHEVROLET_MALIBU_2019}
 CAMERA_ACC_CAR.update(CC_ONLY_CAR)
 # Alt ASCMActiveCruiseControlStatus
 ALT_ACCS = {CAR.GMC_YUKON}

@@ -1,4 +1,4 @@
-#pragma once
+Ôªø#pragma once
 
 #include "safety_declarations.h"
 
@@ -21,7 +21,9 @@ static bool gm_pcm_cruise = false;
 static bool gm_has_acc = true;
 static bool gm_pedal_long = false;
 static bool gm_cc_long = false;
+static bool gm_skip_relay_check = false;
 static bool gm_force_ascm = false;
+//static bool brake_pressed_x = false;
 
 static void handle_gm_wheel_buttons(const CANPacket_t *to_push) {
   int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
@@ -73,21 +75,31 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM)) {  //CAM_ACCµµ 190∫Í∑π¿Ã≈©¥‰∑¬¿ª ¿˚øÎ«œ±‚ ¿ß«‘(¥‹,carstate.pyø°º≠ ∏ª∏Æ∫ŒøÕ ¿Ãƒı≥ÏΩ∫ø° «—¡§Ω√≈¥).
+    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM)) {  //CAM_ACCÎèÑ 190Î∏åÎ†àÏù¥ÌÅ¨ÎãµÎ†•ÏùÑ Ï†ÅÏö©ÌïòÍ∏∞ ÏúÑÌï®(Îã®,carstate.pyÏóêÏÑú ÎßêÎ¶¨Î∂ÄÏôÄ Ïù¥ÏøºÎÖπÏä§Ïóê ÌïúÏ†ïÏãúÌÇ¥).
       if (addr == 0xBE) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 10U; //«Œ∞≈190 ∫Í∑π¿Ã≈©¥‰∑¬
+        if (gm_hw == GM_ASCM) { // ASCMÍ≥º CAM_ACC Íµ¨Î∂Ñ
+          brake_pressed = GET_BYTE(to_push, 1) >= 10U; //ÌïëÍ±∞190 ASCM Î∏åÎ†àÏù¥ÌÅ¨ÎãµÎ†•
+        
+        } else if (gm_hw == GM_CAM) {
+          brake_pressed = GET_BYTE(to_push, 1) >= 8U; //CAM_ACC Î∏åÎ†àÏù¥ÌÅ¨ÎãµÎ†•
+        }
       }
       if (addr == 0xF1) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 15U; //«Œ∞≈241 ∫Í∑π¿Ã≈©¥‰∑¬
+        brake_pressed = GET_BYTE(to_push, 1) >= 15U; //ÌïëÍ±∞241 Î∏åÎ†àÏù¥ÌÅ¨ÎãµÎ†•
       }
     }
 
     if (addr == 0xC9) {
       if (gm_hw == GM_CAM) {
-        brake_pressed = GET_BIT(to_push, 40U);  // CAM_ACCøÎ ∫Í∑π¿Ã≈©on/off √º≈©(201«Œ∞≈ 40π¯¬∞ ∫Ò∆Æ)
+        brake_pressed = GET_BIT(to_push, 40U);  // CAM_ACCÏö© Î∏åÎ†àÏù¥ÌÅ¨on/off Ï≤¥ÌÅ¨(201ÌïëÍ±∞ 40Î≤àÏß∏ ÎπÑÌä∏)
       }
-      acc_main_on = GET_BIT(to_push, 29U);  // ≈©∑Á¡Ó ∏ﬁ¿ŒΩ∫¿ßƒ° √º≈©(201«Œ∞≈ 29π¯¬∞ ∫Ò∆Æ)
+      acc_main_on = GET_BIT(to_push, 29U);  // ÌÅ¨Î£®Ï¶à Î©îÏù∏Ïä§ÏúÑÏπò Ï≤¥ÌÅ¨(201ÌïëÍ±∞ 29Î≤àÏß∏ ÎπÑÌä∏)
     }
+    //brake_pressed = brake_pressed_x;
+    //if (brake_pressed) {
+    //  print("[GM SAFETY] Brake pressed detected from addr 0x%X, byte1=%u\n", addr, GET_BYTE(to_push, 1));
+	//  print("@@auto cruise control enabled....\n")
+    //}
 
     if (addr == 0x1C4) {
       if (!enable_gas_interceptor) {
@@ -242,9 +254,10 @@ static int gm_fwd_hook(int bus_num, int addr) {
 static safety_config gm_init(uint16_t param) {
   const uint16_t GM_PARAM_HW_CAM = 1;
   const uint16_t GM_PARAM_CC_LONG = 4;
-  const uint16_t GM_PARAM_HW_ASCM_LONG = 8;
-  const uint16_t GM_PARAM_NO_ACC = 16;
-  const uint16_t GM_PARAM_PEDAL_LONG = 32;  // TODO: this can be inferred
+  const uint16_t GM_PARAM_NO_CAMERA = 8;
+  const uint16_t GM_PARAM_HW_ASCM_LONG = 16;
+  const uint16_t GM_PARAM_NO_ACC = 32;
+  const uint16_t GM_PARAM_PEDAL_LONG = 64;  // TODO: this can be inferred
 
   static const LongitudinalLimits GM_ASCM_LONG_LIMITS = {
     .max_gas = 3072,
@@ -302,14 +315,15 @@ static safety_config gm_init(uint16_t param) {
 
 #ifdef ALLOW_DEBUG
   const uint16_t GM_PARAM_HW_CAM_LONG = 2;
-  gm_cam_long = GET_FLAG(param, GM_PARAM_HW_CAM_LONG);
+  gm_cam_long = GET_FLAG(param, GM_PARAM_HW_CAM_LONG) && !gm_cc_long;
 #endif
   gm_pedal_long = GET_FLAG(param, GM_PARAM_PEDAL_LONG);
   gm_cc_long = GET_FLAG(param, GM_PARAM_CC_LONG);
   gm_pcm_cruise = (gm_hw == GM_CAM) && !gm_cam_long && !gm_force_ascm && !gm_pedal_long;
+  gm_skip_relay_check = GET_FLAG(param, GM_PARAM_NO_CAMERA);
   gm_has_acc = !GET_FLAG(param, GM_PARAM_NO_ACC);
 
-  const uint16_t GM_PARAM_PEDAL_INTERCEPTOR = 64;
+  const uint16_t GM_PARAM_PEDAL_INTERCEPTOR = 128;
   enable_gas_interceptor = GET_FLAG(param, GM_PARAM_PEDAL_INTERCEPTOR);
   if (enable_gas_interceptor) {
       print("GM Pedal Interceptor Enabled\n");

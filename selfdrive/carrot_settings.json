@@ -1044,19 +1044,6 @@
     },
     {
       "group": "조향일반",
-      "name": "AdjustLaneOffset",
-      "title": "레인모드: 차선조절옵셋 (0)cm",
-      "descr": "도로경계쪽/커브안쪽으로 보정합니다.",
-      "egroup": "LAT",
-      "etitle": "LaneLine: AdjustLaneOffset (0)cm",
-      "edescr": "to roadedge offset",
-      "min": 0,
-      "max": 500,
-      "default": 0,
-      "unit": 10
-    },
-    {
-      "group": "조향일반",
       "name": "LaneChangeNeedTorque",
       "title": "차선변경 조향토크 사용",
       "descr": "0: 즉시 차선변경, 1: 토크필요, -1:자동차선변경사용안함",

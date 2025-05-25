@@ -158,9 +158,9 @@ class LanePlanner:
       self.lane_width_right_filtered.update(self.lane_width_right)
       #self.lane_width_right_filtered.x = self.lane_width_right #바로적용
 
-    self.adjustLaneOffset = float(self.params.get_int("AdjustLaneOffset")) * 0.01
+    self.adjustLaneOffset = 0.0 #float(self.params.get_int("AdjustLaneOffset")) * 0.01
     self.adjustCurveOffset = self.adjustLaneOffset #float(self.params.get_int("AdjustCurveOffset")) * 0.01
-    ADJUST_OFFSET_LIMIT = 0.4 #max(self.adjustLaneOffset, self.adjustCurveOffset)
+    ADJUST_OFFSET_LIMIT = 0.0 #max(self.adjustLaneOffset, self.adjustCurveOffset)
     offset_curve = 0.0
     ## curve offset
     offset_curve = np.interp(abs(curve_speed), [50, 200], [self.adjustCurveOffset, 0.0]) * np.sign(curve_speed)
