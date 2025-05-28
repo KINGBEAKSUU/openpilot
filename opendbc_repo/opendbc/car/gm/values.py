@@ -145,7 +145,7 @@ class CAR(Platforms):
   )
   CHEVROLET_MALIBU_2019 = GMPlatformConfig(
     [GMCarDocs("Chevrolet The New Malibu 2019")],
-    GMCarSpecs(mass=1470, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
+    GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
   GMC_ACADIA = GMASCMPlatformConfig(
     [GMCarDocs("GMC Acadia 2018", video_link="https://www.youtube.com/watch?v=0ZN6DdsBUZo")],
