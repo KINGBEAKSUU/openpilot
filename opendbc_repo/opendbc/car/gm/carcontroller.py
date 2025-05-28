@@ -254,8 +254,7 @@ class CarController(CarControllerBase):
             resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
             at_full_stop = at_full_stop and not resume
 
-          if (actuators.longControlState == LongCtrlState.starting and
-              CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL):
+          if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
             acc_engaged = False
           else:
             acc_engaged = CC.enabled
