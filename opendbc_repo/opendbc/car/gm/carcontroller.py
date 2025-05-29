@@ -255,7 +255,7 @@ class CarController(CarControllerBase):
             at_full_stop = at_full_stop and not resume
           # 차량별로 조건 달리함.
           if self.CP.carFingerprint in A_CRUISE_CAR:
-            if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL
+            if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
               acc_engaged = False
             else:
               acc_engaged = CC.enabled
