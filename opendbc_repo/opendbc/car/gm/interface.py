@@ -283,6 +283,13 @@ class CarInterface(CarInterfaceBase):
     elif candidate in (CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAILBLAZER_CC):
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+      ret.stoppingDecelRate = 1.0
+      ret.minEnableSpeed = -1.
+      ret.stopAccel = -0.7
+      useAutoCruise = Params().get_int("AutoCruiseControl")
+      if useAutoCruise == 1:
+        ret.startingState = True
+        ret.startAccel = 1.9
 
     elif candidate in (CAR.CHEVROLET_SUBURBAN, CAR.CHEVROLET_SUBURBAN_CC):
       ret.steerActuatorDelay = 0.075
@@ -337,7 +344,13 @@ class CarInterface(CarInterfaceBase):
         ret.startingState = True
         ret.startAccel = 1.9
     elif candidate == CAR.CHEVROLET_TRAVERSE:
-      ret.steerActuatorDelay = 0.2
+      ret.stoppingDecelRate = 1.0
+      ret.minEnableSpeed = -1.
+      ret.stopAccel = -0.5
+      useAutoCruise = Params().get_int("AutoCruiseControl")
+      if useAutoCruise == 1:
+        ret.startingState = True
+        ret.startAccel = 1.9
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.GMC_YUKON:
