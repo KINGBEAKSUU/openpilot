@@ -123,7 +123,7 @@ class CarState(CarStateBase):
       ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
       if self.CP.carFingerprint in (CAR.CHEVROLET_MALIBU_2019, CAR.CHEVROLET_EQUINOX):
-        ret.brakePressed = ret.brake >= 10
+        ret.brakePressed = ret.brake >= 15
       else:
         ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
     else:
