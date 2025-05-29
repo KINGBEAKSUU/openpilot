@@ -253,17 +253,13 @@ class CarController(CarControllerBase):
           if self.CP.autoResumeSng:
             resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
             at_full_stop = at_full_stop and not resume
-          # 차량별로 조건 달리함.
-          #if self.CP.carFingerprint in A_CRUISE_CAR:
+
           if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
             if self.CP.carFingerprint in A_CRUISE_CAR:
               acc_engaged = False
             else:
               acc_engaged = CC.enabled
-          else: # 리쥼버튼 조건 삭제
-            #if CS.pcm_acc_status == AccState.STANDSTILL:
-            #  acc_engaged = False
-            #else:
+          else:
             acc_engaged = CC.enabled
 
           if actuators.longControlState in [LongCtrlState.stopping, LongCtrlState.starting]:

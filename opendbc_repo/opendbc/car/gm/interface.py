@@ -206,13 +206,10 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStopping = 0.5
       ret.vEgoStarting = 0.4
       ret.stopAccel = -0.4
-
-      useAutoCruise = Params().get_int("AutoCruiseControl")
-      if useAutoCruise == 1:
-        ret.startingState = True
-        ret.startAccel = 1.9
-
+      ret.startingState = True
+      ret.startAccel = 1.9
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
     elif candidate == CAR.BUICK_LACROSSE:
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -311,9 +308,11 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
       ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
-      ret.stopAccel = -0.7
-      ret.startingState = True
-      ret.startAccel = 1.9
+      ret.stopAccel = -0.5
+      useAutoCruise = Params().get_int("AutoCruiseControl")
+      if useAutoCruise == 1:
+        ret.startingState = True
+        ret.startAccel = 1.9
     elif candidate == CAR.CHEVROLET_TRAVERSE:
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)

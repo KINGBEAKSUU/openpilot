@@ -75,14 +75,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM)) {  //CAM_ACC도 190브레이크답력을 적용하기 위함(단,carstate.py에서 말리부와 이쿼녹스에 한정시킴).
+    if (gm_hw == GM_ASCM) {
       if (addr == 0xBE) {
-        if (gm_hw == GM_ASCM) { // ASCM과 CAM_ACC 구분
-          brake_pressed = GET_BYTE(to_push, 1) >= 10U; //핑거190 ASCM 브레이크답력
-        
-        } else if (gm_hw == GM_CAM) {
-          brake_pressed = GET_BYTE(to_push, 1) >= 15U; //CAM_ACC 브레이크답력
-        }
+        brake_pressed = GET_BYTE(to_push, 1) >= 10U; //핑거190 브레이크답력
       }
       if (addr == 0xF1) {
         brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거241 브레이크답력
@@ -95,11 +90,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       }
       acc_main_on = GET_BIT(to_push, 29U);  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
     }
-    //brake_pressed = brake_pressed_x;
-    //if (brake_pressed) {
-    //  print("[GM SAFETY] Brake pressed detected from addr 0x%X, byte1=%u\n", addr, GET_BYTE(to_push, 1));
-	//  print("@@auto cruise control enabled....\n")
-    //}
 
     if (addr == 0x1C4) {
       if (!enable_gas_interceptor) {
