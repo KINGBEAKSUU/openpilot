@@ -143,7 +143,7 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Malibu Premier 2017")],
     GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
-  CHEVROLET_MALIBU_2019 = GMPlatformConfig(
+  CHEVROLET_MALIBU_2019 = GMASCMPlatformConfig(
     [GMCarDocs("Chevrolet The New Malibu 2019")],
     GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
@@ -197,7 +197,7 @@ class CAR(Platforms):
     [GMCarDocs("Cadillac XT4 2023", "Driver Assist Package")],
     GMCarSpecs(mass=1660, wheelbase=2.78, steerRatio=14.4, centerToFrontRatio=0.4),
   )
-  CADILLAC_CT6_2019 = GMPlatformConfig(
+  CADILLAC_CT6_2019 = GMASCMPlatformConfig(
     [GMCarDocs("Cadillac CT6 2019", "Driver Assist Package")],
     GMCarSpecs(mass=2358, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
   ) 
@@ -349,7 +349,7 @@ FW_QUERY_CONFIG = FwQueryConfig(
 )
 
 EV_CAR = {CAR.CHEVROLET_VOLT, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC}
-A_CRUISE_CAR = {CAR.CHEVROLET_VOLT, CAR.CADILLAC_CT6_2019, CAR.CHEVROLET_TRAX}
+A_CRUISE_CAR = {CAR.CHEVROLET_VOLT, CAR.CADILLAC_CT6_2019, CAR.CHEVROLET_TRAX, CAR.CHEVROLET_MALIBU, CAR.CHEVROLET_MALIBU_2019}
 CC_ONLY_CAR = {CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_EQUINOX_CC, CAR.CHEVROLET_SUBURBAN_CC, CAR.GMC_YUKON_CC, CAR.CADILLAC_CT6_CC, CAR.CHEVROLET_TRAILBLAZER_CC, CAR.CADILLAC_XT5_CC, CAR.CHEVROLET_MALIBU_CC}
 CC_REGEN_PADDLE_CAR = {CAR.CHEVROLET_BOLT_CC}
 # We're integrated at the Safety Data Gateway Module on these cars
