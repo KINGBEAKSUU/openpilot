@@ -129,7 +129,7 @@ class CarState(CarStateBase):
       # that the brake is being intermittently pressed without user interaction.
       # To avoid a cruise fault we need to use a conservative brake position threshold
       # https://static.nhtsa.gov/odi/tsbs/2017/MC-10137629-9999.pdf
-      ret.brakePressed = ret.brake >= 10
+      ret.brakePressed = ret.brake >= 7
 
     # Regen braking is braking
     if self.CP.transmissionType == TransmissionType.direct:
