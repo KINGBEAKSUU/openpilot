@@ -86,9 +86,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     if (addr == 0xC9) {
       if (gm_hw == GM_CAM) {
-        brake_pressed = GET_BIT(to_push, 40U);  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
+        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
       }
-      acc_main_on = GET_BIT(to_push, 29U);  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
+      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U);  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
     }
 
     if (addr == 0x1C4) {
@@ -185,7 +185,13 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
         if(!controls_allowed) print("@@auto cruise control enabled....\n");
         controls_allowed = true;        
     }
-    int gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    int gas_regen = 0;
+    if (gm_hw == GM_ASCM) {
+      gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    }
+    else if (gm_hw == GM_CAM) {
+      gas_regen = ((GET_BYTE(to_send, 1) & 0x1U) << 13) + ((GET_BYTE(to_send, 2) & 0xFFU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    }
 
     bool violation = false;
     // Allow apply bit in pre-enabled and overriding states

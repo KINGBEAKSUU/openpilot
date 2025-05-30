@@ -112,6 +112,14 @@ class GMPlatformConfig(PlatformConfig):
   })
 
 @dataclass
+class GMCAMPlatformConfig(PlatformConfig):
+  dbc_dict: DbcDict = field(default_factory=lambda: {
+    Bus.pt: 'gm_global_a_powertrain_cam_acc',
+    Bus.radar: 'gm_global_a_object',
+    Bus.chassis: 'gm_global_a_chassis',
+  })
+
+@dataclass
 class GMASCMPlatformConfig(GMPlatformConfig):
   def init(self):
     # ASCM is supported, but due to a janky install and hardware configuration, we are not showing in the car docs
@@ -189,7 +197,7 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Equinox 2019-22")],
     GMCarSpecs(mass=1588, wheelbase=2.72, steerRatio=14.4, centerToFrontRatio=0.4),
   )
-  CHEVROLET_TRAILBLAZER = GMPlatformConfig(
+  CHEVROLET_TRAILBLAZER = GMCAMPlatformConfig(
     [GMCarDocs("Chevrolet Trailblazer 2021-22")],
     GMCarSpecs(mass=1345, wheelbase=2.64, steerRatio=16.8, centerToFrontRatio=0.4, tireStiffnessFactor=1.0),
   )
@@ -242,7 +250,7 @@ class CAR(Platforms):
     [GMCarDocs("Cadillac CT6 No ACC")],
     CarSpecs(mass=2358, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
   )
-  CHEVROLET_TRAILBLAZER_CC = GMPlatformConfig(
+  CHEVROLET_TRAILBLAZER_CC = GMCAMPlatformConfig(
     [GMCarDocs("Chevrolet Trailblazer NO ACC 2021-22")],
     CHEVROLET_TRAILBLAZER.specs,
   )
