@@ -16,7 +16,6 @@ from opendbc.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallb
 TransmissionType = structs.CarParams.TransmissionType
 NetworkLocation = structs.CarParams.NetworkLocation
 
-ACCELERATOR_POS_MSG = 0xbe
 TPMS_POS_MSG = 0x52B ## TPMS
 
 NON_LINEAR_TORQUE_PARAMS = {
@@ -29,7 +28,6 @@ NON_LINEAR_TORQUE_PARAMS = {
 
 NEURAL_PARAMS_PATH = os.path.join(BASEDIR, 'torque_data/neural_ff_weights.json')
 
-PEDAL_MSG = 0x201
 
 class CarInterface(CarInterfaceBase):
   CarState = CarState
@@ -104,10 +102,6 @@ class CarInterface(CarInterfaceBase):
 
     useEVTables = Params().get_bool("EVTable")
 
-    if PEDAL_MSG in fingerprint[0]:
-      ret.enableGasInterceptorDEPRECATED = True
-      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.GAS_INTERCEPTOR.value
-
     if candidate in EV_CAR:
       ret.transmissionType = TransmissionType.direct
     else:
@@ -155,10 +149,6 @@ class CarInterface(CarInterfaceBase):
       # Tuning
       ret.longitudinalTuning.kpV = [1.0]
       ret.longitudinalTuning.kiV = [0.3]
-
-      if ret.enableGasInterceptorDEPRECATED:
-        # Need to set ASCM long limits when using pedal interceptor, instead of camera ACC long limits
-        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.GAS_INTERCEPTOR.value
 
     # These cars have been put into dashcam only due to both a lack of users and test coverage.
     # These cars likely still work fine. Once a user confirms each car works and a test route is
@@ -254,15 +244,6 @@ class CarInterface(CarInterfaceBase):
     elif candidate in (CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_BOLT_CC):
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
-
-      if ret.enableGasInterceptorDEPRECATED:
-        # ACC Bolts use pedal for full longitudinal control, not just sng
-        ret.flags |= GMFlags.PEDAL_LONG.value
-        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.PEDAL_LONG.value
-        ret.longitudinalTuning.kiBP = [0.0, 3., 6., 35.]
-        ret.longitudinalTuning.kiV = [0.125, 0.175, 0.225, 0.33]
-        ret.longitudinalTuning.kf = 0.25
-        ret.stoppingDecelRate = 0.8
 
     elif candidate == CAR.CHEVROLET_SILVERADO:
       # On the Bolt, the ECM and camera independently check that you are either above 5 kph or at a stop
@@ -372,8 +353,6 @@ class CarInterface(CarInterfaceBase):
       ret.autoResumeSng = True
 
       if candidate in CC_ONLY_CAR:
-        ret.flags |= GMFlags.PEDAL_LONG.value
-        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.PEDAL_LONG.value
         # Note: Low speed, stop and go not tested. Should be fairly smooth on highway
         ret.longitudinalTuning.kpBP = [0., 3., 6., 35.]
         ret.longitudinalTuning.kpV = [0.08, 0.175, 0.225, 0.33]
@@ -388,11 +367,8 @@ class CarInterface(CarInterfaceBase):
         ret.vEgoStarting = 0.25
 
     elif candidate in CC_ONLY_CAR:
-      ret.flags |= GMFlags.CC_LONG.value
-      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.CC_LONG.value
       if alpha_long:
         ret.openpilotLongitudinalControl = True
-        ret.flags |= GMFlags.CC_LONG.value
       ret.radarUnavailable = True
       ret.alphaLongitudinalAvailable = True
       ret.minEnableSpeed = 24 * CV.MPH_TO_MS
@@ -405,9 +381,6 @@ class CarInterface(CarInterfaceBase):
 
     if candidate in CC_ONLY_CAR:
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.NO_ACC.value
-
-    if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
-      ret.flags |= GMFlags.NO_ACCELERATOR_POS_MSG.value
 
     # kans: TPMS
     if TPMS_POS_MSG in fingerprint[CanBus.POWERTRAIN]:
