@@ -1,5 +1,4 @@
 import copy
-import time # DBC signal checker
 from cereal import car
 from openpilot.common.params import Params #kans
 import numpy as np
@@ -60,18 +59,6 @@ class CarState(CarStateBase):
     pt_cp = can_parsers[Bus.pt]
     cam_cp = can_parsers[Bus.cam]
     loopback_cp = can_parsers[Bus.loopback]
-
-    """# DBC signal checker
-    if "TPMS" in pt_cp.vl:
-      now = time.monotonic()
-      if self.signal_last_time is not None:
-        period = now - self.signal_last_time
-        self.signal_periods.append(period)
-        print(f"[TPMS &etc] Period: {period * 1000:.1f} ms ({1.0 / period:.2f} Hz)")
-        if len(self.signal_periods) > 100:
-          self.signal_periods.pop(0)
-
-      self.tpms_last_time = now """
 
     ret = structs.CarState()
 
