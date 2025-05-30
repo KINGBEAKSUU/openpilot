@@ -77,8 +77,12 @@ class CarControllerParams:
 class GMSafetyFlags(IntFlag):
   HW_CAM = 1
   HW_CAM_LONG = 2
-  HW_ASCM_LONG = 4
-  NO_ACC = 8
+  CC_LONG = 4
+  NO_CAMERA = 8
+  HW_ASCM_LONG = 16
+  NO_ACC = 32
+  PEDAL_LONG = 64  # TODO: This can be inferred
+  GAS_INTERCEPTOR = 128
 
 @dataclass
 class GMCarDocs(CarDocs):
@@ -103,14 +107,6 @@ class GMCarSpecs(CarSpecs):
 class GMPlatformConfig(PlatformConfig):
   dbc_dict: DbcDict = field(default_factory=lambda: {
     Bus.pt: 'gm_global_a_powertrain_volt',
-    Bus.radar: 'gm_global_a_object',
-    Bus.chassis: 'gm_global_a_chassis',
-  })
-
-@dataclass
-class GMCAMPlatformConfig(PlatformConfig):
-  dbc_dict: DbcDict = field(default_factory=lambda: {
-    Bus.pt: 'gm_global_a_powertrain_cam_acc',
     Bus.radar: 'gm_global_a_object',
     Bus.chassis: 'gm_global_a_chassis',
   })
@@ -297,7 +293,10 @@ class CanBus:
   DROPPED = 192
 
 class GMFlags(IntFlag):
-  TPMS_MSG = 1
+  PEDAL_LONG = 1
+  CC_LONG = 2
+  NO_ACCELERATOR_POS_MSG = 4
+  TPMS_MSG = 8
 
 
 # In a Data Module, an identifier is a string used to recognize an object,
@@ -352,6 +351,7 @@ FW_QUERY_CONFIG = FwQueryConfig(
 EV_CAR = {CAR.CHEVROLET_VOLT, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC}
 A_CRUISE_CAR = {CAR.CHEVROLET_VOLT, CAR.CADILLAC_CT6_2019, CAR.CHEVROLET_MALIBU, CAR.CHEVROLET_TRAVERSE}
 CC_ONLY_CAR = {CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_EQUINOX_CC, CAR.CHEVROLET_SUBURBAN_CC, CAR.GMC_YUKON_CC, CAR.CADILLAC_CT6_CC, CAR.CHEVROLET_TRAILBLAZER_CC, CAR.CADILLAC_XT5_CC, CAR.CHEVROLET_MALIBU_CC}
+CC_REGEN_PADDLE_CAR = {CAR.CHEVROLET_BOLT_CC}
 # We're integrated at the Safety Data Gateway Module on these cars
 SDGM_CAR = {CAR.CADILLAC_XT4, CAR.CHEVROLET_TRAVERSE, CAR.BUICK_BABYENCLAVE, CAR.CHEVROLET_VOLT_2019}
 
