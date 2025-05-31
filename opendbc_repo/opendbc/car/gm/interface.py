@@ -116,8 +116,8 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kpBP = [0.]
     ret.longitudinalTuning.kiBP = [0.]
 
-    if candidate in (CAMERA_ACC_CAR | SDGM_CAR):
-      ret.alphaLongitudinalAvailable = candidate not in SDGM_CAR
+    if candidate in CAMERA_ACC_CAR:
+      ret.alphaLongitudinalAvailable = True
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
@@ -130,7 +130,7 @@ class CarInterface(CarInterfaceBase):
       ret.longitudinalTuning.kiV = [1.0]
       ret.stoppingDecelRate = 2.0  # reach brake quickly after enabling
       ret.stopAccel = -0.4
-      ret.startingState = False
+      #ret.startingState = False
       ret.startAccel = 1.5
 
       if alpha_long:
@@ -194,7 +194,7 @@ class CarInterface(CarInterfaceBase):
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
-    elif candidate in (CAR.CHEVROLET_MALIBU):
+    elif candidate in CAR.CHEVROLET_MALIBU:
       ret.openpilotLongitudinalControl = True
       ret.networkLocation = NetworkLocation.gateway
       ret.radarUnavailable = False # kans
@@ -290,10 +290,6 @@ class CarInterface(CarInterfaceBase):
       ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
       ret.stopAccel = -0.7
-      useAutoCruise = Params().get_int("AutoCruiseControl")
-      if useAutoCruise == 1:
-        ret.startingState = True
-        ret.startAccel = 1.9
 
     elif candidate in (CAR.CHEVROLET_SUBURBAN, CAR.CHEVROLET_SUBURBAN_CC):
       ret.steerActuatorDelay = 0.075
@@ -388,8 +384,6 @@ class CarInterface(CarInterfaceBase):
       else:  # Pedal used for SNG, ACC for longitudinal control otherwise
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
         ret.startingState = True
-        ret.vEgoStopping = 0.25
-        ret.vEgoStarting = 0.25
 
     elif candidate in CC_ONLY_CAR:
       ret.flags |= GMFlags.CC_LONG.value
