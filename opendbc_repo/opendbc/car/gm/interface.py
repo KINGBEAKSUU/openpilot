@@ -195,6 +195,10 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate in (CAR.CHEVROLET_MALIBU):
+      ret.openpilotLongitudinalControl = True
+      ret.networkLocation = NetworkLocation.gateway
+      ret.radarUnavailable = False # kans
+      ret.pcmCruise = False
       ret.minEnableSpeed = -1
       ret.longitudinalTuning.kpBP = [0.]
       ret.longitudinalTuning.kpV = [1.0]
