@@ -1,4 +1,4 @@
-import copy
+﻿import copy
 from cereal import car
 from openpilot.common.params import Params #kans
 import numpy as np
@@ -105,21 +105,20 @@ class CarState(CarStateBase):
     else:
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL2"]["PRNDL2"], None))
 
-    if self.CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value:
+    if self.CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value: # 190(0xBE)캔이 없으면 241(0xF1)을 사용하라.
       ret.brake = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"] / 0xd0
+      ret.brakePressed = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"] >= 15
     else:
       ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
+      ret.brakePressed = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"] >= 10
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
-      if self.CP.carFingerprint in (CAR.CHEVROLET_MALIBU_2019, CAR.CHEVROLET_EQUINOX):
-        ret.brakePressed = ret.brake >= 10
-      else:
-        ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
-    else:
+      ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
+    #else:
       # Some Volt 2016-17 have loose brake pedal push rod retainers which causes the ECM to believe
       # that the brake is being intermittently pressed without user interaction.
       # To avoid a cruise fault we need to use a conservative brake position threshold
       # https://static.nhtsa.gov/odi/tsbs/2017/MC-10137629-9999.pdf
-      ret.brakePressed = ret.brake >= 10
+      #ret.brakePressed = ret.brake >= 10
 
     # Regen braking is braking
     if self.CP.transmissionType == TransmissionType.direct:
