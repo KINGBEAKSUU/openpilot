@@ -191,9 +191,6 @@ class CarState(CarStateBase):
           # openpilot controls nonAdaptive when not pcmCruise
           ret.cruiseState.nonAdaptive = cam_cp.vl["ASCMActiveCruiseControlStatus"]["ACCCruiseState"] not in (2, 3)
 
-      if self.CP.carFingerprint not in (SDGM_CAR, CAR.CHEVROLET_EQUINOX):
-        ret.stockAeb = cam_cp.vl["AEBCmd"]["AEBCmdActive"] != 0
-
     if self.CP.carFingerprint in CC_ONLY_CAR:
       ret.accFaulted = False
       ret.cruiseState.speed = pt_cp.vl["ECMCruiseControl"]["CruiseSetSpeed"] * CV.KPH_TO_MS
@@ -261,11 +258,6 @@ class CarState(CarStateBase):
         pt_messages.append(("ECMCruiseControl", 10))
       else:
         cam_messages.append(("ASCMActiveCruiseControlStatus", 25))
-
-      if CP.carFingerprint not in (SDGM_CAR, CAR.CHEVROLET_EQUINOX):
-        cam_messages += [
-          ("AEBCmd", 10),
-        ]
 
     loopback_messages = [
       ("ASCMLKASteeringCmd", 0),

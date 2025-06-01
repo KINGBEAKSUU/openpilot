@@ -219,6 +219,19 @@ class CarInterface(CarInterfaceBase):
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
+    elif candidate in CAR.CHEVROLET_MALIBU_2019:
+      ret.minEnableSpeed = -1 * CV.MPH_TO_MS
+      ret.minSteerSpeed = 7 * CV.MPH_TO_MS
+      ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
+      ret.vEgoStopping = 0.5
+      ret.vEgoStarting = 0.4
+      ret.stopAccel = -0.4
+
+      ret.startingState = True
+      ret.startAccel = 1.9
+
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
     elif candidate == CAR.BUICK_LACROSSE:
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -309,7 +322,7 @@ class CarInterface(CarInterfaceBase):
 
     elif candidate == CAR.CHEVROLET_TRAX:
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
-      ret.stoppingDecelRate = 0.3
+      ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
       ret.stopAccel = -0.5
       ret.startingState = True
