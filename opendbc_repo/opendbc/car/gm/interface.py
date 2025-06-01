@@ -195,17 +195,7 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate in CAR.CHEVROLET_MALIBU:
-      ret.openpilotLongitudinalControl = True
-      ret.networkLocation = NetworkLocation.gateway
-      ret.radarUnavailable = False # kans
-      ret.pcmCruise = False
-      ret.minEnableSpeed = -1
-      ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
-      ret.vEgoStopping = 0.5
-      ret.vEgoStarting = 0.4
-      ret.stopAccel = -0.4
-      ret.startingState = True
-      ret.startAccel = 1.9
+      ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 	  
     elif candidate in CAR.CHEVROLET_MALIBU_CC:
