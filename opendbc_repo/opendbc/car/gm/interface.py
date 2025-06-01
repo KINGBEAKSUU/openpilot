@@ -160,9 +160,6 @@ class CarInterface(CarInterfaceBase):
         # Need to set ASCM long limits when using pedal interceptor, instead of camera ACC long limits
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.GAS_INTERCEPTOR.value
 
-      if candidate in CAR.CHEVROLET_MALIBU_2019:
-        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
-
     # These cars have been put into dashcam only due to both a lack of users and test coverage.
     # These cars likely still work fine. Once a user confirms each car works and a test route is
     # added to opendbc/car/tests/routes.py, we can remove it from this list.
