@@ -139,9 +139,9 @@ class CAR(Platforms):
     [GMCarDocs("Cadillac ATS Premium Performance 2018")],
     GMCarSpecs(mass=1601, wheelbase=2.78, steerRatio=15.3),
   )
-  CHEVROLET_MALIBU = GMASCMPlatformConfig(
+  CHEVROLET_MALIBU = GMPlatformConfig(
     [GMCarDocs("Chevrolet Malibu Premier 2017")],
-    GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.5),
+    GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
   CHEVROLET_MALIBU_2019 = GMPlatformConfig(
     [GMCarDocs("Chevrolet The New Malibu 2019")],

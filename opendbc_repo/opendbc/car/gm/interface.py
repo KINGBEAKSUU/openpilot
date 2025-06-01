@@ -280,6 +280,7 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
     elif candidate == CAR.CADILLAC_CT6_2019:
       ret.minEnableSpeed = -1
+      ret.startingState = True
       ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.5
       ret.vEgoStarting = 0.4
@@ -353,6 +354,8 @@ class CarInterface(CarInterfaceBase):
       else:  # Pedal used for SNG, ACC for longitudinal control otherwise
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
         ret.startingState = True
+        ret.vEgoStopping = 0.25
+        ret.vEgoStarting = 0.25
 
     elif candidate in CC_ONLY_CAR:
       ret.flags |= GMFlags.CC_LONG.value
