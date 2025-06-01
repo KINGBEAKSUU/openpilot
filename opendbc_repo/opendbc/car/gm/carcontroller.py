@@ -144,7 +144,7 @@ class CarController(CarControllerBase):
 
     if self.CP.openpilotLongitudinalControl:
 
-      if self.CP.carFingerprint in A_CRUISE_CAR:
+      if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
         button_counter = (CS.buttons_counter + 1) % 4
         # GM: Auto Cruise
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:
