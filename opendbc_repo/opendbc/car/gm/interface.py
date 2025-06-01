@@ -203,7 +203,7 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
-      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
+      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_ASCM_LONG.value
       ret.openpilotLongitudinalControl = True
       ret.networkLocation = NetworkLocation.gateway
       ret.radarUnavailable = False # kans
