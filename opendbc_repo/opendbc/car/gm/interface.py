@@ -160,6 +160,9 @@ class CarInterface(CarInterfaceBase):
         # Need to set ASCM long limits when using pedal interceptor, instead of camera ACC long limits
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.GAS_INTERCEPTOR.value
 
+      elif candidate in CAR.CHEVROLET_MALIBU_2019:
+        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_ASCM_LONG.value
+
     # These cars have been put into dashcam only due to both a lack of users and test coverage.
     # These cars likely still work fine. Once a user confirms each car works and a test route is
     # added to opendbc/car/tests/routes.py, we can remove it from this list.
@@ -203,12 +206,6 @@ class CarInterface(CarInterfaceBase):
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
-      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_ASCM_LONG.value
-      ret.openpilotLongitudinalControl = True
-      ret.networkLocation = NetworkLocation.gateway
-      ret.radarUnavailable = False # kans
-      ret.pcmCruise = False  # stock non-adaptive cruise control is kept off
-      # supports stop and go, but initial engage must (conservatively) be above 18mph
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
       ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
