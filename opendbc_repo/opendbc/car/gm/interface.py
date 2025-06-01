@@ -204,10 +204,8 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStopping = 0.5
       ret.vEgoStarting = 0.4
       ret.stopAccel = -0.4
-      useAutoCruise = Params().get_int("AutoCruiseControl")
-      if useAutoCruise == 1:
-        ret.startingState = True
-        ret.startAccel = 1.9
+      ret.startingState = True
+      ret.startAccel = 1.9
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 	  
     elif candidate in CAR.CHEVROLET_MALIBU_CC:
@@ -221,9 +219,8 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.4
       ret.stopAccel = -0.4
       useAutoCruise = Params().get_int("AutoCruiseControl")
-      if useAutoCruise == 1:
-        ret.startingState = True
-        ret.startAccel = 1.9
+      ret.startingState = True
+      ret.startAccel = 1.9
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
