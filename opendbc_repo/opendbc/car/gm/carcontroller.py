@@ -146,7 +146,7 @@ class CarController(CarControllerBase):
 
       if self.CP.carFingerprint in A_CRUISE_CAR:
         button_counter = (CS.buttons_counter + 1) % 4
-        # Auto Cruise
+        # GM: Auto Cruise
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04: # 25Hz(40ms 버튼주기)
