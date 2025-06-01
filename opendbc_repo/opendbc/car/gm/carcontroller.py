@@ -241,8 +241,6 @@ class CarController(CarControllerBase):
           if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
             if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
               acc_engaged = False
-            else:
-              acc_engaged = CC.enabled
           else:
             acc_engaged = CC.enabled
 
