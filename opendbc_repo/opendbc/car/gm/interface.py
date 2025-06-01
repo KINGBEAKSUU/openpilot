@@ -215,7 +215,19 @@ class CarInterface(CarInterfaceBase):
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
-    elif candidate in (CAR.CHEVROLET_MALIBU, CAR.CHEVROLET_MALIBU_2019, CAR.CHEVROLET_MALIBU_CC):
+    elif candidate in CAR.CHEVROLET_MALIBU:
+      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_ASCM_LONG.value
+      ret.openpilotLongitudinalControl = True
+      ret.networkLocation = NetworkLocation.gateway
+      ret.radarUnavailable = False # kans
+      ret.pcmCruise = False  # stock non-adaptive cruise control is kept off
+      # supports stop and go, but initial engage must (conservatively) be above 18mph
+      ret.minEnableSpeed = -1 * CV.MPH_TO_MS
+      ret.minSteerSpeed = 7 * CV.MPH_TO_MS
+      ret.steerActuatorDelay = 0.2
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+	  
+    elif candidate in CAR.CHEVROLET_MALIBU_CC:
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
