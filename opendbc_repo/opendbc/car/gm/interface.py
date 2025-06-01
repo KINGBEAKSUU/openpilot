@@ -291,11 +291,8 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStopping = 0.5
       ret.vEgoStarting = 0.4
       ret.stopAccel = -0.4
-
-      useAutoCruise = Params().get_int("AutoCruiseControl")
-      if useAutoCruise == 1:
-        ret.startingState = True
-        ret.startAccel = 1.9
+      ret.startingState = True
+      ret.startAccel = 1.9
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.CHEVROLET_VOLT_2019:
@@ -315,18 +312,14 @@ class CarInterface(CarInterfaceBase):
       ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
       ret.stopAccel = -0.5
-      useAutoCruise = Params().get_int("AutoCruiseControl")
-      if useAutoCruise == 1:
-        ret.startingState = True
-        ret.startAccel = 1.9
+      ret.startingState = True
+      ret.startAccel = 1.9
     elif candidate == CAR.CHEVROLET_TRAVERSE:
       ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
       ret.stopAccel = -0.5
-      useAutoCruise = Params().get_int("AutoCruiseControl")
-      if useAutoCruise == 1:
-        ret.startingState = True
-        ret.startAccel = 1.9
+      ret.startingState = True
+      ret.startAccel = 1.9
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.GMC_YUKON:
