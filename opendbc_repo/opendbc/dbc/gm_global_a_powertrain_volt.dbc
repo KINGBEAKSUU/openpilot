@@ -298,6 +298,12 @@ BO_ 1296 ASCM_510: 4 K124_ASCM
 BO_ 1300 VIN_Part1: 8 K20_ECM
  SG_ VINPart1 : 7|64@0+ (1,0) [0|0] ""  NEO
 
+BO_ 1323 TPMS: 4 K9_BCM
+ SG_ PRESSURE_FL : 31|8@0+ (0.8226,0) [0|50] "psi" XXX
+ SG_ PRESSURE_RR : 23|8@0+ (0.8226,0) [0|50] "psi" XXX
+ SG_ PRESSURE_RL : 15|8@0+ (0.8226,0) [0|50] "psi" XXX
+ SG_ PRESSURE_FR : 7|8@0+ (0.8226,0) [0|50] "psi" XXX
+
 BO_ 1912 PSCM_778: 8 K43_PSCM
 
 BO_ 1930 ASCM_78A: 7 K124_ASCM
@@ -350,7 +356,7 @@ VAL_ 481 DistanceButton 1 "Active" 0 "Inactive" ;
 VAL_ 481 LKAButton 1 "Active" 0 "Inactive" ;
 VAL_ 481 ACCButtons 6 "Cancel" 5 "Main" 3 "Set" 2 "Resume" 1 "None" ;
 VAL_ 481 DriveModeButton 1 "Active" 0 "Inactive" ;
-VAL_ 452 CruiseState 4 "Standstill" 3 "Faulted" 1 "Active" 0 "Off" ;
+VAL_ 452 CruiseState 4 "Standstill" 3 "Faulted" 2 "Standby" 1 "Active" 0 "Off" ;
 VAL_ 309 PRNDL 3 "R" 2 "D" 1 "N" 0 "P" ;
 VAL_ 309 ESPButton 1 "Active" 0 "Inactive" ;
 VAL_ 384 LKASteeringCmdActive 1 "Active" 0 "Inactive" ;

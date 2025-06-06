@@ -33,7 +33,8 @@ class CarController(CarControllerBase):
     self.apply_torque_last = 0
     self.apply_gas = 0
     self.apply_brake = 0
-    self.apply_speed = 0 # kans: button spam
+    # kans: button spam
+    self.apply_speed = 0
     self.frame = 0
     self.last_steer_frame = 0
     self.last_button_frame = 0
@@ -57,7 +58,7 @@ class CarController(CarControllerBase):
     self.accel_g = 0.0
     # GM: AutoResume
     self.activateCruise_after_brake = False
-    self.v_cruise_carrot = VCruiseCarrot(self.CP)
+    self.auto_CruiseControl = 0
 
   @staticmethod
   def calc_pedal_command(accel: float, long_active: bool, car_velocity) -> tuple[float, bool]:
@@ -86,6 +87,7 @@ class CarController(CarControllerBase):
       steerMax = params.get_int("CustomSteerMax")
       steerDeltaUp = params.get_int("CustomSteerDeltaUp")
       steerDeltaDown = params.get_int("CustomSteerDeltaDown")
+      self.auto_CruiseControl = Params().get_int("AutoCruiseControl")
       if steerMax > 0:
         self.params.STEER_MAX = steerMax
       if steerDeltaUp > 0:
@@ -142,9 +144,9 @@ class CarController(CarControllerBase):
 
     if self.CP.openpilotLongitudinalControl:
 
-      if self.CP.carFingerprint in (CAR.CHEVROLET_VOLT):
+      if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
         button_counter = (CS.buttons_counter + 1) % 4
-        # Auto Cruise
+        # GM: Auto Cruise
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04: # 25Hz(40ms 버튼주기)
@@ -162,8 +164,7 @@ class CarController(CarControllerBase):
             Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
             self.activateCruise_after_brake = True # 브레이크신호는 한번만 보내고 초기화
       else:
-        auto_cruise_control = self.v_cruise_carrot.autoCruiseControl
-        if (CS.out.activateCruise or auto_cruise_control > 0) and \
+        if (CS.out.activateCruise or self.auto_CruiseControl > 0) and \
            not CS.out.cruiseState.enabled:
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
             self.last_button_frame = self.frame
@@ -171,7 +172,7 @@ class CarController(CarControllerBase):
         
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
-      # GM: softHold
+        # GM: softHold
         stopping = actuators.longControlState == LongCtrlState.stopping or CS.out.softHoldActive > 0
 
         # Pitch compensated acceleration;
@@ -244,7 +245,10 @@ class CarController(CarControllerBase):
             at_full_stop = at_full_stop and not resume
 
           if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
-            acc_engaged = False
+            if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
+              acc_engaged = False
+            else:
+              acc_engaged = CC.enabled
           else:
             acc_engaged = CC.enabled
 
