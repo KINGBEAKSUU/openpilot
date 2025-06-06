@@ -138,11 +138,7 @@ class CarInterface(CarInterfaceBase):
       if alpha_long:
         ret.pcmCruise = False
         ret.openpilotLongitudinalControl = True
-        # kans:
-        if candidate in CAR.CHEVROLET_MALIBU_2019:
-          ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_ASCM_LONG.value
-        else:
-          ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
+        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
 
       if candidate in ALT_ACCS:
         ret.alphaLongitudinalAvailable = False
