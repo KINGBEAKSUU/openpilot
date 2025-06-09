@@ -119,7 +119,6 @@ class GMASCMPlatformConfig(GMPlatformConfig):
     Bus.radar: 'gm_global_a_object',
     Bus.chassis: 'gm_global_a_chassis',
   })
-s
 
 @dataclass
 class GMSDGMPlatformConfig(GMPlatformConfig):
