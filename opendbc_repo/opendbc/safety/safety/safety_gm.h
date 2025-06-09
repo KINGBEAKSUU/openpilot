@@ -180,9 +180,8 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
         if(!controls_allowed) print("@@auto cruise control enabled....\n");
         controls_allowed = true;        
     }
-    int gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
-    // int gas_regen = ((GET_BYTE(to_send, 1) & 0x1U) << 13) + ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
-    // 위 주석코드로 테스트 필요. 두번째 바이트부터 계산하되  세번째 바이트 계산은 0x7FU까지만 하는 식.
+    //int gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    int gas_regen = (((GET_BYTE(to_send, 1) & 0x7U) << 16) | (GET_BYTE(to_send, 2) << 8) | GET_BYTE(to_send, 3)) - 180272U;
 
     bool violation = false;
     // Allow apply bit in pre-enabled and overriding states
@@ -251,10 +250,13 @@ static safety_config gm_init(uint16_t param) {
   const uint16_t GM_PARAM_NO_ACC = 32;
   const uint16_t GM_PARAM_PEDAL_LONG = 64;  // TODO: this can be inferred
 
+  // common safety checks assume unscaled integer values
+  static const int GM_GAS_TO_CAN = 8;  // 1 / 0.125
+
   static const LongitudinalLimits GM_ASCM_LONG_LIMITS = {
-    .max_gas = 3072,
-    .min_gas = 1404,
-    .inactive_gas = 1404,
+    .max_gas = 1018 * GM_GAS_TO_CAN,
+    .min_gas = -650 * GM_GAS_TO_CAN,
+    .inactive_gas = -650 * GM_GAS_TO_CAN,
     .max_brake = 400,
   };
 
@@ -267,9 +269,9 @@ static safety_config gm_init(uint16_t param) {
 
 
   static const LongitudinalLimits GM_CAM_LONG_LIMITS = {
-    .max_gas = 3400,
-    .min_gas = 1514,
-    .inactive_gas = 1554,
+    .max_gas = 1346 * GM_GAS_TO_CAN,
+    .min_gas = -540 * GM_GAS_TO_CAN,
+    .inactive_gas = -500 * GM_GAS_TO_CAN,
     .max_brake = 400,
   };
 
