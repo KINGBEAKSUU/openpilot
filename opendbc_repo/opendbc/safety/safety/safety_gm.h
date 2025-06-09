@@ -198,21 +198,13 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   }
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
-  if (addr == 0x1E1) {
+  if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long || gm_cc_long)) {
     int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
-    bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
 
-    if (gm_force_ascm) {
-      // VOLT 등 ASCM 차량은 언제든지 버튼 허용
-      allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
-    } else if (!gm_pcm_cruise && gm_cam_long) {
-      // CAM 기반 OP 롱컨 차량
-      allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
-    } else if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {
-      if (gm_cc_long) { 
-        // 그외 차량은 이미 크루즈 중일때만 버튼 허용. 왜??
-        allowed_btn |= cruise_engaged_prev && ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
-      }
+    bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
+    // For standard CC, allow spamming of SET / RESUME
+    if (gm_cc_long) {
+      allowed_btn |= cruise_engaged_prev && ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     }
 
     if (!allowed_btn) {
@@ -256,10 +248,13 @@ static safety_config gm_init(uint16_t param) {
   const uint16_t GM_PARAM_NO_ACC = 32;
   const uint16_t GM_PARAM_PEDAL_LONG = 64;  // TODO: this can be inferred
 
+  // common safety checks assume unscaled integer values
+  static const int GM_GAS_TO_CAN = 8;  // 1 / 0.125
+
   static const LongitudinalLimits GM_ASCM_LONG_LIMITS = {
-    .max_gas = 3072,
-    .min_gas = 1404,
-    .inactive_gas = 1404,
+    .max_gas = 1018 * GM_GAS_TO_CAN,
+    .min_gas = -650 * GM_GAS_TO_CAN,
+    .inactive_gas = -650 * GM_GAS_TO_CAN,
     .max_brake = 400,
   };
 
@@ -272,9 +267,9 @@ static safety_config gm_init(uint16_t param) {
 
 
   static const LongitudinalLimits GM_CAM_LONG_LIMITS = {
-    .max_gas = 3400,
-    .min_gas = 1514,
-    .inactive_gas = 1554,
+    .max_gas = 1346 * GM_GAS_TO_CAN,
+    .min_gas = -540 * GM_GAS_TO_CAN,
+    .inactive_gas = -500 * GM_GAS_TO_CAN,
     .max_brake = 400,
   };
 
