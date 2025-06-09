@@ -180,9 +180,12 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
         if(!controls_allowed) print("@@auto cruise control enabled....\n");
         controls_allowed = true;        
     }
-    int gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
-    // int gas_regen = ((GET_BYTE(to_send, 1) & 0x1U) << 13) + ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
-    // 위 주석코드로 테스트 필요. 두번째 바이트부터 계산하되  세번째 바이트 계산은 0x7FU까지만 하는 식.
+    int gas_regen = 0;
+    if (!gm_pcm_cruise && (gm_hw == GM_ASCM)) {
+      gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    } else {
+      gas_regen = ((GET_BYTE(to_send, 1) & 0x1U) << 13) + ((GET_BYTE(to_send, 2) & 0xFFU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    }
 
     bool violation = false;
     // Allow apply bit in pre-enabled and overriding states
@@ -200,7 +203,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
 
-    if (!gm_pcm_cruise && gm_cam_long) {
+    if (!gm_pcm_cruise &&  ((gm_hw == GM_ASCM) || gm_cam_long)) {
       // OP 롱컨 + CAM_LONG 차량
       allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     } else if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {
