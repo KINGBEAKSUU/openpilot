@@ -194,25 +194,20 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   }
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
-  if (addr == 0x1E1) {
+
+if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long || gm_cc_long)) {
     int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
-
-    //if (!gm_pcm_cruise && (gm_cam_long || gm_force_ascm)) {
-      // OP 롱컨 + CAM_LONG 차량
-    //  allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
-    if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {
-      if (gm_cc_long) {
-        allowed_btn |= cruise_engaged_prev && ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
-      }
+    // For standard CC, allow spamming of SET / RESUME
+    if (gm_cc_long) {
+      allowed_btn |= cruise_engaged_prev && ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     }
 
     if (!allowed_btn) {
       tx = false;
     }
   }
-
   return tx;
 }
 
