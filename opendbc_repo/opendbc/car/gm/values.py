@@ -111,7 +111,6 @@ class GMPlatformConfig(PlatformConfig):
     Bus.chassis: 'gm_global_a_chassis',
   })
 
-
 @dataclass
 class GMASCMPlatformConfig(GMPlatformConfig):
   dbc_dict: DbcDict = field(default_factory=lambda: {
