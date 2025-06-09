@@ -248,13 +248,10 @@ static safety_config gm_init(uint16_t param) {
   const uint16_t GM_PARAM_NO_ACC = 32;
   const uint16_t GM_PARAM_PEDAL_LONG = 64;  // TODO: this can be inferred
 
-  // common safety checks assume unscaled integer values
-  static const int GM_GAS_TO_CAN = 8;  // 1 / 0.125
-
   static const LongitudinalLimits GM_ASCM_LONG_LIMITS = {
-    .max_gas = 1018 * GM_GAS_TO_CAN,
-    .min_gas = -650 * GM_GAS_TO_CAN,
-    .inactive_gas = -650 * GM_GAS_TO_CAN,
+    .max_gas = 3072,
+    .min_gas = 1404,
+    .inactive_gas = 1404,
     .max_brake = 400,
   };
 
@@ -267,9 +264,9 @@ static safety_config gm_init(uint16_t param) {
 
 
   static const LongitudinalLimits GM_CAM_LONG_LIMITS = {
-    .max_gas = 1346 * GM_GAS_TO_CAN,
-    .min_gas = -540 * GM_GAS_TO_CAN,
-    .inactive_gas = -500 * GM_GAS_TO_CAN,
+    .max_gas = 3400,
+    .min_gas = 1514,
+    .inactive_gas = 1554,
     .max_brake = 400,
   };
 
