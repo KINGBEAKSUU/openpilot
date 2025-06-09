@@ -181,7 +181,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
         controls_allowed = true;        
     }
     int gas_regen = 0;
-    if (!gm_pcm_cruise && (gm_hw == GM_ASCM)) {
+    if (!gm_pcm_cruise && ((gm_hw == GM_ASCM) || gm_cam_long)) {
       gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
     } else {
       gas_regen = ((GET_BYTE(to_send, 1) & 0x1U) << 13) + ((GET_BYTE(to_send, 2) & 0xFFU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
