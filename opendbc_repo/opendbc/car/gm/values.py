@@ -206,7 +206,7 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Volt 2019", "Adaptive Cruise Control (ACC) & LKAS")],
     GMCarSpecs(mass=1607, wheelbase=2.69, steerRatio=15.7, centerToFrontRatio=0.45),
   )
-  CHEVROLET_TRAVERSE = GMSDGMPlatformConfig(
+  CHEVROLET_TRAVERSE = GMASCMPlatformConfig(
     [GMCarDocs("Chevrolet Traverse 2022-23", "RS, Premier, or High Country Trim")],
     GMCarSpecs(mass=1955, wheelbase=3.07, steerRatio=17.9, centerToFrontRatio=0.4),
   )
@@ -259,7 +259,7 @@ class CAR(Platforms):
     [GMCarDocs("Buick Baby Enclave 2020-23", "Driver Assist Package")],
     CarSpecs(mass=2050, wheelbase=2.86, steerRatio=16.0, centerToFrontRatio=0.5),
   )
-  CHEVROLET_TRAX = GMPlatformConfig(
+  CHEVROLET_TRAX = GMASCMPlatformConfig(
     [GMCarDocs("Chevrolet TRAX 2024")],
     CarSpecs(mass=1365, wheelbase=2.7, steerRatio=16.1, centerToFrontRatio=0.7),
   )

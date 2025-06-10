@@ -209,12 +209,17 @@ class CarInterface(CarInterfaceBase):
       ret.radarUnavailable = False
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
+      ret.longitudinalTuning.kpBP = [0.]
+      ret.longitudinalTuning.kpV = [1.0]
+      ret.longitudinalTuning.kiBP = [0.]
+      ret.longitudinalTuning.kiV = [.3]
+      ret.longitudinalTuning.kf = 1.0
       ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.5
       ret.vEgoStarting = 0.4
       ret.stopAccel = -0.4
       ret.startingState = True
-      ret.startAccel = 1.9
+      ret.startAccel = 0.9
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
