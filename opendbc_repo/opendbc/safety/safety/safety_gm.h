@@ -50,7 +50,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    if ((addr == 0x1E1) && (!gm_pcm_cruise || gm_cc_long)) {
+    if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || !gm_pcm_cruise || gm_cc_long || gm_cam_long)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // enter controls on falling edge of set or rising edge of resume (avoids fault)
@@ -181,7 +181,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
         controls_allowed = true;        
     }
     int gas_regen = 0;
-    if (!gm_pcm_cruise && ((gm_hw == GM_ASCM) || gm_cam_long)) {
+    if ((gm_hw == GM_ASCM) || gm_cam_long) {
       gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
     } else {
       gas_regen = ((GET_BYTE(to_send, 1) & 0x1U) << 13) + ((GET_BYTE(to_send, 2) & 0xFFU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
@@ -203,7 +203,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
 
-    if (!gm_pcm_cruise &&  ((gm_hw == GM_ASCM) || gm_cam_long)) {
+    if ((gm_hw == GM_ASCM) || gm_cam_long) {
       // OP 롱컨 + CAM_LONG 차량
       allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     } else if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {
