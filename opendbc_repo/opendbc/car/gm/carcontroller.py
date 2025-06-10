@@ -166,10 +166,21 @@ class CarController(CarControllerBase):
       else:
         if (CS.out.activateCruise or self.auto_CruiseControl > 0) and \
            not CS.out.cruiseState.enabled:
+          self.activateCruise_after_brake = False
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
             self.last_button_frame = self.frame
             can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
-        
+
+        # CAM_ACC: AutoResume
+        elif actuators.longControlState == LongCtrlState.starting:
+          if CS.out.cruiseState.enabled and not self.activateCruise_after_brake:
+            idx = (self.frame // 4) % 4
+            brake_force = -0.5
+            apply_brake = self.brake_input(brake_force)
+            can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
+            Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True)
+            self.activateCruise_after_brake = True
+
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
         # GM: softHold
