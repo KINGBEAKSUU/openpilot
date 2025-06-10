@@ -263,7 +263,7 @@ class CarController(CarControllerBase):
           else:
             acc_engaged = CC.enabled
 
-          if actuators.longControlState in [LongCtrlState.stopping, LongCtrlState.starting]:
+          if actuators.longControlState == LongCtrlState.starting: #in [LongCtrlState.stopping, LongCtrlState.starting]:
             if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
               self.last_button_frame = self.frame
               can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.RES_ACCEL))
