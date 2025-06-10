@@ -166,6 +166,7 @@ class CarController(CarControllerBase):
       else:
         if (CS.out.activateCruise or self.auto_CruiseControl > 0) and \
            not CS.out.cruiseState.enabled:
+          self.activateCruise_after_brake = False
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
             self.last_button_frame = self.frame
             can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
