@@ -133,7 +133,7 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.25
       ret.stopAccel = -0.4
       ret.startingState = True
-      ret.startAccel = 1.5
+      ret.startAccel = .6
 
       if alpha_long:
         ret.pcmCruise = False
@@ -187,7 +187,7 @@ class CarInterface(CarInterfaceBase):
       useAutoCruise = Params().get_int("AutoCruiseControl")
       if useAutoCruise == 1:
         ret.startingState = True
-        ret.startAccel = 1.9
+        ret.startAccel = .9
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -216,7 +216,7 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.4
       ret.stopAccel = -0.4
       ret.startingState = True
-      ret.startAccel = 1.9
+      ret.startAccel = .9
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -265,7 +265,7 @@ class CarInterface(CarInterfaceBase):
       ret.minEnableSpeed = -1.
       ret.stopAccel = -0.7
       ret.startingState = True
-      ret.startAccel = 1.9
+      ret.startAccel = .9
 
     elif candidate in (CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAILBLAZER_CC):
       ret.steerActuatorDelay = 0.2
@@ -292,7 +292,7 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.4
       ret.stopAccel = -0.4
       ret.startingState = True
-      ret.startAccel = 1.9
+      ret.startAccel = .9
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.CHEVROLET_VOLT_2019:
@@ -313,13 +313,13 @@ class CarInterface(CarInterfaceBase):
       ret.minEnableSpeed = -1.
       ret.stopAccel = -0.5
       ret.startingState = True
-      ret.startAccel = 1.9
+      ret.startAccel = .9
     elif candidate == CAR.CHEVROLET_TRAVERSE:
       ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
       ret.stopAccel = -0.5
       ret.startingState = True
-      ret.startAccel = 1.9
+      ret.startAccel = .9
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.GMC_YUKON:
