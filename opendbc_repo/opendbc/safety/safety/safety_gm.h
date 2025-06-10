@@ -203,7 +203,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
 
-    if (!gm_pcm_cruise &&  ((gm_hw == GM_ASCM) || gm_cam_long)) {
+    if ((gm_hw == GM_ASCM) || gm_cam_long) {
       // OP 롱컨 + CAM_LONG 차량
       allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     } else if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {
