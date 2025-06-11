@@ -172,7 +172,7 @@ class CarController(CarControllerBase):
             # 이후 해제-재개 사이클을 위해 플래그 리셋
             self.activateCruise_after_brake = False
       else:
-        if (CS.out.activateCruise  and not CS.out.cruiseState.enabled:
+        if CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
             self.last_button_frame = self.frame
