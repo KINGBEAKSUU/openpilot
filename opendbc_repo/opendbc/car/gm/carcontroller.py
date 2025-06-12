@@ -59,6 +59,7 @@ class CarController(CarControllerBase):
     # GM: AutoResume
     self.activateCruise_after_brake = False
     self.auto_CruiseControl = 0
+    self.waiting_for_release = False
 
   @staticmethod
   def calc_pedal_command(accel: float, long_active: bool, car_velocity) -> tuple[float, bool]:
@@ -143,50 +144,64 @@ class CarController(CarControllerBase):
       can_sends.append(gmcan.create_steering_control(self.packer_pt, CanBus.POWERTRAIN, apply_torque, idx, CC.latActive))
 
     if self.CP.openpilotLongitudinalControl:
+      button_counter = (CS.buttons_counter + 1) % 4
 
       if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
-        button_counter = (CS.buttons_counter + 1) % 4
-        # GM: Auto Cruise
+        # GM: ASCM차량 Auto Cruise
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04: # 25Hz(40ms 버튼주기)
             self.last_button_frame = self.frame
             can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
+            self.waiting_for_release = True
 
-        # GM: AutoResume
+          # ASCM차량에도 필요할 경우 대비
+        elif self.waiting_for_release and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
+          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
+          self.waiting_for_release = False
+
+        # GM: ASCM차량 AutoResume
         elif actuators.longControlState == LongCtrlState.starting:
           if CS.out.cruiseState.enabled and not self.activateCruise_after_brake: #브레이크신호 한번만 보내기 위한 조건.
             idx = (self.frame // 4) % 4
-            brake_force = -0.5  #롱컨캔슬을 위한 브레이크값(0.0 이하)
-            apply_brake = self.brake_input(brake_force)
+            apply_brake = self.brake_input(-0.5) #롱컨캔슬을 위한 브레이크값(0.0 이하)
             # 브레이크신호 전송(롱컨 꺼짐)
             can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
             Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
             self.activateCruise_after_brake = True # 브레이크신호는 한번만 보내고 초기화
-        elif (self.activateCruise_after_brake and \
-             actuators.longControlState == LongCtrlState.starting and \
-             CS.out.cruiseState.enabled):
+
+        elif actuators.longControlState == LongCtrlState.starting and self.activateCruise_after_brake and CS.out.cruiseState.enabled:
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
             self.last_button_frame = self.frame
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.RES_ACCEL))
-            # 이후 해제-재개 사이클을 위해 플래그 리셋
-            self.activateCruise_after_brake = False
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.RES_ACCEL))
+            self.activateCruise_after_brake = False # 브레이크신호재개를 위한 초기화
       else:
-        if CS.out.activateCruise and not CS.out.cruiseState.enabled:
+        # CAM_ACC차량 AutoCruise
+        if CS.out.cruiseState.available and CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
             self.last_button_frame = self.frame
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
+            self.waiting_for_release = True
 
-        # CAM_ACC: AutoResume
+          # 누른후 떼는 동작 추가(release after press)
+        elif self.waiting_for_release and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
+          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
+          self.waiting_for_release = False
+
+        # CAM_ACC차량 AutoResume, 브레이크로 캔슬 후 리쥼버튼 보냄
         elif actuators.longControlState == LongCtrlState.starting:
           if CS.out.cruiseState.enabled and not self.activateCruise_after_brake:
             idx = (self.frame // 4) % 4
-            brake_force = -0.5
-            apply_brake = self.brake_input(brake_force)
+            apply_brake = self.brake_input(-0.5)
             can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
-            Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True)
+            # 이부분은 아래의 브레이크 플래그처리로 생략가능 아시 추가해도 됨/Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True)
             self.activateCruise_after_brake = True
+        elif actuators.longControlState == LongCtrlState.starting and self.activateCruise_after_brake and CS.out.cruiseState.enabled:
+          if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
+            self.last_button_frame = self.frame
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.RES_ACCEL))
+            self.activateCruise_after_brake = False
 
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
