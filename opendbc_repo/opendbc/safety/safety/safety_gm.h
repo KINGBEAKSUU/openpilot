@@ -54,7 +54,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // enter controls on falling edge of set or rising edge of resume (avoids fault)
-      bool set = (button != GM_BTN_SET) && (cruise_button_prev == GM_BTN_SET);
+      bool set = (button == GM_BTN_SET) && (cruise_button_prev != GM_BTN_SET);
       bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
       if (set || res) {
         controls_allowed = true;
@@ -201,14 +201,14 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   if (addr == 0x1E1) {
     int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
 
-    bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
+    bool allowed_btn = (button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_CANCEL);
 
     if ((gm_hw == GM_ASCM) || gm_cam_long) {
       // OP 롱컨 + CAM_LONG 차량
-      allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
+      allowed_btn |= (button == GM_BTN_UNPRESS);
     } else if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {
       if (gm_cc_long) {
-        allowed_btn |= cruise_engaged_prev && ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
+        allowed_btn |= (button == GM_BTN_UNPRESS));
       }
     }
 
