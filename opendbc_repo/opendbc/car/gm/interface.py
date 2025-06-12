@@ -101,6 +101,7 @@ class CarInterface(CarInterfaceBase):
     ret.autoResumeSng = False
     ret.enableBsm = 0x142 in fingerprint[CanBus.POWERTRAIN] or 0x142 in fingerprint[CanBus.CAMERA]
     ret.startAccel = 1.0
+    ret.radarTimeStep = 0.0667
 
     useEVTables = Params().get_bool("EVTable")
 
