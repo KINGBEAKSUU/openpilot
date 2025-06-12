@@ -146,7 +146,7 @@ class CarController(CarControllerBase):
     if self.CP.openpilotLongitudinalControl:
       button_counter = (CS.buttons_counter + 1) % 4
 
-      if self.CP.carFingerprint in (CAR.CHEVROLET_VOLT, CAR.CHEVROLET_MALIBU, CAR.CHEVROLET_MALIBU_2019):
+      if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
         # ASCM: Auto Cruise(DECEL_SET)
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
