@@ -129,11 +129,11 @@ class CarInterface(CarInterfaceBase):
       ret.longitudinalTuning.kpV = [1.0]
       ret.longitudinalTuning.kiV = [1.0]
       ret.stoppingDecelRate = 2.0  # reach brake quickly after enabling
-      ret.vEgoStopping = 0.25
-      ret.vEgoStarting = 0.25
       ret.stopAccel = -0.4
       ret.startingState = True
       ret.startAccel = .6
+      ret.vEgoStopping = 0.5
+      ret.vEgoStarting = 0.5
 
       if alpha_long:
         ret.pcmCruise = False
@@ -182,7 +182,7 @@ class CarInterface(CarInterfaceBase):
       ret.longitudinalTuning.kf = 1.0
       ret.stoppingDecelRate = 0.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.2
-      ret.vEgoStarting = 0.15
+      ret.vEgoStarting = 0.5
       ret.stopAccel = -0.7
       useAutoCruise = Params().get_int("AutoCruiseControl")
       if useAutoCruise == 1:
@@ -268,6 +268,8 @@ class CarInterface(CarInterfaceBase):
       ret.startAccel = .9
 
     elif candidate in (CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAILBLAZER_CC):
+      ret.pcmCruise = False
+      ret.openpilotLongitudinalControl = True
       ret.steerActuatorDelay = 0.2
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
