@@ -208,7 +208,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
       allowed_btn |= (button == GM_BTN_UNPRESS);
     } else if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {
       if (gm_cc_long) {
-        allowed_btn |= (button == GM_BTN_UNPRESS));
+        allowed_btn |= (button == GM_BTN_UNPRESS);
       }
     }
 
