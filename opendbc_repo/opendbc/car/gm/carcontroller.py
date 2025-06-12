@@ -156,9 +156,9 @@ class CarController(CarControllerBase):
             self.waiting_for_release = True
 
           # ASCM차량에도 필요할 경우 대비
-        elif self.waiting_for_release and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
-          self.waiting_for_release = False
+          elif self.waiting_for_release and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
+            self.waiting_for_release = False
 
         # GM: ASCM차량 AutoResume
         elif actuators.longControlState == LongCtrlState.starting:
