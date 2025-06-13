@@ -50,6 +50,10 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
+    // Brake/gas->disable(ET.IMMEDIATE_DISABLE [39, 41] 에러 제거용
+    if (brake_pressed || gas_pressed) {
+      controls_allowed = false;
+    }
     if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || !gm_pcm_cruise || gm_cc_long || gm_cam_long)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
