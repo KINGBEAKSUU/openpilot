@@ -50,10 +50,16 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    // Brake->disable(ET.IMMEDIATE_DISABLE [39, 41] 에러 제거용
-    //if (brake_pressed) {
-    //  controls_allowed = false;
-    //}
+    // 브레이크에는 롱컨만 해제
+    if (brake_pressed) {
+      controls_allowed = false;
+    }
+
+    // 메인오프시는 → 롱컨·조향 모두 해제(ET.USER_DISABLE)
+    if (!acc_main_on) {
+      controls_allowed = false;
+      aol_allowed = false;
+    }
     if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || !gm_pcm_cruise || gm_cc_long || gm_cam_long)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
@@ -62,12 +68,14 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       // 리쥼은 기존처럼 falling edge 유지
       bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
       if (set || res) {
-        controls_allowed = true;
+        controls_allowed = true;  //롱컨재개
+        aol_allowed = true;  //조향도 재개
       }
 
       // exit controls on cancel press
       if (button == GM_BTN_CANCEL) {
-        controls_allowed = false;
+        controls_allowed = false;  //롱컨 해제
+        aol_allowed = false;  //조향도 해제
       }
 
       cruise_button_prev = button;
@@ -131,6 +139,8 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     if (!gm_pcm_cruise && !gm_pedal_long && (addr == 0x2CB)) {
       stock_ecu_detected = true;
     }
+    // 운전자 가스오버라이드에도 롱컨 유지
+    alternative_experience |= ALT_EXP_DISABLE_DISENGAGE_ON_GAS;
     generic_rx_checks(stock_ecu_detected);
   }
 }
@@ -147,7 +157,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     .type = TorqueDriverLimited,
   };
 
-  bool tx = true;
+  bool tx = !relay_malfunction && whitelisted;  //true;
   int addr = GET_ADDR(to_send);
 
   // BRAKE: safety check
@@ -204,6 +214,11 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
   if (addr == 0x1E1) {
+    // Main Off(ACC 비사용)에서 SET/RESUME 전송 차단(noEntry/ET.ENABLE)
+    if (gm_has_acc && !acc_main_on) {
+      return false;
+    }
+
     int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
     // 크루즈 선행조건 없이 CANCEL/SET/RESUME 진입 허용
     bool allowed_btn = (button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_CANCEL);
