@@ -101,14 +101,19 @@ class CarState(CarStateBase):
     else:
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL2"]["PRNDL2"], None))
 
-    if self.CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value: # 190(0xBE)캔이 없으면 241(0xF1)을 사용하라.
-      ret.brake = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"] / 0xd0
-      ret.brakePressed = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"] >= 15
-    else:
-      ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
-      ret.brakePressed = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"] >= 10
-    if self.CP.networkLocation == NetworkLocation.fwdCamera:
+    # 0xC9 우선 사용
+    if "ECMEngineStatus" in pt_cp.vl:
       ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
+    # 0xC9가 안들어올 경우에만 190/241 신호 순차 사용
+    elif self.CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value:
+      raw = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"]
+      ret.brake = raw / 0xD0
+      ret.brakePressed = raw >= 15
+    else:
+      raw = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
+      ret.brake = raw
+      ret.brakePressed = raw >= 10
+
     #else:
       # Some Volt 2016-17 have loose brake pedal push rod retainers which causes the ECM to believe
       # that the brake is being intermittently pressed without user interaction.

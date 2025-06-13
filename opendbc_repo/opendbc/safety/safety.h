@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "safety_declarations.h"
 #include "can.h"
@@ -377,7 +377,9 @@ void generic_rx_checks(bool stock_ecu_detected) {
   brake_pressed_prev = brake_pressed;
 
   // exit controls on rising edge of regen paddle
-  if (regen_braking && (!regen_braking_prev || vehicle_moving)) {
+  // 차가 정지중일때는 제생 제동 버튼으로 롱컨해제가 안되게 수정함.
+  //if (regen_braking && (!regen_braking_prev || vehicle_moving)) {
+  if (regen_braking && vehicle_moving && !regen_braking_prev)) {
     controls_allowed = false;
   }
   regen_braking_prev = regen_braking;

@@ -24,14 +24,13 @@ static bool gm_pedal_long = false;
 static bool gm_cc_long = false;
 static bool gm_skip_relay_check = false;
 static bool gm_force_ascm = false;
+static bool seen_ecm_status = false;
 
+const int GM_STANDSTILL_THRSLD = 10;
+const int GM_GAS_INTERCEPTOR_THRESHOLD = 550;
+#define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U)
+  
 static void gm_rx_hook(const CANPacket_t *to_push) {
-  const int GM_STANDSTILL_THRSLD = 10;  // 0.311kph
-  // panda interceptor threshold needs to be equivalent to openpilot threshold to avoid controls mismatches
-  // If thresholds are mismatched then it is possible for panda to see the gas fall and rise while openpilot is in the pre-enabled state
-  const int GM_GAS_INTERCEPTOR_THRESHOLD = 550; // (675 + 355) / 2 ratio between offset and gain from dbc file
-  #define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U) // avg between 2 tracks
-
   if (GET_BUS(to_push) == 0U) {
     int addr = GET_ADDR(to_push);
 
@@ -49,11 +48,29 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       vehicle_moving = (left_rear_speed > GM_STANDSTILL_THRSLD) || (right_rear_speed > GM_STANDSTILL_THRSLD);
     }
 
+    // Reference for brake pressed signals:
+    // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py 
+    // 0xc9신호만 브레이크로 우선 감지하고 나머지 브레이크는 필요시 사용.
+    if (addr == 0xC9) {
+      seen_ecm_status = true;
+      brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
+      acc_main_on   = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
+    }
+    else if (!seen_ecm_status) {
+      if (addr == 0xBE) {
+        brake_pressed = GET_BYTE(to_push, 1) >= 10U;
+      }
+      else if (addr == 0xF1) {
+        brake_pressed = GET_BYTE(to_push, 1) >= 15U;
+      }
+    }
+
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    // 브레이크에는 롱컨만 해제
-    if (brake_pressed) {
+    // 브레이크 밟는 순간에는 롱컨만 해제
+    if (brake_pressed && !brake_pressed_prev) {
       controls_allowed = false;
     }
+    brake_pressed_prev = brake_pressed;
 
     // 메인오프시는 → 롱컨·조향 모두 해제(ET.USER_DISABLE)
     if (!acc_main_on) {
@@ -79,24 +96,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       }
 
       cruise_button_prev = button;
-    }
-
-    // Reference for brake pressed signals:
-    // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if (gm_hw == GM_ASCM) {
-      if (addr == 0xBE) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 10U; //핑거190 브레이크답력
-      }
-      if (addr == 0xF1) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거241 브레이크답력
-      }
-    }
-
-    if (addr == 0xC9) {
-      if (gm_hw == GM_CAM) {
-        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
-      }
-      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U);  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
     }
 
     if (addr == 0x1C4) {
