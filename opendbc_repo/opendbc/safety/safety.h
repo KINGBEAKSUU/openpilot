@@ -379,7 +379,7 @@ void generic_rx_checks(bool stock_ecu_detected) {
   // exit controls on rising edge of regen paddle
   // 차가 정지중일때는 제생 제동 버튼으로 롱컨해제가 안되게 수정함.
   //if (regen_braking && (!regen_braking_prev || vehicle_moving)) {
-  if (regen_braking && vehicle_moving && !regen_braking_prev)) {
+  if (regen_braking && vehicle_moving && !regen_braking_prev) {
     controls_allowed = false;
   }
   regen_braking_prev = regen_braking;
