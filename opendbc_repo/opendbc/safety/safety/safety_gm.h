@@ -156,7 +156,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     .type = TorqueDriverLimited,
   };
 
-  bool tx = !relay_malfunction && whitelisted;  //true;
+  bool tx = true;
   int addr = GET_ADDR(to_send);
 
   // BRAKE: safety check
