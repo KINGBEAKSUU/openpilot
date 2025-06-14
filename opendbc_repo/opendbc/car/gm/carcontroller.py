@@ -166,7 +166,7 @@ class CarController(CarControllerBase):
             and CS.out.cruiseState.enabled
             and not self.activateCruise_after_brake):
           idx = (self.frame // 4) % 4
-          apply_brake = self.brake_input(-0.5) #롱컨캔슬을 위한 브레이크값(0.0 이하)
+          apply_brake = self.brake_input(-0.1) #롱컨캔슬을 위한 브레이크값(0.0 이하)
           # 브레이크신호 전송(롱컨 꺼짐)
           can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
           Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
@@ -200,7 +200,7 @@ class CarController(CarControllerBase):
         if (actuators.longControlState == LongCtrlState.starting and CS.out.cruiseState.enabled
             and not self.activateCruise_after_brake):
           idx = (self.frame // 4) % 4
-          apply_brake = self.brake_input(-0.5)
+          apply_brake = self.brake_input(-0.1)
           can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
           # Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) #필요시 추가되어야 할 부분.
           self.activateCruise_after_brake = True
