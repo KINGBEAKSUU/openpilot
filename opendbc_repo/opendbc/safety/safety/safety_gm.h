@@ -66,8 +66,8 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    // 브레이크 밟는 순간에는 롱컨만 해제
-    if (brake_pressed && !brake_pressed_prev) {
+    // 브레이크 밟는 순간에는 롱컨만 해제(+ standstill상테서는 롱컨해제 안되게)
+    if (brake_pressed && !brake_pressed_prev && vehicle_moving) {
       controls_allowed = false;
     }
     brake_pressed_prev = brake_pressed;
