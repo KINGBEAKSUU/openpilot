@@ -25,12 +25,16 @@ static bool gm_cc_long = false;
 static bool gm_skip_relay_check = false;
 static bool gm_force_ascm = false;
 static bool seen_ecm_status = false;
+static int skip_brake_disable_frame = 0; //리쥼용 브레크신호로 인한 크루즈폴트 무시용 플래그.
 
 const int GM_STANDSTILL_THRSLD = 10;
 const int GM_GAS_INTERCEPTOR_THRESHOLD = 550;
 #define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U)
   
 static void gm_rx_hook(const CANPacket_t *to_push) {
+  static int frame = 0;  //리쥼용 브레이크신호로 인한 크루즈폴트 무시용 플래그
+  frame++;
+
   if (GET_BUS(to_push) == 0U) {
     int addr = GET_ADDR(to_push);
 
@@ -65,9 +69,16 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       }
     }
 
-    // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    // 브레이크 밟는 순간에는 롱컨만 해제(+ standstill상테서는 롱컨해제 안되게)
-    if (brake_pressed && !brake_pressed_prev && vehicle_moving) {
+    if (addr == 0x1E1) {
+      int button = (GET_BYTE(to_push,5) & 0x70U) >> 4;
+      bool res_edge = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
+      if (res_edge) {
+        // 리쥼용 브레이크신호 들어온 프레임부터 10프레임(0.4초?)동안 크루즈폴트 안보냄.
+        skip_brake_disable_frame = frame + 10;
+      }
+    }
+    // 브레이크 밟는 순간에는 롱컨만 해제(+ standstill상태 + 리쥼용 브레이크무시 프레임 동안에는 롱컨해제 안되게)
+    if (brake_pressed && !brake_pressed_prev && vehicle_moving && (frame > skip_brake_disable_frame)) {
       controls_allowed = false;
     }
     brake_pressed_prev = brake_pressed;
@@ -77,6 +88,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       controls_allowed = false;
       aol_allowed = false;
     }
+    // 버튼(SET/RES, CANCEL)활성화 로직
     if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || !gm_pcm_cruise || gm_cc_long || gm_cam_long)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
@@ -94,7 +106,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         controls_allowed = false;  //롱컨 해제
         aol_allowed = false;  //조향도 해제
       }
-
       cruise_button_prev = button;
     }
 
