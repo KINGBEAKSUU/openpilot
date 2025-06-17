@@ -92,8 +92,23 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
       // enter controls on rising edge of ACC, exit controls when ACC off
       if (gm_pcm_cruise && gm_has_acc) {
-        bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
+        //bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
+        //pcm_cruise_check(cruise_engaged);
+        int cruise_state = (GET_BYTE(to_push, 1) >> 5) & 0x7U;
+        const int CRUISE_ACTIVE = 1;
+        const int CRUISE_STANDSTILL = 4;
+        bool cruise_engaged = (cruise_state == CRUISE_ACTIVE) || (cruise_state == CRUISE_STANDSTILL);
+        // 이전 상태 저장
+        bool prev = cruise_engaged_prev;
+        // 기존 stock ACC 토글 로직
         pcm_cruise_check(cruise_engaged);
+        // Rising edge(Off→Active) 시점에 허용
+        if (cruise_engaged && !prev) {
+          controls_allowed = true;
+          aol_allowed = true;
+        }
+        // 상태 갱신
+        cruise_engaged_prev = cruise_engaged;
       }
     }
 
