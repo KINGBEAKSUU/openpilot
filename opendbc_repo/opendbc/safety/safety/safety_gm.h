@@ -50,7 +50,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || !gm_pcm_cruise || gm_cc_long || gm_cam_long)) {
+    if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || gm_cc_long || gm_cam_long)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // fall edge: 누르고 있다가 떼는 것에서 리쥼버튼처럼 rising edge(이전에 안눌렸던 것을 지금 누르는 것)으로 SET조건 변경
@@ -59,11 +59,13 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
       if (set || res) {
         controls_allowed = true;
+        aol_allowed = true;  //조향도 재개
       }
 
       // exit controls on cancel press
       if (button == GM_BTN_CANCEL) {
         controls_allowed = false;
+        aol_allowed = false;  //조향도 해제
       }
 
       cruise_button_prev = button;
@@ -74,9 +76,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     if (gm_hw == GM_ASCM) {
       if (addr == 0xBE) {
         brake_pressed = GET_BYTE(to_push, 1) >= 10U; //핑거190 브레이크답력
-      }
-      if (addr == 0xF1) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거241 브레이크답력
       }
     }
 
@@ -127,6 +126,8 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     if (!gm_pcm_cruise && !gm_pedal_long && (addr == 0x2CB)) {
       stock_ecu_detected = true;
     }
+    // 운전자 가스오버라이드에도 롱컨 유지
+    alternative_experience |= ALT_EXP_DISABLE_DISENGAGE_ON_GAS;
     generic_rx_checks(stock_ecu_detected);
   }
 }
@@ -204,7 +205,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     // 크루즈 선행조건 없이 CANCEL/SET/RESUME 진입 허용
     bool allowed_btn = (button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_CANCEL);
     // 모두 허용후 차량별로 나머지 버튼허용
-    if ((gm_hw == GM_ASCM) || gm_cam_long) {
+    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cam_long) {
       // OP 롱컨 + CAM_LONG 차량
       allowed_btn |= (button == GM_BTN_UNPRESS);
     } else if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {

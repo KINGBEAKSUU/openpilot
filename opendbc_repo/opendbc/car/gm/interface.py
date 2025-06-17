@@ -16,7 +16,6 @@ from opendbc.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallb
 TransmissionType = structs.CarParams.TransmissionType
 NetworkLocation = structs.CarParams.NetworkLocation
 
-ACCELERATOR_POS_MSG = 0xbe
 TPMS_POS_MSG = 0x52B ## TPMS
 
 NON_LINEAR_TORQUE_PARAMS = {
@@ -133,8 +132,8 @@ class CarInterface(CarInterfaceBase):
       ret.stopAccel = -0.4
       ret.startingState = True
       ret.startAccel = .6
-      ret.vEgoStopping = 0.5
-      ret.vEgoStarting = 0.5
+      ret.vEgoStopping = 0.2
+      ret.vEgoStarting = 0.1
 
       if alpha_long:
         ret.pcmCruise = False
@@ -183,12 +182,10 @@ class CarInterface(CarInterfaceBase):
       ret.longitudinalTuning.kf = 1.0
       ret.stoppingDecelRate = 0.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.2
-      ret.vEgoStarting = 0.5
-      ret.stopAccel = -0.7
-      useAutoCruise = Params().get_int("AutoCruiseControl")
-      if useAutoCruise == 1:
-        ret.startingState = True
-        ret.startAccel = .9
+      ret.vEgoStarting = 0.1
+      ret.stopAccel = -0.5
+      ret.startingState = True
+      ret.startAccel = 0.7
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -210,14 +207,20 @@ class CarInterface(CarInterfaceBase):
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
       ret.networkLocation = NetworkLocation.gateway
       ret.radarUnavailable = False
+      ret.pcmCruise = False
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
+      ret.longitudinalTuning.kpBP = [0.]
+      ret.longitudinalTuning.kpV = [1.0]
+      ret.longitudinalTuning.kiBP = [0.]
+      ret.longitudinalTuning.kiV = [.1]
+      ret.longitudinalTuning.kf = 1.0
       ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
-      ret.vEgoStopping = 0.5
-      ret.vEgoStarting = 0.4
+      ret.vEgoStopping = 0.2
+      ret.vEgoStarting = 0.1
       ret.stopAccel = -0.4
       ret.startingState = True
-      ret.startAccel = .9
+      ret.startAccel = .7
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -272,6 +275,38 @@ class CarInterface(CarInterfaceBase):
       ret.pcmCruise = False
       ret.openpilotLongitudinalControl = True
       ret.steerActuatorDelay = 0.2
+      ret.minEnableSpeed = -1 * CV.MPH_TO_MS
+      ret.minSteerSpeed = 7 * CV.MPH_TO_MS
+      ret.longitudinalTuning.kpBP = [0.]
+      ret.longitudinalTuning.kpV = [1.0]
+      ret.longitudinalTuning.kiBP = [0.]
+      ret.longitudinalTuning.kiV = [.1]
+      ret.longitudinalTuning.kf = 1.0
+      ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
+      ret.vEgoStopping = 0.2
+      ret.vEgoStarting = 0.1
+      ret.stopAccel = -0.4
+      ret.startingState = True
+      ret.startAccel = .7
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+
+    elif candidate == CAR.CHEVROLET_NEW_TRAILBLAZER:
+      ret.pcmCruise = False
+      ret.openpilotLongitudinalControl = True
+      ret.steerActuatorDelay = 0.2
+      ret.minEnableSpeed = -1 * CV.MPH_TO_MS
+      ret.minSteerSpeed = 7 * CV.MPH_TO_MS
+      ret.longitudinalTuning.kpBP = [0.]
+      ret.longitudinalTuning.kpV = [1.0]
+      ret.longitudinalTuning.kiBP = [0.]
+      ret.longitudinalTuning.kiV = [.1]
+      ret.longitudinalTuning.kf = 1.0
+      ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
+      ret.vEgoStopping = 0.2
+      ret.vEgoStarting = 0.1
+      ret.stopAccel = -0.4
+      ret.startingState = True
+      ret.startAccel = .7
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate in (CAR.CHEVROLET_SUBURBAN, CAR.CHEVROLET_SUBURBAN_CC):
@@ -318,8 +353,13 @@ class CarInterface(CarInterfaceBase):
       ret.startingState = True
       ret.startAccel = .9
     elif candidate == CAR.CHEVROLET_TRAVERSE:
+      ret.networkLocation = NetworkLocation.gateway
+      ret.radarUnavailable = False
+      ret.pcmCruise = False
       ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
+      ret.vEgoStopping = 0.2
+      ret.vEgoStarting = 0.1
       ret.stopAccel = -0.5
       ret.startingState = True
       ret.startAccel = .9
@@ -378,8 +418,6 @@ class CarInterface(CarInterfaceBase):
     if candidate in CC_ONLY_CAR:
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.NO_ACC.value
 
-    if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
-      ret.flags |= GMFlags.NO_ACCELERATOR_POS_MSG.value
 
     # kans: TPMS
     if TPMS_POS_MSG in fingerprint[CanBus.POWERTRAIN]:

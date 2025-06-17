@@ -194,6 +194,10 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Trailblazer 2021-22")],
     GMCarSpecs(mass=1345, wheelbase=2.64, steerRatio=16.8, centerToFrontRatio=0.4, tireStiffnessFactor=1.0),
   )
+  CHEVROLET_NEW_TRAILBLAZER = GMPlatformConfig(
+    [GMCarDocs("Chevrolet Trailblazer FaceLift")],
+    GMCarSpecs(mass=1345, wheelbase=2.64, steerRatio=16.8, centerToFrontRatio=0.4, tireStiffnessFactor=1.0),
+  )
   CADILLAC_XT4 = GMSDGMPlatformConfig(
     [GMCarDocs("Cadillac XT4 2023", "Driver Assist Package")],
     GMCarSpecs(mass=1660, wheelbase=2.78, steerRatio=14.4, centerToFrontRatio=0.4),
@@ -296,8 +300,7 @@ class CanBus:
 class GMFlags(IntFlag):
   PEDAL_LONG = 1
   CC_LONG = 2
-  NO_ACCELERATOR_POS_MSG = 4
-  TPMS_MSG = 8
+  TPMS_MSG = 4
 
 
 # In a Data Module, an identifier is a string used to recognize an object,
@@ -356,7 +359,7 @@ CC_REGEN_PADDLE_CAR = {CAR.CHEVROLET_BOLT_CC}
 SDGM_CAR = {CAR.CADILLAC_XT4, CAR.CHEVROLET_TRAVERSE, CAR.BUICK_BABYENCLAVE, CAR.CHEVROLET_VOLT_2019}
 
 # We're integrated at the camera with VOACC on these cars (instead of ASCM w/ OBD-II harness)
-CAMERA_ACC_CAR = {CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_SILVERADO, CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAX, CAR.CADILLAC_CT6_2019, CAR.CHEVROLET_MALIBU_2019}
+CAMERA_ACC_CAR = {CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_SILVERADO, CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_NEW_TRAILBLAZER, CAR.CHEVROLET_TRAX, CAR.CADILLAC_CT6_2019, CAR.CHEVROLET_MALIBU_2019, CAR.CHEVROLET_TRAVERSE}
 CAMERA_ACC_CAR.update({CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_EQUINOX_CC, CAR.GMC_YUKON_CC, CAR.CADILLAC_CT6_CC, CAR.CHEVROLET_TRAILBLAZER_CC, CAR.CADILLAC_XT5_CC, CAR.CHEVROLET_MALIBU_CC})
 # CAMERA_ACC_CAR.update(CC_ONLY_CAR)
 # Alt ASCMActiveCruiseControlStatus
