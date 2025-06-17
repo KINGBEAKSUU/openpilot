@@ -50,7 +50,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || gm_cc_long || gm_cam_long)) {
+    if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cc_long || gm_cam_long)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // fall edge: 누르고 있다가 떼는 것에서 리쥼버튼처럼 rising edge(이전에 안눌렸던 것을 지금 누르는 것)으로 SET조건 변경
