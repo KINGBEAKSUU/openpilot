@@ -53,9 +53,8 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cc_long || gm_cam_long)) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
-      // fall edge: 누르고 있다가 떼는 것에서 리쥼버튼처럼 rising edge(이전에 안눌렸던 것을 지금 누르는 것)으로 SET조건 변경
-      bool set = (button == GM_BTN_SET) && (cruise_button_prev != GM_BTN_SET);
-      // 리쥼은 기존처럼 falling edge 유지
+      // enter controls on falling edge of set or rising edge of resume (avoids fault)
+      bool set = (button != GM_BTN_SET) && (cruise_button_prev == GM_BTN_SET);
       bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
       if (set || res) {
         controls_allowed = true;
@@ -200,18 +199,13 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   }
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
-  if (addr == 0x1E1) {
+  if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cam_long || gm_pcm_cruise || gm_pedal_long || gm_cc_long)) {
     int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
-    // 크루즈 선행조건 없이 CANCEL/SET/RESUME 진입 허용
-    bool allowed_btn = (button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_CANCEL);
-    // 모두 허용후 차량별로 나머지 버튼허용
-    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cam_long) {
-      // OP 롱컨 + CAM_LONG 차량
-      allowed_btn |= (button == GM_BTN_UNPRESS);
-    } else if (gm_pcm_cruise || gm_pedal_long || gm_cc_long) {
-      if (gm_cc_long) {
-        allowed_btn |= (button == GM_BTN_UNPRESS);
-      }
+
+    bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
+    // For standard CC, allow spamming of SET / RESUME
+    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cam_long || gm_cc_long) {
+      allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     }
 
     if (!allowed_btn) {
