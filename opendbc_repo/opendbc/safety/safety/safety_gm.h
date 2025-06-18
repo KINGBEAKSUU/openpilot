@@ -72,18 +72,21 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if (gm_hw == GM_ASCM) {
-      if (addr == 0xBE) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 10U; //핑거190 브레이크답력
-      }
+    // BE,C9 통합로직
+    static bool brake_c9 = false;
+    static bool brake_be = false;
+    if (addr == 0xBE) {
+      // ASCM/BE 신호
+      brake_be = GET_BYTE(to_push, 1) >= 20U;  //20이상 되어야 C9에서 브레이크 감지.
+    }
+    if (addr == 0xC9) {
+      // CAM_ACC/C9 신호
+      brake_c9 = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
+      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
     }
 
-    if (addr == 0xC9) {
-      if (gm_hw == GM_CAM) {
-        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
-      }
-      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U);  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
-    }
+    // 두 신호중 하나라도 눌리면 true
+    brake_pressed = brake_be || brake_c9;
 
     if (addr == 0x1C4) {
       if (!enable_gas_interceptor) {
