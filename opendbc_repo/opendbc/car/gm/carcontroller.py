@@ -195,7 +195,7 @@ class CarController(CarControllerBase):
 
         # CamAcc: AutoResume 1st step(CANCEL버튼 전송 = 브레이크 토글용)
         elif actuators.longControlState == LongCtrlState.starting:
-          if CS.out.cruiseState.enabled and not self.activateCruise_after_brake: #\
+          if CS.out.cruiseState.enabled and not self.activateCruise_after_brake and CS.lead_distance == float('inf'): #\
             idx = (self.frame // 4) % 4
             apply_brake = self.brake_input(-0.5)
             can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))

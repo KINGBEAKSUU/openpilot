@@ -9,6 +9,7 @@ from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.interfaces import CarStateBase
 from opendbc.car.gm.values import DBC, AccState, CruiseButtons, STEER_THRESHOLD, CAR, DBC, GMFlags, \
    CC_ONLY_CAR, CAMERA_ACC_CAR
+import cereal.messaging as messaging
 
 ButtonType = structs.CarState.ButtonEvent.Type
 TransmissionType = structs.CarParams.TransmissionType
@@ -38,6 +39,9 @@ class CarState(CarStateBase):
     self.cruise_buttons = 0
     # GAP_DIST
     self.distance_button = 0
+    # lead_distance
+    self.lead_distance = float('inf') # float('inf')는 무한대값을 의미하는 문자열. 즉 레이더에 잡히는 대상이 없음=앞차없음
+    self.sm = messaging.SubMaster(['radarState'])
 
     # cruiseMain default(test from nd0706-vision)
     self.cruiseMain_on = True if Params().get_int("AutoEngage") == 2 else False
@@ -52,6 +56,15 @@ class CarState(CarStateBase):
     return False
 
   def update(self, can_parsers) -> structs.CarState:
+    # lead_distance
+    self.sm.update(0)
+    if self.sm.updated['radarState']:
+      lead = self.sm['radarState'].leadOne
+      if lead is not None and lead.status:
+        self.lead_distance = lead.dRel
+      else:
+        self.lead_distance = float('inf')
+
     pt_cp = can_parsers[Bus.pt]
     cam_cp = can_parsers[Bus.cam]
     loopback_cp = can_parsers[Bus.loopback]
@@ -164,6 +177,10 @@ class CarState(CarStateBase):
 
     ret.cruiseState.available = pt_cp.vl["ECMEngineStatus"]["CruiseMainOn"] != 0
     self.cruiseMain_on =  ret.cruiseState.available
+    # AutoEngage 파라미터가 2(“완전 자동”)일 땐 available=True 로 override
+    if Params().get_int("AutoEngage") == 2:
+      ret.cruiseState.available = True
+      self.cruiseMain_on = True
     ret.espDisabled = pt_cp.vl["ESPStatus"]["TractionControlOn"] != 1
     ret.accFaulted = (pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.FAULTED or
                       pt_cp.vl["EBCMFrictionBrakeStatus"]["FrictionBrakeUnavailable"] == 1)
