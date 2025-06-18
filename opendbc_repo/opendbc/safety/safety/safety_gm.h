@@ -24,13 +24,15 @@ static bool gm_pedal_long = false;
 static bool gm_cc_long = false;
 static bool gm_skip_relay_check = false;
 static bool gm_force_ascm = false;
+static int skip_brake_disable_frame = 0; //리쥼용 브레크신호로 인한 크루즈폴트 무시용 플래그.
 
+const int GM_STANDSTILL_THRSLD = 10;  // 0.311kph 미세 속도에도 standstill해제될 가능성 있으므로 20~15로 튜닝해볼 필요 있음.
+const int GM_GAS_INTERCEPTOR_THRESHOLD = 550;
+#define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U)
+  
 static void gm_rx_hook(const CANPacket_t *to_push) {
-  const int GM_STANDSTILL_THRSLD = 10;  // 0.311kph
-  // panda interceptor threshold needs to be equivalent to openpilot threshold to avoid controls mismatches
-  // If thresholds are mismatched then it is possible for panda to see the gas fall and rise while openpilot is in the pre-enabled state
-  const int GM_GAS_INTERCEPTOR_THRESHOLD = 550; // (675 + 355) / 2 ratio between offset and gain from dbc file
-  #define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U) // avg between 2 tracks
+  static int frame = 0;  //리쥼용 브레이크신호로 인한 크루즈폴트 무시용 플래그
+  frame++;
 
   if (GET_BUS(to_push) == 0U) {
     int addr = GET_ADDR(to_push);
@@ -54,7 +56,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // enter controls on falling edge of set or rising edge of resume (avoids fault)
-      bool set = (button != GM_BTN_SET) && (cruise_button_prev == GM_BTN_SET);
+      bool set = (cruise_button_prev == GM_BTN_SET) && (button != GM_BTN_SET);
       bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
       if (set || res) {
         controls_allowed = true;
@@ -66,27 +68,42 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         controls_allowed = false;
         aol_allowed = false;  //조향도 해제
       }
-
+      // Auto-Resume 토글용 브레이크 스킵 설정
+      if (res) {
+        skip_brake_disable_frame = frame + 10;
+      }
       cruise_button_prev = button;
     }
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    // BE,C9 통합로직
+    // BE,C9, F1 통합로직
     static bool brake_c9 = false;
     static bool brake_be = false;
+    static bool brake_f1 = false;
     if (addr == 0xBE) {
-      // ASCM/BE 신호
       brake_be = GET_BYTE(to_push, 1) >= 20U;  //20이상 되어야 C9에서 브레이크 감지.
     }
     if (addr == 0xC9) {
-      // CAM_ACC/C9 신호
       brake_c9 = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
       acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
     }
+    if (addr == 0xF1) {
+      brake_f1 = GET_BYTE(to_push, 1) >= 15U;
+    }
 
-    // 두 신호중 하나라도 눌리면 true
-    brake_pressed = brake_be || brake_c9;
+    // 신호중 하나라도 눌리면 true
+    brake_pressed = brake_be || brake_c9 || brake_f1;
+
+    // 브레이크 rising‐edge 헤제 즉,
+    // Auto-resume 토글용 브레이크는 skip 프레임 동안 무시
+    if (frame > skip_brake_disable_frame) {
+      // 운전자 브레이크 rising-edge
+      if (brake_pressed && !brake_pressed_prev && vehicle_moving) {
+        controls_allowed = false;
+      }
+    }
+    brake_pressed_prev = brake_pressed;
 
     if (addr == 0x1C4) {
       if (!enable_gas_interceptor) {
