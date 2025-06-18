@@ -121,8 +121,8 @@ class CarState(CarStateBase):
     brake_be = False
     if "ECMAcceleratorPos" in pt_cp.vl:
       raw = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
-      ret.brake = raw  # 기존 출력 유지
-      brake_be = raw >= 20  # 기존 임계치 10→20으로 맞추시려면 변경
+      ret.brake = raw
+      brake_be = raw >= 20
     ret.brakePressed = brake_c9 or brake_be
 
     #else:
