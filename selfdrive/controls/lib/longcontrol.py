@@ -17,7 +17,7 @@ def long_control_state_trans(CP, active, long_control_state, v_ego,
   starting_condition = (not should_stop and
                         not cruise_standstill and
                         not brake_pressed)
-  started_condition = v_ego > CP.vEgoStarting
+  started_condition = v_ego > CP.vEgoStarting and not cruise_standstill # 정지중 미세 속도변화에는 크루즈재개 억제
 
   if not active:
     long_control_state = LongCtrlState.off
