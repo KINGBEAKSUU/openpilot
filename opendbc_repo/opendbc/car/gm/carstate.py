@@ -115,9 +115,6 @@ class CarState(CarStateBase):
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL2"]["PRNDL2"], None))
 
 
-    brake_c9 = False
-    if "ECMEngineStatus" in pt_cp.vl:
-      brake_c9 = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
     brake_be = False
     if "ECMAcceleratorPos" in pt_cp.vl:
       raw = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
@@ -127,7 +124,11 @@ class CarState(CarStateBase):
     if "EBCMBrakePedalPosition" in pt_cp.vl:
       raw_f1 = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"]
       brake_f1 = raw_f1 >= 15
-    ret.brakePressed = brake_c9 or brake_be or brake_f1
+    brake_c9 = False
+    if "ECMEngineStatus" in pt_cp.vl:
+      brake_c9 = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
+
+    ret.brakePressed = brake_be or brake_f1 or brake_c9
 
     #else:
       # Some Volt 2016-17 have loose brake pedal push rod retainers which causes the ECM to believe
