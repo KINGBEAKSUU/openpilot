@@ -116,13 +116,20 @@ class CarState(CarStateBase):
 
 
     brake_be = False
+    raw_be = None
     if "ECMAcceleratorPos" in pt_cp.vl:
-      raw = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
-      ret.brake = raw
-      brake_be = raw >= 10
+      raw_be = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
+      ret.brake = raw_be
+      brake_be = raw_be >= 10
     brake_c9 = False
+    raw_c9 = None
     if "ECMEngineStatus" in pt_cp.vl:
-      brake_c9 = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
+      raw_c9 = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
+      brake_c9 = raw_c9 != 0
+
+    # 디버그 출력
+    print(f"[BRAKE_DBG] BE_raw={raw_be} -> {brake_be}, "
+          f"C9_raw={raw_c9} -> {brake_c9}")
 
     ret.brakePressed = brake_be or brake_c9
 
