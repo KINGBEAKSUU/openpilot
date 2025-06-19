@@ -78,15 +78,10 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
     // BE,C9, F1 통합로직
-    static bool brake_c9 = false;
-    static bool brake_be = false;
-    static bool brake_f1 = false;
-    if (addr == 0xBE) {
-      brake_be = GET_BYTE(to_push, 1) >= 10U;  //1이상에도 감지됨
-    }
-    if (addr == 0xF1) {
-      brake_f1 = GET_BYTE(to_push, 1) >= 15U;
-    }
+    static bool brake_be = false, brake_f1 = false, brake_c9 = false;
+    if (addr == 0xBE) brake_be = GET_BYTE(to_push, 1) >= 10U;
+    if (addr == 0xF1) brake_f1 = GET_BYTE(to_push, 1) >= 15U;
+
     if (addr == 0xC9) {
       brake_c9 = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
       acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
@@ -115,9 +110,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         //bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
         //pcm_cruise_check(cruise_engaged);
         int cruise_state = (GET_BYTE(to_push, 1) >> 5) & 0x7U;
-        const int CRUISE_ACTIVE = 1;
-        const int CRUISE_STANDSTILL = 4;
-        bool cruise_engaged = (cruise_state == CRUISE_ACTIVE) || (cruise_state == CRUISE_STANDSTILL);
+        bool cruise_engaged = (cruise_state == 1) || (cruise_state == 4);
         // 이전 상태 저장
         bool prev = cruise_engaged_prev;
         // 기존 stock ACC 토글 로직
@@ -240,7 +233,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
     // For standard CC, allow spamming of SET / RESUME
     if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cam_long || gm_cc_long) {
-      allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
+      allowed_btn |= cruise_engaged_prev && ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     }
 
     if (!allowed_btn) {
