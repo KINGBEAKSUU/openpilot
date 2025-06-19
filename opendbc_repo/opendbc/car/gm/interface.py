@@ -206,8 +206,6 @@ class CarInterface(CarInterfaceBase):
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
       ret.networkLocation = NetworkLocation.gateway
-      ret.radarUnavailable = False
-      ret.pcmCruise = False
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
       ret.longitudinalTuning.kpBP = [0.]
