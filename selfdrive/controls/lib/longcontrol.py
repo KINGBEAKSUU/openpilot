@@ -13,6 +13,9 @@ LongCtrlState = car.CarControl.Actuators.LongControlState
 
 def long_control_state_trans(CP, active, long_control_state, v_ego,
                              should_stop, brake_pressed, cruise_standstill, a_ego, stopping_accel, radarState):
+  stop_dist = 10.0 # 미터단위
+  lead = radarState.leadOne
+  stopping_condition = should_stop or (lead.status and lead.dRel < stop_dist)
   stopping_condition = should_stop
   starting_condition = (not should_stop and
                         not cruise_standstill and
