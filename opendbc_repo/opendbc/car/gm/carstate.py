@@ -114,38 +114,22 @@ class CarState(CarStateBase):
     else:
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL2"]["PRNDL2"], None))
 
-    #(0xC9) — CAM_ACC우선 순위
-    brake_c9 = False
-    raw_c9 = None
-    if self.CP.networkLocation == NetworkLocation.fwdCamera and "ECMEngineStatus" in pt_cp.vl:
-      raw_c9 = pt_cp.vl["ECMEngineStatus"]["BrakePressed"]
-      brake_c9 = raw_c9 != 0
-    #(0xF1)
+
+    brake_be = False
+    if "ECMAcceleratorPos" in pt_cp.vl:
+      raw = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
+      ret.brake = raw
+      brake_be = raw >= 20
     brake_f1 = False
-    raw_f1 = None
     if "EBCMBrakePedalPosition" in pt_cp.vl:
       raw_f1 = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"]
-      ret.brake = raw_f1
       brake_f1 = raw_f1 >= 15
-    #(0xBE)
-    brake_be = False
-    raw_be = None
-    if "ECMAcceleratorPos" in pt_cp.vl:
-      raw_be = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
-      ret.brake = raw_be
-      brake_be = raw_be >= 10
-    # 우선순위: C9 → F1 → BE
-    if brake_c9:
-      ret.brakePressed = True
-    elif brake_f1:
-      ret.brakePressed = True
-    else:
-      ret.brakePressed = brake_be
-    # 디버그 출력
-    print(f"[BRAKE_DBG] C9={raw_c9} -> {brake_c9},"
-         f"F1={raw_f1} -> {brake_f1},"
-         f"BE ={raw_be} -> {brake_be}")
-    #ret.brakePressed = brake_c9 or brake_f1 or brake_be
+    brake_c9 = False
+    if "ECMEngineStatus" in pt_cp.vl:
+      brake_c9 = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
+
+    ret.brakePressed = brake_be or brake_f1 or brake_c9
+
     #else:
       # Some Volt 2016-17 have loose brake pedal push rod retainers which causes the ECM to believe
       # that the brake is being intermittently pressed without user interaction.
