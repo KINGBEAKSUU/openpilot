@@ -78,15 +78,16 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
     // BE,C9, F1 통합로직
-    static bool brake_be = false, brake_c9 = false;
+    static bool brake_be = false, brake_f1 = false, brake_c9 = false;
     if (addr == 0xBE) brake_be = GET_BYTE(to_push, 1) >= 10U;
+    if (addr == 0xF1) brake_f1 = GET_BYTE(to_push, 1) >= 15U;
     if (addr == 0xC9) {
       brake_c9 = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
       acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
     }
 
     // 신호중 하나라도 눌리면 true
-    brake_pressed = brake_be || brake_c9;
+    brake_pressed = brake_be || brake_f1 || brake_c9;
 
     // 브레이크 rising‐edge 헤제 즉,
     // Auto-resume 토글용 브레이크는 skip 프레임 동안 무시
