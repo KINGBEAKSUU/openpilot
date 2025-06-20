@@ -16,7 +16,9 @@ def long_control_state_trans(CP, active, long_control_state, v_ego,
   stop_dist = 10.0 # 미터단위
   lead = radarState.leadOne
   stopping_condition = should_stop or (lead.status and lead.dRel < stop_dist)
-  #디버깅출력
+  # 오픈파일럿이 LongitudinalControl 중일 때만, 멈춘 뒤 브레이크 해제 무시
+  if CP.openpilotLongitudinalControl and long_control_state == LongCtrlState.stopping:
+    brake_pressed = True
   #dRel: 앞차 거리, should_stop: MPC 기준, stopping_condition: 최종 정지 진입 조건
   print(f"[STOP_DBG] dRel={lead.dRel:.2f}m, "
         f"should_stop={should_stop}, "
