@@ -23,7 +23,7 @@ def long_control_state_trans(CP, active, long_control_state, v_ego,
         f"stop_dist={stop_dist}, "
         f"stopping_condition={stopping_condition}, "
         f"prev_state={long_control_state}")
-  stopping_condition = should_stop
+  #stopping_condition = should_stop
   starting_condition = (not should_stop and
                         not cruise_standstill and
                         not brake_pressed)
