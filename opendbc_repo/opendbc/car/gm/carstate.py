@@ -133,13 +133,7 @@ class CarState(CarStateBase):
     # 디버그 출력
     print(f"[BRAKE_DBG] C9={brake_c9}, F1={brake_f1}, BE={brake_be}")
 
-    # 우선순위 논리: C9 → F1 → BE
-    if brake_c9:
-      ret.brakePressed = True
-    elif brake_f1:
-      ret.brakePressed = True
-    else:
-      ret.brakePressed = brake_be
+    ret.brakePressed = brake_c9 or brake_f1 or brake_be
 
     #else:
       # Some Volt 2016-17 have loose brake pedal push rod retainers which causes the ECM to believe
