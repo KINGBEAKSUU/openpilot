@@ -170,7 +170,7 @@ class CarController(CarControllerBase):
             can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
             Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
             self.activateCruise_after_brake = True # 브레이크신호는 한번만 보내고 초기화
-            self.last_button_frame = self.frame # 바로 다음에 리쥼을 보내기 위해 버튼 프레임 초기화 필요.
+            #self.last_button_frame = self.frame # 바로 다음에 리쥼을 보내기 위해 버튼 프레임 초기화 필요.
 
           # ASCM: AutoResume 2nd step (RES_ACCEL press)
           elif (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
