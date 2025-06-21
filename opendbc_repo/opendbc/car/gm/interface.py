@@ -118,10 +118,16 @@ class CarInterface(CarInterfaceBase):
 
     if candidate in (CAMERA_ACC_CAR | SDGM_CAR):
       ret.alphaLongitudinalAvailable = candidate not in (CC_ONLY_CAR | SDGM_CAR)
-      ret.networkLocation = NetworkLocation.fwdCamera
-      ret.radarUnavailable = True  # no radar
-      ret.pcmCruise = True
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM.value
+      ret.pcmCruise = True
+      if candidate in CAR.CHEVROLET_MALIBU_2019:
+        ret.networkLocation = NetworkLocation.gateway
+        ret.radarUnavailable = False
+      else:
+        ret.networkLocation = NetworkLocation.fwdCamera
+        ret.radarUnavailable = True
+
+
       ret.minEnableSpeed = -1 * CV.KPH_TO_MS
       ret.minSteerSpeed = 10 * CV.KPH_TO_MS
 
@@ -136,10 +142,9 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.1
 
       if alpha_long:
-        ret.pcmCruise = False
-        ret.openpilotLongitudinalControl = True
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
-
+        ret.openpilotLongitudinalControl = True
+        ret.pcmCruise = False
       if candidate in ALT_ACCS:
         ret.alphaLongitudinalAvailable = False
         ret.openpilotLongitudinalControl = False
@@ -185,7 +190,7 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.1
       ret.stopAccel = -0.5
       ret.startingState = True
-      ret.startAccel = 0.7
+      ret.startAccel = 1.9
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -205,8 +210,6 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kf = 0.00004   # full torque for 20 deg at 80mph means 0.00007818594
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
-      ret.networkLocation = NetworkLocation.gateway
-      ret.radarUnavailable = False
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
       ret.longitudinalTuning.kpBP = [0.]
@@ -354,7 +357,6 @@ class CarInterface(CarInterfaceBase):
     elif candidate == CAR.CHEVROLET_TRAVERSE:
       ret.networkLocation = NetworkLocation.gateway
       ret.radarUnavailable = False
-      ret.pcmCruise = False
       ret.stoppingDecelRate = 1.0
       ret.minEnableSpeed = -1.
       ret.vEgoStopping = 0.2

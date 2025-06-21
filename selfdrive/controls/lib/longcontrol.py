@@ -13,7 +13,7 @@ LongCtrlState = car.CarControl.Actuators.LongControlState
 
 def long_control_state_trans(CP, active, long_control_state, v_ego,
                              should_stop, brake_pressed, cruise_standstill, a_ego, stopping_accel, radarState):
-  stop_dist = 20.0 # 미터단위
+  stop_dist = 7.0 # 미터단위
   lead = radarState.leadOne
   stopping_condition = should_stop or (lead.status and lead.dRel < stop_dist)
   # 오픈파일럿이 LongitudinalControl 중일 때만, 멈춘 뒤 브레이크 해제 무시
