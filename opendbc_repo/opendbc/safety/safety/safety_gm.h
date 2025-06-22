@@ -56,7 +56,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // enter controls on falling edge of set or rising edge of resume (avoids fault)
-      bool set = (button != GM_BTN_SET) && (cruise_button_prev == GM_BTN_SET);
+      bool set = (cruise_button_prev == GM_BTN_SET) && (button != GM_BTN_SET);
       bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
       if (set || res) {
         controls_allowed = true;
@@ -75,18 +75,19 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM)) {  //CAM_ACC도 190브레이크답력을 적용하기 위함(단,carstate.py에서 말리부와 이쿼녹스에 한정시킴).
-      if (addr == 0xBE) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 10U; //핑거190 브레이크답력
-      }
+    // BE,C9 통합로직
+    static bool brake_c9 = false;
+    static bool brake_be = false;
+    if (addr == 0xBE) {
+      brake_be = GET_BYTE(to_push, 1) >= 10U;  //1이상에도 감지됨
+    }
+    if (addr == 0xC9) {
+      brake_c9 = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
+      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
     }
 
-    if (addr == 0xC9) {
-      if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM)) {
-        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
-      }
-      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
-    }
+    // 신호중 하나라도 눌리면 true
+    brake_pressed = brake_be || brake_c9;
 
     // 브레이크 rising‐edge 헤제 즉,
     // Auto-resume 토글용 브레이크는 skip 프레임 동안 무시
@@ -115,9 +116,12 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         const int CRUISE_ACTIVE = 1;
         const int CRUISE_STANDSTILL = 4;
         bool cruise_engaged = (cruise_state == CRUISE_ACTIVE) || (cruise_state == CRUISE_STANDSTILL);
+        // 이전 상태 저장
+        bool prev = cruise_engaged_prev;
+        // 기존 stock ACC 토글 로직
         pcm_cruise_check(cruise_engaged);
         // Rising edge(Off→Active) 시점에 허용
-        if (cruise_engaged && !cruise_engaged_prev) {
+        if (cruise_engaged && !prev) {
           controls_allowed = true;
         }
         // 상태 갱신

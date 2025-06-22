@@ -190,7 +190,7 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.1
       ret.stopAccel = -0.5
       ret.startingState = True
-      ret.startAccel = 1.9
+      ret.startAccel = 0.7
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
