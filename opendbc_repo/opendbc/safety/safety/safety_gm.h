@@ -60,11 +60,13 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
       if (set || res) {
         controls_allowed = true;
+        aol_allowed = true;  //조향도 재개
       }
 
       // exit controls on cancel press
       if (button == GM_BTN_CANCEL) {
         controls_allowed = false;
+        aol_allowed = false;  //조향도 해제
       }
       // Auto-Resume 토글용 브레이크 스킵 설정
       if (res) {
@@ -105,11 +107,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       }
 
       // enter controls on rising edge of ACC, exit controls when ACC off
-      if (gm_cam_long) {
-        // alpha_long 모드는 즉시 권한 허용
-        controls_allowed = true;
-      }
-      else if (gm_pcm_cruise && gm_has_acc) {
+      if (gm_pcm_cruise && gm_has_acc) {
         //bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
         //pcm_cruise_check(cruise_engaged);
         int cruise_state = (GET_BYTE(to_push, 1) >> 5) & 0x7U;
@@ -123,6 +121,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         // Rising edge(Off→Active) 시점에 허용
         if (cruise_engaged && !prev) {
           controls_allowed = true;
+          aol_allowed = true;
         }
         // 상태 갱신
         cruise_engaged_prev = cruise_engaged;
@@ -213,7 +212,12 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
         if(!controls_allowed) print("@@auto cruise control enabled....\n");
         controls_allowed = true;        
     }
-    int gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    int gas_regen = 0;
+    if ((gm_hw == GM_ASCM) || gm_cam_long) {
+      gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    } else {
+      gas_regen = ((GET_BYTE(to_send, 1) & 0x1U) << 13) + ((GET_BYTE(to_send, 2) & 0xFFU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
+    }
 
     bool violation = false;
     // Allow apply bit in pre-enabled and overriding states
