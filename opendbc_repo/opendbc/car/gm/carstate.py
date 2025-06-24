@@ -141,10 +141,6 @@ class CarState(CarStateBase):
       ret.brakePressed = True
     else:
       ret.brakePressed = brake_be
-    # 디버그 출력
-    print(f"[BRAKE_DBG] C9={raw_c9} -> {brake_c9},"
-         f"F1={raw_f1} -> {brake_f1},"
-         f"BE ={raw_be} -> {brake_be}")
     #ret.brakePressed = brake_c9 or brake_f1 or brake_be
 
     #else:
