@@ -114,7 +114,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         controls_allowed = true;
         aol_allowed      = true;
       // enter controls on rising edge of ACC, exit controls when ACC off
-      else if (gm_pcm_cruise && gm_has_acc) {
+      } else if (gm_pcm_cruise && gm_has_acc) {
         //bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
         //pcm_cruise_check(cruise_engaged);
         int cruise_state = (GET_BYTE(to_push, 1) >> 5) & 0x7U;
