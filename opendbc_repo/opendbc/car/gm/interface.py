@@ -139,6 +139,8 @@ class CarInterface(CarInterfaceBase):
         ret.pcmCruise = False
         ret.openpilotLongitudinalControl = True
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
+        # 브레이크 토글(= 페달 롱) 모드 활성화
+        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_PEDAL_LONG.value
 
       if candidate in ALT_ACCS:
         ret.alphaLongitudinalAvailable = False
