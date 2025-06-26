@@ -82,7 +82,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     static bool brake_be = false;
     static bool brake_f1 = false;
     if (addr == 0xBE) {
-      brake_be = GET_BYTE(to_push, 1) >= 10U;  //1이상에도 감지됨
+      brake_be = GET_BYTE(to_push, 1) >= 10U;
     }
     if (addr == 0xF1) {
       brake_f1 = GET_BYTE(to_push, 1) >= 15U;
@@ -109,9 +109,12 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       if (!enable_gas_interceptor) {
         gas_pressed = GET_BYTE(to_push, 5) != 0U;
       }
-
+      //alpha_long 모드라면 즉시 허용
+      if (gm_cam_long) {
+        controls_allowed = true;
+        aol_allowed      = true;
       // enter controls on rising edge of ACC, exit controls when ACC off
-      if (gm_pcm_cruise && gm_has_acc) {
+      else if (gm_pcm_cruise && gm_has_acc) {
         //bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
         //pcm_cruise_check(cruise_engaged);
         int cruise_state = (GET_BYTE(to_push, 1) >> 5) & 0x7U;
