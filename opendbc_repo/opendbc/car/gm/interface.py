@@ -139,7 +139,6 @@ class CarInterface(CarInterfaceBase):
         ret.pcmCruise = False
         ret.openpilotLongitudinalControl = True
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
-        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_PEDAL_LONG.value
 
       if candidate in ALT_ACCS:
         ret.alphaLongitudinalAvailable = False

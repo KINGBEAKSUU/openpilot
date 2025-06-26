@@ -116,23 +116,18 @@ class CarState(CarStateBase):
 
     #(0xC9) — CAM_ACC우선 순위
     brake_c9 = False
-    raw_c9 = None
     if self.CP.networkLocation == NetworkLocation.fwdCamera and "ECMEngineStatus" in pt_cp.vl:
       raw_c9 = pt_cp.vl["ECMEngineStatus"]["BrakePressed"]
       brake_c9 = raw_c9 != 0
     #(0xF1)
     brake_f1 = False
-    raw_f1 = None
     if "EBCMBrakePedalPosition" in pt_cp.vl:
       raw_f1 = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"]
-      ret.brake = raw_f1
       brake_f1 = raw_f1 >= 15
     #(0xBE)
     brake_be = False
-    raw_be = None
     if "ECMAcceleratorPos" in pt_cp.vl:
       raw_be = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
-      ret.brake = raw_be
       brake_be = raw_be >= 10
     # 우선순위: C9 → F1 → BE
     if brake_c9:

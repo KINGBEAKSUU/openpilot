@@ -78,15 +78,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
     // BE,C9, F1 통합로직
-    static bool brake_c9 = false;
-    static bool brake_be = false;
-    static bool brake_f1 = false;
-    if (addr == 0xBE) {
-      brake_be = GET_BYTE(to_push, 1) >= 10U;
-    }
-    if (addr == 0xF1) {
-      brake_f1 = GET_BYTE(to_push, 1) >= 15U;
-    }
+    static bool brake_be = false, brake_f1 = false, brake_c9 = false;
+    if (addr == 0xBE) brake_be = GET_BYTE(to_push, 1) >= 10U;
+    if (addr == 0xF1) brake_f1 = GET_BYTE(to_push, 1) >= 15U;
     if (addr == 0xC9) {
       brake_c9 = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
       acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
@@ -112,7 +106,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       //alpha_long 모드라면 즉시 허용
       if (gm_cam_long) {
         controls_allowed = true;
-        aol_allowed      = true;
       // enter controls on rising edge of ACC, exit controls when ACC off
       } else if (gm_pcm_cruise && gm_has_acc) {
         //bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
