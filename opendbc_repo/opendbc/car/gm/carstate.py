@@ -114,25 +114,18 @@ class CarState(CarStateBase):
     else:
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL2"]["PRNDL2"], None))
 
-    brake_be = False
-    raw_be = None
-    if "ECMAcceleratorPos" in pt_cp.vl:
-      raw_be = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
-      ret.brake = raw_be
-      brake_be = raw_be >= 10
-    brake_c9 = False
-    raw_c9 = None
-    if "ECMEngineStatus" in pt_cp.vl:
-      raw_c9 = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
-      brake_c9 = raw_c9 != 0
-    ret.brakePressed = brake_be or brake_c9
-
-    #else:
+    ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
+    if self.CP.networkLocation == NetworkLocation.fwdCamera:
+      if self.CP.carFingerprint in CAR.CHEVROLET_MALIBU_2019:
+        ret.brakePressed = ret.brake >= 10
+      else:
+        ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
+    else:
       # Some Volt 2016-17 have loose brake pedal push rod retainers which causes the ECM to believe
       # that the brake is being intermittently pressed without user interaction.
       # To avoid a cruise fault we need to use a conservative brake position threshold
       # https://static.nhtsa.gov/odi/tsbs/2017/MC-10137629-9999.pdf
-      #ret.brakePressed = ret.brake >= 10
+      ret.brakePressed = ret.brake >= 10
 
     # Regen braking is braking
     if self.CP.transmissionType == TransmissionType.direct:

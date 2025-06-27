@@ -77,18 +77,22 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    // BE,C9, F1 통합로직
-    static bool brake_be = false, brake_c9 = false;
-    if (addr == 0xBE) brake_be = GET_BYTE(to_push, 1) >= 10U;
-    if (addr == 0xC9) {
-      brake_c9 = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
-      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
+    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM)) {  //CAM_ACC도 190브레이크답력을 적용하기 위함(단,carstate.py에서 말리부와 이쿼녹스에 한정시킴).
+      if (addr == 0xBE) {
+        brake_pressed = GET_BYTE(to_push, 1) >= 10U; //핑거190 브레이크답력
+      }
+      if (addr == 0xF1) {
+        brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거241 브레이크답력
+      }
     }
 
-    // 신호중 하나라도 눌리면 true
-    brake_pressed = brake_be || brake_c9;
+    if (addr == 0xC9) {
+      if ((gm_hw == GM_CAM) || (gm_hw == GM_ASCM)) {
+        brake_pressed = GET_BIT(to_push, 40U);  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
+      }
+      acc_main_on = GET_BIT(to_push, 29U);  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
+    }
 
-    // 브레이크 rising‐edge 헤제 즉,
     // Auto-resume 토글용 브레이크는 skip 프레임 동안 무시
     if (frame > skip_brake_disable_frame) {
       // 운전자 브레이크 rising-edge
@@ -252,7 +256,8 @@ static int gm_fwd_hook(int bus_num, int addr) {
     if (bus_num == 0) {
       // block PSCMStatus; forwarded through openpilot to hide an alert from the camera
       bool is_pscm_msg = (addr == 0x184);
-      if (!is_pscm_msg) {
+      bool is_acc_passthrough = (addr == 0x315); //0x315는 0번 버스에서 카메라버스로도 보내야 됨
+      if (!is_pscm_msg || is_acc_passthrough) {
         bus_fwd = 2;
       }
     }
@@ -260,8 +265,9 @@ static int gm_fwd_hook(int bus_num, int addr) {
     if (bus_num == 2) {
       // block lkas message and acc messages if gm_cam_long, forward all others
       bool is_lkas_msg = (addr == 0x180);
-      bool is_acc_msg = (addr == 0x315) || (addr == 0x2CB) || (addr == 0x370);
-      bool block_msg = is_lkas_msg || (is_acc_msg && gm_cam_long);
+      //bool is_acc_msg = (addr == 0x315) || (addr == 0x2CB) || (addr == 0x370);
+      // 0x315은 gm_cam_long 여부와 상관없이 허용해서 트블도 크루즈 진입을 가능하게 해봄.
+      bool block_msg = is_lkas_msg || ((addr == 0x2CB || addr == 0x370) && gm_cam_long);
       if (!block_msg) {
         bus_fwd = 0;
       }
