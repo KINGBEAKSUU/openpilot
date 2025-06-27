@@ -205,6 +205,7 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kf = 0.00004   # full torque for 20 deg at 80mph means 0.00007818594
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
+      ret.networkLocation = NetworkLocation.gateway
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
       ret.longitudinalTuning.kpBP = [0.]
