@@ -114,12 +114,12 @@ class CarState(CarStateBase):
     else:
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL2"]["PRNDL2"], None))
 
-    ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
+    if self.CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value:
+      ret.brake = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"] / 0xd0
+    else:
+      ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
-      if self.CP.carFingerprint in CAR.CHEVROLET_MALIBU_2019:
-        ret.brakePressed = ret.brake >= 10
-      else:
-        ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
+      ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
     else:
       # Some Volt 2016-17 have loose brake pedal push rod retainers which causes the ECM to believe
       # that the brake is being intermittently pressed without user interaction.
@@ -245,6 +245,9 @@ class CarState(CarStateBase):
     if CP.enableBsm:
       pt_messages.append(("BCMBlindSpotMonitor", 10))
 
+    if CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value:
+      pt_messages.remove(("ECMAcceleratorPos", 80))
+      pt_messages.append(("EBCMBrakePedalPosition", 100))
 
     if CP.transmissionType == TransmissionType.direct:
       pt_messages += [

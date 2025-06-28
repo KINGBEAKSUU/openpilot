@@ -16,6 +16,7 @@ from opendbc.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallb
 TransmissionType = structs.CarParams.TransmissionType
 NetworkLocation = structs.CarParams.NetworkLocation
 
+ACCELERATOR_POS_MSG = 0xbe
 TPMS_POS_MSG = 0x52B ## TPMS
 
 NON_LINEAR_TORQUE_PARAMS = {
@@ -117,7 +118,7 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kiBP = [0.]
 
     if candidate in (CAMERA_ACC_CAR | SDGM_CAR):
-      ret.alphaLongitudinalAvailable = candidate not in (CC_ONLY_CAR | SDGM_CAR)
+      ret.alphaLongitudinalAvailable = candidate not in SDGM_CAR
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
@@ -129,11 +130,11 @@ class CarInterface(CarInterfaceBase):
       ret.longitudinalTuning.kpV = [1.0]
       ret.longitudinalTuning.kiV = [1.0]
       ret.stoppingDecelRate = 2.0  # reach brake quickly after enabling
-      ret.stopAccel = -0.4
-      ret.startingState = True
-      ret.startAccel = .6
       ret.vEgoStopping = 0.2
-      ret.vEgoStarting = 0.1
+      ret.vEgoStarting = 0.15
+      ret.stopAccel = -0.6
+      ret.startingState = True
+      ret.startAccel = 1.0
 
       if alpha_long:
         ret.pcmCruise = False
@@ -183,7 +184,7 @@ class CarInterface(CarInterfaceBase):
       ret.stoppingDecelRate = 0.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.2
       ret.vEgoStarting = 0.1
-      ret.stopAccel = -0.5
+      ret.stopAccel = -0.6
       ret.startingState = True
       ret.startAccel = 0.7
 
@@ -215,10 +216,10 @@ class CarInterface(CarInterfaceBase):
       ret.longitudinalTuning.kf = 1.0
       ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.2
-      ret.vEgoStarting = 0.1
+      ret.vEgoStarting = 0.15
       ret.stopAccel = -0.7
       ret.startingState = True
-      ret.startAccel = .7
+      ret.startAccel = 1.0
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -416,6 +417,8 @@ class CarInterface(CarInterfaceBase):
     if candidate in CC_ONLY_CAR:
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.NO_ACC.value
 
+    if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
+      ret.flags |= GMFlags.NO_ACCELERATOR_POS_MSG.value
 
     # kans: TPMS
     if TPMS_POS_MSG in fingerprint[CanBus.POWERTRAIN]:
