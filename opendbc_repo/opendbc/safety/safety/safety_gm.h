@@ -86,7 +86,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거190 브레이크답력
       }
       if (addr == 0xF1) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거241 브레이크답력
+        brake_pressed = GET_BYTE(to_push, 1) >= 12U; //핑거241 브레이크답력
       }
     }
 
