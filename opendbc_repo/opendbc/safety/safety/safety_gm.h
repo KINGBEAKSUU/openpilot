@@ -114,8 +114,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         //pcm_cruise_check(cruise_engaged);
         int cruise_state = (GET_BYTE(to_push, 1) >> 5) & 0x7U;
         const int CRUISE_ACTIVE = 1;
+        const int CRUISE_STANDBY = 2;
         const int CRUISE_STANDSTILL = 4;
-        bool cruise_engaged = (cruise_state == CRUISE_ACTIVE) || (cruise_state == CRUISE_STANDSTILL);
+        bool cruise_engaged = (cruise_state == CRUISE_ACTIVE) || (cruise_state == CRUISE_STANDBY) || (cruise_state == CRUISE_STANDSTILL);
         // 이전 상태 저장
         bool prev = cruise_engaged_prev;
         // 기존 stock ACC 토글 로직
