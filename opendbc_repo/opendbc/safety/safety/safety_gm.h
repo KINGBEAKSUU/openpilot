@@ -92,9 +92,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     if (addr == 0xC9) {
       if ((gm_hw == GM_CAM) || (gm_hw == GM_ASCM)) {
-        brake_pressed = GET_BIT(to_push, 40U);  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
+        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
       }
-      acc_main_on = GET_BIT(to_push, 29U);  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
+      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
     }
 
     // Auto-resume 토글용 브레이크는 skip 프레임 동안 무시
