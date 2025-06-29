@@ -29,6 +29,26 @@ static int skip_brake_disable_frame = 0; //리쥼용 브레크신호로 인한 �
 const int GM_STANDSTILL_THRSLD = 10;  // 0.311kph 미세 속도에도 standstill해제될 가능성 있으므로 20~15로 튜닝해볼 필요 있음.
 const int GM_GAS_INTERCEPTOR_THRESHOLD = 550;
 #define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U)
+
+static void handle_gm_wheel_buttons(const CANPacket_t *to_push) {
+  int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
+
+  // enter controls on falling edge of set or rising edge of resume (avoids fault)
+  bool set = (cruise_button_prev == GM_BTN_SET) && (button != GM_BTN_SET);
+  bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
+  if (set || res) {
+    controls_allowed = true;
+  }
+  // exit controls on cancel press
+  if (button == GM_BTN_CANCEL) {
+    controls_allowed = false;
+  }
+  // Auto-Resume 토글용 브레이크 스킵 설정
+  if (res) {
+    skip_brake_disable_frame = frame + 10;
+  }
+  cruise_button_prev = button;
+}
   
 static void gm_rx_hook(const CANPacket_t *to_push) {
   static int frame = 0;  //리쥼용 브레이크신호로 인한 크루즈폴트 무시용 플래그
@@ -53,24 +73,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
     if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cc_long || gm_cam_long)) {
-      int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
-
-      // enter controls on falling edge of set or rising edge of resume (avoids fault)
-      bool set = (cruise_button_prev == GM_BTN_SET) && (button != GM_BTN_SET);
-      bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
-      if (set || res) {
-        controls_allowed = true;
-      }
-
-      // exit controls on cancel press
-      if (button == GM_BTN_CANCEL) {
-        controls_allowed = false;
-      }
-      // Auto-Resume 토글용 브레이크 스킵 설정
-      if (res) {
-        skip_brake_disable_frame = frame + 10;
-      }
-      cruise_button_prev = button;
+      handle_gm_wheel_buttons(to_push);
     }
 
     // Reference for brake pressed signals:
@@ -209,13 +212,13 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   if (addr == 0x2CB) {
     bool apply = GET_BIT(to_send, 0U);
     if (apply) {
-        if(!controls_allowed) print("@@auto cruise control enabled....\n");
+      if(!controls_allowed) print("@@auto cruise control enabled....\n");
         controls_allowed = true;        
     }
     int gas_regen = 0;
-    if ((gm_hw == GM_ASCM) || gm_cam_long) {
+    if (gm_hw == GM_ASCM) {
       gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
-    } else {
+    } else if (gm_hw == GM_CAM) {
       gas_regen = ((GET_BYTE(to_send, 1) & 0x1U) << 13) + ((GET_BYTE(to_send, 2) & 0xFFU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
     }
 
