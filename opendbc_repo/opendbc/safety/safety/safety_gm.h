@@ -31,6 +31,9 @@ const int GM_GAS_INTERCEPTOR_THRESHOLD = 550;
 #define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U)
 
 static void handle_gm_wheel_buttons(const CANPacket_t *to_push) {
+  static int frame = 0;  //리쥼용 브레이크신호로 인한 크루즈폴트 무시용 플래그
+  frame++;
+
   int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
   // enter controls on falling edge of set or rising edge of resume (avoids fault)
