@@ -83,7 +83,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
     if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM)) {  //CAM_ACC도 190브레이크답력을 적용하기 위함(단,carstate.py에서 말리부와 이쿼녹스에 한정시킴).
       if (addr == 0xBE) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 8U; //핑거190 브레이크답력
+        brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거190 브레이크답력
       }
       if (addr == 0xF1) {
         brake_pressed = GET_BYTE(to_push, 1) >= 15U; //핑거241 브레이크답력
