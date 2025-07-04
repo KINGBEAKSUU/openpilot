@@ -57,7 +57,7 @@ class CarController(CarControllerBase):
     self.accel_g = 0.0
     # GM: AutoResume
     self.activateCruise_after_brake = False
-    self.v_cruise_carrot = VCruiseCarrot(self.CP)
+    self.waiting_for_release = False
 
   @staticmethod
   def calc_pedal_command(accel: float, long_active: bool, car_velocity) -> tuple[float, bool]:
@@ -141,9 +141,9 @@ class CarController(CarControllerBase):
       can_sends.append(gmcan.create_steering_control(self.packer_pt, CanBus.POWERTRAIN, apply_torque, idx, CC.latActive))
 
     if self.CP.openpilotLongitudinalControl:
+      button_counter = (CS.buttons_counter + 1) % 4
 
-      if self.CP.carFingerprint in (CAR.CHEVROLET_VOLT):
-        button_counter = (CS.buttons_counter + 1) % 4
+      if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
         # Auto Cruise
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
@@ -155,23 +155,44 @@ class CarController(CarControllerBase):
         elif actuators.longControlState == LongCtrlState.starting:
           if CS.out.cruiseState.enabled and not self.activateCruise_after_brake: #브레이크신호 한번만 보내기 위한 조건.
             idx = (self.frame // 4) % 4
-            brake_force = -0.5  #롱컨캔슬을 위한 브레이크값(0.0 이하)
-            apply_brake = self.brake_input(brake_force)
+            apply_brake = self.brake_input(-0.5) #롱컨캔슬을 위한 브레이크값(0.0 이하)
             # 브레이크신호 전송(롱컨 꺼짐)
             can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
             Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
             self.activateCruise_after_brake = True # 브레이크신호는 한번만 보내고 초기화
       else:
-        auto_cruise_control = self.v_cruise_carrot.autoCruiseControl
-        if (CS.out.activateCruise or auto_cruise_control > 0) and \
-           not CS.out.cruiseState.enabled:
+        # CamAcc: Auto Cruise(DECEL_SET → SET)
+        if CS.out.activateCruise and not CS.out.cruiseState.enabled:
+          self.activateCruise_after_brake = False
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
             self.last_button_frame = self.frame
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
-        
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
+            self.waiting_for_release = True
+
+        # Release (DECEL_SET → UNPRESS)
+        elif self.waiting_for_release and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
+          self.last_button_frame = self.frame
+          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
+          self.waiting_for_release = False
+
+        # CamAcc: AutoResume 1st step(CANCEL버튼 전송 = 브레이크 토글용)
+        elif actuators.longControlState == LongCtrlState.starting:
+          if CS.out.cruiseState.enabled and not self.activateCruise_after_brake:
+            idx = (self.frame // 4) % 4
+            apply_brake = self.brake_input(-0.5)
+            can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
+            # Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) #필요시 추가되어야 할 부분.
+            self.activateCruise_after_brake = True
+            self.last_button_frame = self.frame # 버튼전송 초기화
+          # CamAcc: AutoResume 2nd step (RES_ACCEL press)
+          elif (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
+            self.last_button_frame = self.frame
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.RES_ACCEL))
+            self.activateCruise_after_brake = False
+
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
-      # GM: softHold
+        # GM: softHold
         stopping = actuators.longControlState == LongCtrlState.stopping or CS.out.softHoldActive > 0
 
         # Pitch compensated acceleration;
@@ -244,7 +265,10 @@ class CarController(CarControllerBase):
             at_full_stop = at_full_stop and not resume
 
           if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
-            acc_engaged = False
+            if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
+              acc_engaged = False
+            else:
+              acc_engaged = CC.enabled
           else:
             acc_engaged = CC.enabled
 

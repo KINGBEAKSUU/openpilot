@@ -88,7 +88,6 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop):
 
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
 
-
 def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_stop, at_full_stop, CP):
   mode = 0x1
 
@@ -196,14 +195,14 @@ def create_regen_paddle_command(packer, bus):
   return packer.make_can_msg("EBCMRegenPaddle", bus, values)
 
 def create_gm_cc_spam_command(packer, controller, CS, actuators):
-  if controller.params_.get_bool("IsMetric"):
-    _CV = CV.MS_TO_KPH
-    RATE_UP_MAX = 0.04
-    RATE_DOWN_MAX = 0.04
-  else:
-    _CV = CV.MS_TO_MPH
-    RATE_UP_MAX = 0.2
-    RATE_DOWN_MAX = 0.2
+  # if controller.params_.get_bool("IsMetric"):
+  #   _CV = CV.MS_TO_KPH
+  #   RATE_UP_MAX = 0.04
+  #   RATE_DOWN_MAX = 0.04
+  # else:
+  _CV = CV.MS_TO_MPH
+  RATE_UP_MAX = 0.2
+  RATE_DOWN_MAX = 0.2
 
   accel = actuators.accel * _CV  # m/s/s to mph/s
   speedSetPoint = int(round(CS.out.cruiseState.speed * _CV))

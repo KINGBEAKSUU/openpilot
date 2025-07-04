@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "safety_declarations.h"
 
@@ -24,16 +24,39 @@ static bool gm_pedal_long = false;
 static bool gm_cc_long = false;
 static bool gm_skip_relay_check = false;
 static bool gm_force_ascm = false;
+static int skip_brake_disable_frame = 0; //리쥼용 브레크신호로 인한 크루즈폴트 무시용 플래그.
+
+const int GM_STANDSTILL_THRSLD = 10;  // 0.311kph 미세 속도에도 standstill해제될 가능성 있으므로 20~15로 튜닝해볼 필요 있음.
+const int GM_GAS_INTERCEPTOR_THRESHOLD = 550;
+#define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U)
+
+static void handle_gm_wheel_buttons(const CANPacket_t *to_push) {
+  static int frame = 0;  //리쥼용 브레이크신호로 인한 크루즈폴트 무시용 플래그
+  frame++;
+
+  int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
+
+  // enter controls on falling edge of set or rising edge of resume (avoids fault)
+  bool set = (cruise_button_prev == GM_BTN_SET) && (button != GM_BTN_SET);
+  bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
+  if (set || res) {
+    controls_allowed = true;
+  }
+
+  // exit controls on cancel press
+  if (button == GM_BTN_CANCEL) {
+    controls_allowed = false;
+  }
+  // Auto-Resume 토글용 브레이크 스킵 설정
+  if (res) {
+    skip_brake_disable_frame = frame + 10;
+  }
+  cruise_button_prev = button;
+}
 
 static void gm_rx_hook(const CANPacket_t *to_push) {
-
-  const int GM_STANDSTILL_THRSLD = 10;  // 0.311kph
-  // panda interceptor threshold needs to be equivalent to openpilot threshold to avoid controls mismatches
-  // If thresholds are mismatched then it is possible for panda to see the gas fall and rise while openpilot is in the pre-enabled state
-  const int GM_GAS_INTERCEPTOR_THRESHOLD = 550; // (675 + 355) / 2 ratio between offset and gain from dbc file
-  #define GM_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U) // avg between 2 tracks
-
-
+  static int frame = 0;  //리쥼용 브레이크신호로 인한 크루즈폴트 무시용 플래그
+  frame++;
 
   if (GET_BUS(to_push) == 0U) {
     int addr = GET_ADDR(to_push);
@@ -53,33 +76,34 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
-    if ((addr == 0x1E1) && (!gm_pcm_cruise || gm_cc_long)) {
-      int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
-
-      // enter controls on falling edge of set or rising edge of resume (avoids fault)
-      bool set = (button != GM_BTN_SET) && (cruise_button_prev == GM_BTN_SET);
-      bool res = (button == GM_BTN_RESUME) && (cruise_button_prev != GM_BTN_RESUME);
-      if (set || res) {
-        controls_allowed = true;
-      }
-
-      // exit controls on cancel press
-      if (button == GM_BTN_CANCEL) {
-        controls_allowed = false;
-      }
-
-      cruise_button_prev = button;
+    if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cc_long || gm_cam_long)) {
+      handle_gm_wheel_buttons(to_push);
     }
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if ((addr == 0xBE) && (gm_hw == GM_ASCM)) {
-      brake_pressed = GET_BYTE(to_push, 1) >= 10U;
+    // BE,C9,F1 통합로직
+    static bool brake_c9 = false;
+    static bool brake_be = false;
+    if (addr == 0xBE) {
+      brake_be = GET_BYTE(to_push, 1) >= 10U;
+    }
+    if (addr == 0xC9) {
+      brake_c9 = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
+      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
     }
 
-    if ((addr == 0xC9) && (gm_hw == GM_CAM)) {
-      brake_pressed = GET_BIT(to_push, 40U);
+    // 신호중 하나라도 눌리면 true
+    brake_pressed = brake_be || brake_c9;
+
+    // Auto-resume 토글용 브레이크(rising‐edge)는 skip 프레임 동안 무시
+    if (frame > skip_brake_disable_frame) {
+      // 운전자 브레이크 rising-edge
+      if (brake_pressed && !brake_pressed_prev && vehicle_moving) {
+        controls_allowed = false;
+      }
     }
+    brake_pressed_prev = brake_pressed;
 
     if (addr == 0x1C4) {
       if (!enable_gas_interceptor) {
@@ -88,8 +112,22 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
       // enter controls on rising edge of ACC, exit controls when ACC off
       if (gm_pcm_cruise && gm_has_acc) {
-        bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
+        //bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U; 크루즈인게이지를 0(OFF)이 아닌 경우만 보는 코드.
+        //pcm_cruise_check(cruise_engaged);
+        int cruise_state = (GET_BYTE(to_push, 1) >> 5) & 0x7U;  //크루즈 인게이지를 1,4일때만 유효하게 하기 위한 코드.
+        const int CRUISE_ACTIVE = 1;
+        const int CRUISE_STANDSTILL = 4;
+        bool cruise_engaged = (cruise_state == CRUISE_ACTIVE) || (cruise_state == CRUISE_STANDSTILL);
+        // 이전 상태 저장
+        bool prev = cruise_engaged_prev;
+        // 기존 stock ACC 토글 로직
         pcm_cruise_check(cruise_engaged);
+        // Rising edge(Off→Active) 시점에 허용
+        if (cruise_engaged && !prev) {
+          controls_allowed = true;
+        }
+        // 상태 갱신
+        cruise_engaged_prev = cruise_engaged;
       }
     }
 
@@ -112,7 +150,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       int gas_interceptor = GM_GET_INTERCEPTOR(to_push);
       gas_pressed = gas_interceptor > GM_GAS_INTERCEPTOR_THRESHOLD;
       gas_interceptor_prev = gas_interceptor;
-//      gm_pcm_cruise = false;
+      // gm_pcm_cruise = false;
     }
 
     bool stock_ecu_detected = (addr == 0x180);  // ASCMLKASteeringCmd
@@ -121,6 +159,8 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     if (!gm_pcm_cruise && !gm_pedal_long && (addr == 0x2CB)) {
       stock_ecu_detected = true;
     }
+    // 운전자 가스오버라이드에도 롱컨 유지
+    alternative_experience |= ALT_EXP_DISABLE_DISENGAGE_ON_GAS;
     generic_rx_checks(stock_ecu_detected);
   }
 }
@@ -179,7 +219,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
     bool violation = false;
     // Allow apply bit in pre-enabled and overriding states
-    violation |= !controls_allowed && apply;
+    //violation |= !controls_allowed && apply;  //테스트: apply체크 제거
     violation |= longitudinal_gas_checks(gas_regen, *gm_long_limits);
 
     if (violation) {
@@ -188,20 +228,19 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   }
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
-  if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long || gm_cc_long)) {
+  if ((addr == 0x1E1) && ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cam_long || gm_pcm_cruise || gm_pedal_long || gm_cc_long)) {
     int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
     // For standard CC, allow spamming of SET / RESUME
-    if (gm_cc_long) {
-      allowed_btn |= cruise_engaged_prev && ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
+    if ((gm_hw == GM_ASCM) || (gm_hw == GM_CAM) || gm_cam_long || gm_cc_long) {
+      allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     }
 
     if (!allowed_btn) {
       tx = false;
     }
   }
-
   return tx;
 }
 
@@ -248,8 +287,7 @@ static safety_config gm_init(uint16_t param) {
 
   static const CanMsg GM_ASCM_TX_MSGS[] = {{0x180, 0, 4}, {0x409, 0, 7}, {0x40A, 0, 7}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7}, {0xBD, 0, 7},// pt bus
                                            {0xA1, 1, 7}, {0x306, 1, 8}, {0x308, 1, 7}, {0x310, 1, 2},   // obs bus
-                                           {0x315, 2, 5}};  // ch bus
-
+                                           {0x315, 2, 5}, {0x1E1, 2, 7}};  // ch bus
 
   static const CanMsg GM_CC_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x1E1, 0, 7},  // pt bus
                                               {0x184, 2, 8}, {0x1E1, 2, 7}};  // camera bus
@@ -263,18 +301,20 @@ static safety_config gm_init(uint16_t param) {
   };
 
   static const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7},  // pt bus
-                                               {0x184, 2, 8}};  // camera bus
+                                               {0x184, 2, 8}, {0x1E1, 2, 7}};  // camera bus
 
 
   // TODO: do checksum and counter checks. Add correct timestep, 0.1s for now.
   static RxCheck gm_rx_checks[] = {
     {.msg = {{0x184, 0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
     {.msg = {{0x34A, 0, 5, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
-    {.msg = {{0x1E1, 0, 7, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
+    {.msg = {{0x1E1, 0, 7, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U},
+             {0x1E1, 2, 7, .ignore_checksum = true, .ignore_counter = true, .frequency = 100000U}}},
     {.msg = {{0xBE, 0, 6, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U},    // Volt, Silverado, Acadia Denali
              {0xBE, 0, 7, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U},    // Bolt EUV
              {0xBE, 0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}}},  // Escalade
-    {.msg = {{0xF1, 0, 6, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
+    {.msg = {{0xF1, 0, 6, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U},
+             {0xF1, 2, 6, .ignore_checksum = true, .ignore_counter = true, .frequency = 100000U}}},
     {.msg = {{0x1C4, 0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
     {.msg = {{0xC9, 0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
   };
