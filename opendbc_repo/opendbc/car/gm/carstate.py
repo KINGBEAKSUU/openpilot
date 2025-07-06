@@ -205,8 +205,9 @@ class CarState(CarStateBase):
                       pt_cp.vl["EBCMFrictionBrakeStatus"]["FrictionBrakeUnavailable"] == 1)
 
     #ret.cruiseState.enabled = pt_cp.vl["AcceleratorPedal2"]["CruiseState"] != AccState.OFF
-    # OFF외의 모든 경우를 True로 보던 것을 ACTIVE/STANDSTILL만 True로)
+    # OFF외의 모든 경우를 True로 보던 것을 ACTIVE/STANDBY/STANDSTILL만 True로)
     ret.cruiseState.enabled = (pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.ACTIVE \
+       or pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.STANDBY \
        or pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.STANDSTILL)
     ret.cruiseState.standstill = pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.STANDSTILL
     # kans: avoid to accFault

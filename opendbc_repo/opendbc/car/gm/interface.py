@@ -16,8 +16,8 @@ from opendbc.car.interfaces import CarInterfaceBase, TorqueFromLateralAccelCallb
 TransmissionType = structs.CarParams.TransmissionType
 NetworkLocation = structs.CarParams.NetworkLocation
 
-TPMS_POS_MSG = 0x52B ## TPMS
 ACCELERATOR_POS_MSG = 0xbe
+TPMS_POS_MSG = 0x52B ## TPMS
 
 NON_LINEAR_TORQUE_PARAMS = {
   CAR.CHEVROLET_BOLT_EUV: [2.6531724862969748, 1.0, 0.1919764879840985, 0.009054123646805178],
@@ -132,7 +132,7 @@ class CarInterface(CarInterfaceBase):
       ret.stoppingDecelRate = 2.0  # reach brake quickly after enabling
       ret.stopAccel = -0.4
       ret.startingState = True
-      ret.startAccel = .6
+      ret.startAccel = 1.0
       ret.vEgoStopping = 0.2
       ret.vEgoStarting = 0.1
 
@@ -230,7 +230,7 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.1
       ret.stopAccel = -0.7
       ret.startingState = True
-      ret.startAccel = .7
+      ret.startAccel = 1.0
 
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
@@ -428,9 +428,9 @@ class CarInterface(CarInterfaceBase):
     if candidate in CC_ONLY_CAR:
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.NO_ACC.value
 
-
     if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
       ret.flags |= GMFlags.NO_ACCELERATOR_POS_MSG.value
+
     # kans: TPMS
     if TPMS_POS_MSG in fingerprint[CanBus.POWERTRAIN]:
       ret.flags |= GMFlags.TPMS_MSG.value

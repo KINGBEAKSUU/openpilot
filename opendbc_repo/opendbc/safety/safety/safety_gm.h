@@ -92,15 +92,14 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       brake_pressed = GET_BYTE(to_push, 1) >= 10U;
     }
 
-    if ((addr == 0xC9) && ((gm_hw == GM_CAM) || (gm_hw == GM_SDGM))) {
-      brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
-    }
-
     if (addr == 0xC9) {
-      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
+      if ((gm_hw == GM_CAM) || (gm_hw == GM_SDGM)) {
+        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;  // CAM_ACC용 브레이크on/off 체크(201핑거 40번째 비트)
+      }
+      acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
     }
 
-    // Auto-resume 토글용 브레이크(rising‐edge)는 skip 프레임 동안 무시
+    // Auto-resume 토글용 브레이크는 skip 프레임 동안 무시
     if (frame > skip_brake_disable_frame) {
       // 운전자 브레이크 rising-edge
       if (brake_pressed && !brake_pressed_prev && vehicle_moving) {
@@ -120,8 +119,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         //pcm_cruise_check(cruise_engaged);
         int cruise_state = (GET_BYTE(to_push, 1) >> 5) & 0x7U;  //크루즈 인게이지를 1,4일때만 유효하게 하기 위한 코드.
         const int CRUISE_ACTIVE = 1;
+        const int CRUISE_STANDBY = 2;
         const int CRUISE_STANDSTILL = 4;
-        bool cruise_engaged = (cruise_state == CRUISE_ACTIVE) || (cruise_state == CRUISE_STANDSTILL);
+        bool cruise_engaged = (cruise_state == CRUISE_ACTIVE) || (cruise_state == CRUISE_STANDBY) || (cruise_state == CRUISE_STANDSTILL);
         // 이전 상태 저장
         bool prev = cruise_engaged_prev;
         // 기존 stock ACC 토글 로직
@@ -216,7 +216,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   if (addr == 0x2CB) {
     bool apply = GET_BIT(to_send, 0U);
     if (apply) {
-        if(!controls_allowed) print("@@auto cruise control enabled....\n");
+      if(!controls_allowed) print("@@auto cruise control enabled....\n");
         controls_allowed = true;        
     }
     int gas_regen = ((GET_BYTE(to_send, 2) & 0x7FU) << 5) + ((GET_BYTE(to_send, 3) & 0xF8U) >> 3);
