@@ -151,31 +151,16 @@ class CarController(CarControllerBase):
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04: # 25Hz(40ms 버튼주기)
             self.last_button_frame = self.frame
             can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
-            self.waiting_for_release = True
 
-        # Release (DECEL_SET → UNPRESS)
-        elif self.waiting_for_release and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-          self.last_button_frame = self.frame
-          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
-          self.waiting_for_release = False
-
-        # ASCM AutoResume 1st step(CANCEL버튼 전송 = 브레이크 토글용)
+        # GM: AutoResume
         elif actuators.longControlState == LongCtrlState.starting:
-          if CS.out.cruiseState.enabled and not self.activateCruise_after_brake:
+          if CS.out.cruiseState.enabled and not self.activateCruise_after_brake: #브레이크신호 한번만 보내기 위한 조건.
             idx = (self.frame // 4) % 4
             apply_brake = self.brake_input(-0.5) #롱컨캔슬을 위한 브레이크값(0.0 이하)
             # 브레이크신호 전송(롱컨 꺼짐)
             can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
             Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
             self.activateCruise_after_brake = True # 브레이크신호는 한번만 보내고 초기화
-            self.last_button_frame = self.frame # 바로 다음에 리쥼을 보내기 위해 버튼 프레임 초기화 필요.
-
-          # ASCM: AutoResume 2nd step (RES_ACCEL press)
-          elif (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-            self.last_button_frame = self.frame
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.RES_ACCEL))
-            self.activateCruise_after_brake = False # 브레이크신호재개를 위한 초기화
-
       else:
         # CamAcc: Auto Cruise(DECEL_SET → SET)
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:

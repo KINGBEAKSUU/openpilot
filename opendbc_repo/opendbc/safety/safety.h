@@ -86,7 +86,6 @@ bool acc_main_on = false;  // referred to as "ACC off" in ISO 15622:2018
 int cruise_button_prev = 0;
 int cruise_main_prev = 0;
 bool safety_rx_checks_invalid = false;
-bool aol_allowed = false;
 
 // for safety modes with torque steering control
 int desired_torque_last = 0;       // last desired steer torque
@@ -378,9 +377,7 @@ void generic_rx_checks(bool stock_ecu_detected) {
   brake_pressed_prev = brake_pressed;
 
   // exit controls on rising edge of regen paddle
-  // 차가 정지중일때는 제생 제동 버튼으로 롱컨해제가 안되게 수정함.
-  //if (regen_braking && (!regen_braking_prev || vehicle_moving)) {
-  if (regen_braking && vehicle_moving && !regen_braking_prev) {
+  if (regen_braking && (!regen_braking_prev || vehicle_moving)) {
     controls_allowed = false;
   }
   regen_braking_prev = regen_braking;
@@ -457,7 +454,6 @@ int set_safety_hooks(uint16_t mode, uint16_t param) {
   ts_steer_req_mismatch_last = 0;
   valid_steer_req_count = 0;
   invalid_steer_req_count = 0;
-  aol_allowed = false;
 
   // reset samples
   reset_sample(&vehicle_speed);
