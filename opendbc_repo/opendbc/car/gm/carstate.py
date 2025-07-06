@@ -8,7 +8,7 @@ from opendbc.car import Bus, create_button_events, structs
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.interfaces import CarStateBase
 from opendbc.car.gm.values import DBC, AccState, CruiseButtons, STEER_THRESHOLD, CAR, DBC, GMFlags, \
-   CC_ONLY_CAR, CAMERA_ACC_CAR
+   CC_ONLY_CAR, CAMERA_ACC_CAR, SDGM_CAR
 import cereal.messaging as messaging
 
 ButtonType = structs.CarState.ButtonEvent.Type
