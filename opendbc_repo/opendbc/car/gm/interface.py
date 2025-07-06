@@ -17,6 +17,7 @@ TransmissionType = structs.CarParams.TransmissionType
 NetworkLocation = structs.CarParams.NetworkLocation
 
 TPMS_POS_MSG = 0x52B ## TPMS
+ACCELERATOR_POS_MSG = 0xbe
 
 NON_LINEAR_TORQUE_PARAMS = {
   CAR.CHEVROLET_BOLT_EUV: [2.6531724862969748, 1.0, 0.1919764879840985, 0.009054123646805178],
@@ -116,8 +117,8 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kpBP = [0.]
     ret.longitudinalTuning.kiBP = [0.]
 
-    if candidate in (CAMERA_ACC_CAR | SDGM_CAR):
-      ret.alphaLongitudinalAvailable = candidate not in (CC_ONLY_CAR | SDGM_CAR)
+    if candidate in CAMERA_ACC_CAR:
+      ret.alphaLongitudinalAvailable = True #candidate not in (CC_ONLY_CAR | SDGM_CAR)
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
@@ -144,6 +145,16 @@ class CarInterface(CarInterfaceBase):
         ret.alphaLongitudinalAvailable = False
         ret.openpilotLongitudinalControl = False
         ret.minEnableSpeed = -1.  # engage speed is decided by PCM
+
+    elif candidate in SDGM_CAR:
+      ret.longitudinalTuning.kiV = [0.]  # TODO: tuning
+      ret.alphaLongitudinalAvailable = True
+      ret.networkLocation = NetworkLocation.fwdCamera
+      ret.pcmCruise = True
+      ret.radarUnavailable = False
+      ret.minEnableSpeed = -1.  # engage speed is decided by ASCM
+      ret.minSteerSpeed = 30 * CV.MPH_TO_MS
+      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_SDGM.value
 
     else:  # ASCM, OBD-II harness
       ret.openpilotLongitudinalControl = True
@@ -418,6 +429,8 @@ class CarInterface(CarInterfaceBase):
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.NO_ACC.value
 
 
+    if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
+      ret.flags |= GMFlags.NO_ACCELERATOR_POS_MSG.value
     # kans: TPMS
     if TPMS_POS_MSG in fingerprint[CanBus.POWERTRAIN]:
       ret.flags |= GMFlags.TPMS_MSG.value
