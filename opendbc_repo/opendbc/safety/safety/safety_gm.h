@@ -56,13 +56,13 @@ static void handle_gm_wheel_buttons(const CANPacket_t *to_push) {
 }
 
 static void gm_rx_hook(const CANPacket_t *to_push) {
+  static int frame = 0;  //리쥼용 브레이크신호로 인한 크루즈폴트 무시용 플래그
+  frame++;
+  
   if ((GET_BUS(to_push) == 2U) && (GET_ADDR(to_push) == 0x1E1) && (gm_hw == GM_SDGM)) {
     // SDGM buttons are on bus 2
     handle_gm_wheel_buttons(to_push);
   }
-
-  static int frame = 0;  //리쥼용 브레이크신호로 인한 크루즈폴트 무시용 플래그
-  frame++;
 
   if (GET_BUS(to_push) == 0U) {
     int addr = GET_ADDR(to_push);
@@ -98,6 +98,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     if (addr == 0xC9) {
       acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
+    }
 
     // Auto-resume 토글용 브레이크(rising‐edge)는 skip 프레임 동안 무시
     if (frame > skip_brake_disable_frame) {
