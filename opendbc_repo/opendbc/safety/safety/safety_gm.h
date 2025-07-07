@@ -375,6 +375,7 @@ static safety_config gm_init(uint16_t param) {
     }
   } else if (gm_hw == GM_SDGM) {
     ret = BUILD_SAFETY_CFG(gm_rx_checks, GM_SDGM_TX_MSGS);
+    print("GM SDGM\n");
   }
   return ret;
 }
