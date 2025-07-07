@@ -98,6 +98,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       }
       acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
     }
+    if (addr == 0xF1) {
+      brake_pressed = GET_BYTE(to_push, 1) >= 15U;
+    }
 
     // Auto-resume 토글용 브레이크는 skip 프레임 동안 무시
     if (frame > skip_brake_disable_frame) {
