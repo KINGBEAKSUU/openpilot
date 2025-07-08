@@ -73,26 +73,18 @@ class CarState(CarStateBase):
 
     prev_cruise_buttons = self.cruise_buttons
     prev_distance_button = self.distance_button
-    if self.CP.carFingerprint not in SDGM_CAR:
-      self.cruise_buttons = pt_cp.vl["ASCMSteeringButton"]["ACCButtons"]
-      self.distance_button = pt_cp.vl["ASCMSteeringButton"]["DistanceButton"] != 0
-      self.buttons_counter = pt_cp.vl["ASCMSteeringButton"]["RollingCounter"]
-    else:
-      self.cruise_buttons = cam_cp.vl["ASCMSteeringButton"]["ACCButtons"]
-      self.distance_button = cam_cp.vl["ASCMSteeringButton"]["DistanceButton"] != 0
-      self.buttons_counter = cam_cp.vl["ASCMSteeringButton"]["RollingCounter"]
+    self.cruise_buttons = pt_cp.vl["ASCMSteeringButton"]["ACCButtons"]
+    self.distance_button = pt_cp.vl["ASCMSteeringButton"]["DistanceButton"]
+    self.buttons_counter = pt_cp.vl["ASCMSteeringButton"]["RollingCounter"]
+
     self.pscm_status = copy.copy(pt_cp.vl["PSCMStatus"])
     # GAP_DIST
     if self.cruise_buttons in [CruiseButtons.UNPRESS, CruiseButtons.INIT] and self.distance_button:
       self.cruise_buttons = CruiseButtons.GAP_DIST
 
     if self.CP.enableBsm:
-      if self.CP.carFingerprint not in SDGM_CAR:
-        ret.leftBlindspot = pt_cp.vl["BCMBlindSpotMonitor"]["LeftBSM"] == 1
-        ret.rightBlindspot = pt_cp.vl["BCMBlindSpotMonitor"]["RightBSM"] == 1
-      else:
-        ret.leftBlindspot = cam_cp.vl["BCMBlindSpotMonitor"]["LeftBSM"] == 1
-        ret.rightBlindspot = cam_cp.vl["BCMBlindSpotMonitor"]["RightBSM"] == 1
+      ret.leftBlindspot = pt_cp.vl["BCMBlindSpotMonitor"]["LeftBSM"] == 1
+      ret.rightBlindspot = pt_cp.vl["BCMBlindSpotMonitor"]["RightBSM"] == 1
 
     # Variables used for avoiding LKAS faults
     self.loopback_lka_steering_cmd_updated = len(loopback_cp.vl_all["ASCMLKASteeringCmd"]["RollingCounter"]) > 0
@@ -169,32 +161,18 @@ class CarState(CarStateBase):
     ret.steerFaultTemporary = self.lkas_status == 2
     ret.steerFaultPermanent = self.lkas_status == 3
 
-    if self.CP.carFingerprint not in SDGM_CAR:
-      # 1 - open, 0 - closed
-      ret.doorOpen = (pt_cp.vl["BCMDoorBeltStatus"]["FrontLeftDoor"] == 1 or
-                      pt_cp.vl["BCMDoorBeltStatus"]["FrontRightDoor"] == 1 or
-                      pt_cp.vl["BCMDoorBeltStatus"]["RearLeftDoor"] == 1 or
-                      pt_cp.vl["BCMDoorBeltStatus"]["RearRightDoor"] == 1)
+    # 1 - open, 0 - closed
+    ret.doorOpen = (pt_cp.vl["BCMDoorBeltStatus"]["FrontLeftDoor"] == 1 or
+                    pt_cp.vl["BCMDoorBeltStatus"]["FrontRightDoor"] == 1 or
+                    pt_cp.vl["BCMDoorBeltStatus"]["RearLeftDoor"] == 1 or
+                    pt_cp.vl["BCMDoorBeltStatus"]["RearRightDoor"] == 1)
 
-      # 1 - latched
-      ret.seatbeltUnlatched = pt_cp.vl["BCMDoorBeltStatus"]["LeftSeatBelt"] == 0
-      ret.leftBlinker = pt_cp.vl["BCMTurnSignals"]["TurnSignals"] == 1
-      ret.rightBlinker = pt_cp.vl["BCMTurnSignals"]["TurnSignals"] == 2
+    # 1 - latched
+    ret.seatbeltUnlatched = pt_cp.vl["BCMDoorBeltStatus"]["LeftSeatBelt"] == 0
+    ret.leftBlinker = pt_cp.vl["BCMTurnSignals"]["TurnSignals"] == 1
+    ret.rightBlinker = pt_cp.vl["BCMTurnSignals"]["TurnSignals"] == 2
 
-      ret.parkingBrake = pt_cp.vl["BCMGeneralPlatformStatus"]["ParkBrakeSwActive"] == 1
-    else:
-      # 1 - open, 0 - closed
-      ret.doorOpen = (cam_cp.vl["BCMDoorBeltStatus"]["FrontLeftDoor"] == 1 or
-                      cam_cp.vl["BCMDoorBeltStatus"]["FrontRightDoor"] == 1 or
-                      cam_cp.vl["BCMDoorBeltStatus"]["RearLeftDoor"] == 1 or
-                      cam_cp.vl["BCMDoorBeltStatus"]["RearRightDoor"] == 1)
-
-      # 1 - latched
-      ret.seatbeltUnlatched = cam_cp.vl["BCMDoorBeltStatus"]["LeftSeatBelt"] == 0
-      ret.leftBlinker = cam_cp.vl["BCMTurnSignals"]["TurnSignals"] == 1
-      ret.rightBlinker = cam_cp.vl["BCMTurnSignals"]["TurnSignals"] == 2
-
-      ret.parkingBrake = cam_cp.vl["BCMGeneralPlatformStatus"]["ParkBrakeSwActive"] == 1
+    ret.parkingBrake = pt_cp.vl["BCMGeneralPlatformStatus"]["ParkBrakeSwActive"] == 1
 
     ret.cruiseState.available = pt_cp.vl["ECMEngineStatus"]["CruiseMainOn"] != 0
     self.cruiseMain_on =  ret.cruiseState.available
@@ -248,11 +226,18 @@ class CarState(CarStateBase):
   @staticmethod
   def get_can_parsers(CP):
     pt_messages = [
+      ("BCMTurnSignals", 1),
+      ("ECMPRDNL2", 10),
       ("PSCMStatus", 10),
       ("ESPStatus", 10),
+      ("BCMDoorBeltStatus", 10),
+      ("BCMGeneralPlatformStatus", 10),
       ("EBCMWheelSpdFront", 20),
       ("EBCMWheelSpdRear", 20),
       ("EBCMFrictionBrakeStatus", 20),
+      ("AcceleratorPedal2", 33),
+      ("ASCMSteeringButton", 33),
+      ("ECMEngineStatus", 100),
       ("PSCMSteeringAngle", 100),
       ("ECMAcceleratorPos", 80),
     ]
@@ -262,23 +247,6 @@ class CarState(CarStateBase):
 
     if CP.enableBsm:
       pt_messages.append(("BCMBlindSpotMonitor", 10))
-
-    if CP.carFingerprint in SDGM_CAR:
-      pt_messages += [
-        ("ECMPRDNL2", 40),
-        ("AcceleratorPedal2", 40),
-        ("ECMEngineStatus", 80),
-      ]
-    else:
-      pt_messages += [
-        ("ECMPRDNL2", 10),
-        ("AcceleratorPedal2", 33),
-        ("ECMEngineStatus", 100),
-        ("BCMTurnSignals", 1),
-        ("BCMDoorBeltStatus", 10),
-        ("BCMGeneralPlatformStatus", 10),
-        ("ASCMSteeringButton", 33),
-      ]
 
     # Used to read back last counter sent to PT by camera
     if CP.networkLocation == NetworkLocation.fwdCamera:
@@ -310,15 +278,6 @@ class CarState(CarStateBase):
       cam_messages += [
         ("ASCMLKASteeringCmd", 10),
       ]
-      if CP.carFingerprint in SDGM_CAR:
-        cam_messages += [
-          ("BCMTurnSignals", 1),
-          ("BCMDoorBeltStatus", 10),
-          ("BCMGeneralPlatformStatus", 10),
-          ("ASCMSteeringButton", 33),
-        ]
-        if CP.enableBsm:
-          cam_messages.append(("BCMBlindSpotMonitor", 10))
 
       if CP.carFingerprint not in CC_ONLY_CAR:
         cam_messages += [
