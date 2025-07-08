@@ -182,7 +182,7 @@ class CarController(CarControllerBase):
             idx = (self.frame // 4) % 4
             apply_brake = self.brake_input(-0.5)
             can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
-            Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) #필요시 추가되어야 할 부분.
+            Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True)
             self.activateCruise_after_brake = True
 
       # Gas/regen, brakes, and UI commands - all at 25Hz
@@ -322,9 +322,9 @@ class CarController(CarControllerBase):
         if self.cancel_counter > CAMERA_CANCEL_DELAY_FRAMES:
           self.last_button_frame = self.frame
           if self.CP.carFingerprint in SDGM_CAR:
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, CS.buttons_counter, CruiseButtons.CANCEL))
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.CANCEL))
           else:
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, CS.buttons_counter, CruiseButtons.CANCEL))
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, (CS.buttons_counter + 1) % 4, CruiseButtons.CANCEL))
 
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
       # Silence "Take Steering" alert sent by camera, forward PSCMStatus with HandsOffSWlDetectionStatus=1

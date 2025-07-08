@@ -6,7 +6,7 @@ from opendbc.car.interfaces import MAX_CTRL_SPEED
 from opendbc.car.volkswagen.values import CarControllerParams as VWCarControllerParams
 from opendbc.car.hyundai.interface import ENABLE_BUTTONS as HYUNDAI_ENABLE_BUTTONS
 from opendbc.car.hyundai.carstate import PREV_BUTTON_SAMPLES as HYUNDAI_PREV_BUTTON_SAMPLES
-from opendbc.car.gm.values import CAR, SDGM_CAR
+from opendbc.car.gm.values import CAR, SDGM_CAR, GMFlags
 
 from openpilot.selfdrive.selfdrived.events import Events, ET
 
@@ -125,10 +125,19 @@ class CarSpecificEvents:
       if CS.vEgo < self.CP.minEnableSpeed and not (CS.standstill and CS.brake >= 20 and
                                                    (self.CP.networkLocation == NetworkLocation.fwdCamera and not self.CP.carFingerprint in SDGM_CAR)):
         events.add(EventName.belowEngageSpeed)
-      if CS.cruiseState.standstill:
+      if CS.cruiseState.standstill and not self.CP.autoResumeSng:
         events.add(EventName.resumeRequired)
       if CS.vEgo < self.CP.minSteerSpeed:
         events.add(EventName.belowSteerSpeed)
+      if (self.CP.flags & GMFlags.CC_LONG.value) and CS.vEgo < self.CP.minEnableSpeed and CS.cruiseState.enabled:
+        events.add(EventName.speedTooLow)
+
+      if (self.CP.flags & GMFlags.PEDAL_LONG.value) and \
+        self.CP.transmissionType == TransmissionType.direct and \
+        not self.CS.single_pedal_mode and \
+        CC.longActive:
+        events.add(EventName.pedalInterceptorNoBrake)
+
 
     elif self.CP.brand == 'volkswagen':
       events = self.create_common_events(CS, CS_prev, extra_gears=[GearShifter.eco, GearShifter.sport, GearShifter.manumatic],

@@ -118,7 +118,7 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kiBP = [0.]
 
     if candidate in CAMERA_ACC_CAR:
-      ret.alphaLongitudinalAvailable = True #candidate not in (CC_ONLY_CAR | SDGM_CAR)
+      ret.alphaLongitudinalAvailable = candidate not in CC_ONLY_CAR
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True

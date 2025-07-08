@@ -129,6 +129,9 @@ class Controls:
     actuators.aTargetNow = float(aTargetNow)
     actuators.jerk = float(jerk)
 
+    if len(long_plan.speeds):
+      actuators.speed = long_plan.speeds[-1]
+
     # Steering PID loop and lateral MPC
     lat_plan = self.sm['lateralPlan']
     curve_speed_abs = abs(self.sm['carrotMan'].vTurnSpeed)
