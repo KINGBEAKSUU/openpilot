@@ -37,27 +37,27 @@ class CarControllerParams:
 
   def __init__(self, CP):
     # Gas/brake lookups
-    self.ZERO_GAS = 2048  # Coasting
+    self.ZERO_GAS = 0.0  # Coasting
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
 
     if CP.carFingerprint in (CAMERA_ACC_CAR | SDGM_CAR) and CP.carFingerprint not in CC_ONLY_CAR:
-      self.MAX_GAS = 3400
-      self.MAX_ACC_REGEN = 1514
-      self.INACTIVE_REGEN = 1554
+      self.MAX_GAS = 1346.0
+      self.MAX_ACC_REGEN = -540.0
+      self.INACTIVE_REGEN = -500.0
       # Camera ACC vehicles have no regen while enabled.
       # Camera transitions to MAX_ACC_REGEN from ZERO_GAS and uses friction brakes instantly
       max_regen_acceleration = 0.
 
     else:
-      self.MAX_GAS = 3072  # Safety limit, not ACC max. Stock ACC >4096 from standstill.
-      self.MAX_ACC_REGEN = 1404  # Max ACC regen is slightly less than max paddle regen
-      self.INACTIVE_REGEN = 1404
+      self.MAX_GAS = 1018.0  # Safety limit, not ACC max. Stock ACC >2042 from standstill.
+      self.MAX_ACC_REGEN = -650.0  # Max ACC regen is slightly less than max paddle regen
+      self.INACTIVE_REGEN = -650.0
       # ICE has much less engine braking force compared to regen in EVs,
       # lower threshold removes some braking deadzone
       max_regen_acceleration = -1. if CP.carFingerprint in EV_CAR else -0.1
 
     self.GAS_LOOKUP_BP = [max_regen_acceleration, 0., self.ACCEL_MAX]
-    self.GAS_LOOKUP_V = [self.MAX_ACC_REGEN, self.ZERO_GAS, self.MAX_GAS]
+    self.GAS_LOOKUP_V = [self.MAX_ACC_REGEN, 0., self.MAX_GAS]
 
     self.BRAKE_LOOKUP_BP = [self.ACCEL_MIN, max_regen_acceleration]
     self.BRAKE_LOOKUP_V = [self.MAX_BRAKE, 0.]
@@ -77,8 +77,8 @@ class CarControllerParams:
 class GMSafetyFlags(IntFlag):
   HW_CAM = 1
   HW_CAM_LONG = 2
-  CC_LONG = 4
-  NO_CAMERA = 8
+  EV = 4
+  CC_LONG = 8
   HW_ASCM_LONG = 16
   NO_ACC = 32
   PEDAL_LONG = 64  # TODO: This can be inferred
@@ -90,32 +90,41 @@ class GMCarDocs(CarDocs):
 
   def init_make(self, CP: CarParams):
     if CP.networkLocation == CarParams.NetworkLocation.fwdCamera:
-      self.car_parts = CarParts.common([CarHarness.gm])
+      if CP.carFingerprint in SDGM_CAR:
+        self.car_parts = CarParts.common([CarHarness.gmsdgm])
+      else:
+        self.car_parts = CarParts.common([CarHarness.gm])
     else:
       self.car_parts = CarParts.common([CarHarness.obd_ii])
 
 
 @dataclass(frozen=True, kw_only=True)
 class GMCarSpecs(CarSpecs):
-  tireStiffnessFactor: float = 0.444  # not optimized yet
+  tireStiffnessFactor: float = 0.4  # not optimized yet
 
 
 @dataclass
 class GMPlatformConfig(PlatformConfig):
+  dbc_dict: DbcDict = field(default_factory=lambda: {
+    Bus.pt: 'gm_global_a_powertrain_cam',
+    Bus.radar: 'gm_global_a_object',
+    Bus.chassis: 'gm_global_a_chassis',
+  })
+
+@dataclass
+class GMASCMPlatformConfig(GMPlatformConfig):
   dbc_dict: DbcDict = field(default_factory=lambda: {
     Bus.pt: 'gm_global_a_powertrain_volt',
     Bus.radar: 'gm_global_a_object',
     Bus.chassis: 'gm_global_a_chassis',
   })
 
-
 @dataclass
-class GMASCMPlatformConfig(GMPlatformConfig):
+class GMSDGMPlatformConfig(GMPlatformConfig):
   def init(self):
-    # ASCM is supported, but due to a janky install and hardware configuration, we are not showing in the car docs
+    # Don't show in docs until the harness is sold. See https://github.com/commaai/openpilot/issues/32471
     #self.car_docs = []
     pass
-
 
 
 class CAR(Platforms):
@@ -125,7 +134,7 @@ class CAR(Platforms):
   )
   CHEVROLET_VOLT = GMASCMPlatformConfig(
     [GMCarDocs("Chevrolet Volt 2017-18", min_enable_speed=0, video_link="https://youtu.be/QeMCN_4TFfQ")],
-    GMCarSpecs(mass=1607, wheelbase=2.69, steerRatio=17.7, centerToFrontRatio=0.55, tireStiffnessFactor=0.469, minEnableSpeed=-1),
+    GMCarSpecs(mass=1607, wheelbase=2.69, steerRatio=17.7, centerToFrontRatio=0.45, tireStiffnessFactor=0.46, minEnableSpeed=-1),
   )
   CADILLAC_ATS = GMASCMPlatformConfig(
     [GMCarDocs("Cadillac ATS Premium Performance 2018")],
@@ -133,6 +142,10 @@ class CAR(Platforms):
   )
   CHEVROLET_MALIBU = GMASCMPlatformConfig(
     [GMCarDocs("Chevrolet Malibu Premier 2017")],
+    GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
+  )
+  CHEVROLET_MALIBU_2019 = GMASCMPlatformConfig(
+    [GMCarDocs("Chevrolet The New Malibu 2019")],
     GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
   GMC_ACADIA = GMASCMPlatformConfig(
@@ -181,17 +194,25 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Trailblazer 2021-22")],
     GMCarSpecs(mass=1345, wheelbase=2.64, steerRatio=16.8, centerToFrontRatio=0.4, tireStiffnessFactor=1.0),
   )
-  CADILLAC_XT4 = GMPlatformConfig(
-    [GMCarDocs("Cadillac XT4 2023", "Driver Assist Package")],
-    CarSpecs(mass=1660, wheelbase=2.78, steerRatio=14.4, centerToFrontRatio=0.4),
+  CHEVROLET_NEW_TRAILBLAZER = GMPlatformConfig(
+    [GMCarDocs("Chevrolet Trailblazer FaceLift")],
+    GMCarSpecs(mass=1345, wheelbase=2.64, steerRatio=16.8, centerToFrontRatio=0.4, tireStiffnessFactor=1.0),
   )
-  CHEVROLET_VOLT_2019 = GMPlatformConfig(
+  CADILLAC_XT4 = GMSDGMPlatformConfig(
+    [GMCarDocs("Cadillac XT4 2023", "Driver Assist Package")],
+    GMCarSpecs(mass=1660, wheelbase=2.78, steerRatio=14.4, centerToFrontRatio=0.4),
+  )
+  CADILLAC_CT6_2019 = GMSDGMPlatformConfig(
+    [GMCarDocs("Cadillac CT6 2019", "Driver Assist Package")],
+    GMCarSpecs(mass=2358, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
+  ) 
+  CHEVROLET_VOLT_2019 = GMSDGMPlatformConfig(
     [GMCarDocs("Chevrolet Volt 2019", "Adaptive Cruise Control (ACC) & LKAS")],
     GMCarSpecs(mass=1607, wheelbase=2.69, steerRatio=15.7, centerToFrontRatio=0.45),
   )
-  CHEVROLET_TRAVERSE = GMPlatformConfig(
+  CHEVROLET_TRAVERSE = GMASCMPlatformConfig(
     [GMCarDocs("Chevrolet Traverse 2022-23", "RS, Premier, or High Country Trim")],
-    CarSpecs(mass=1955, wheelbase=3.07, steerRatio=17.9, centerToFrontRatio=0.4),
+    GMCarSpecs(mass=1955, wheelbase=3.07, steerRatio=17.9, centerToFrontRatio=0.4),
   )
   # Separate car def is required when there is no ASCM
   # (for now) unless there is a way to detect it when it has been unplugged...
@@ -242,13 +263,9 @@ class CAR(Platforms):
     [GMCarDocs("Buick Baby Enclave 2020-23", "Driver Assist Package")],
     CarSpecs(mass=2050, wheelbase=2.86, steerRatio=16.0, centerToFrontRatio=0.5),
   )
-  CHEVROLET_TRAX = GMPlatformConfig(
+  CHEVROLET_TRAX = GMASCMPlatformConfig(
     [GMCarDocs("Chevrolet TRAX 2024")],
     CarSpecs(mass=1365, wheelbase=2.7, steerRatio=16.1, centerToFrontRatio=0.7),
-  )
-  CADILLAC_CT6_ACC = GMPlatformConfig(
-    [GMCarDocs("CT6-2019 Advanced ACC", "Adaptive Cruise Control (ACC)")],
-    GMCarSpecs(mass=1736, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
   )
   GMC_YUKON = GMPlatformConfig(
     [GMCarDocs("GMC Yukon 2019-20", "Adaptive Cruise Control (ACC) & LKAS")],
@@ -268,6 +285,7 @@ class CruiseButtons:
 class AccState:
   OFF = 0
   ACTIVE = 1
+  STANDBY = 2
   FAULTED = 3
   STANDSTILL = 4
 
@@ -282,9 +300,7 @@ class CanBus:
 class GMFlags(IntFlag):
   PEDAL_LONG = 1
   CC_LONG = 2
-  NO_CAMERA = 4
-  NO_ACCELERATOR_POS_MSG = 8
-  SPEED_RELATED_MSG = 16
+  TPMS_MSG = 4
 
 
 # In a Data Module, an identifier is a string used to recognize an object,
@@ -340,10 +356,10 @@ EV_CAR = {CAR.CHEVROLET_VOLT, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_BOLT_EUV, C
 CC_ONLY_CAR = {CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_EQUINOX_CC, CAR.CHEVROLET_SUBURBAN_CC, CAR.GMC_YUKON_CC, CAR.CADILLAC_CT6_CC, CAR.CHEVROLET_TRAILBLAZER_CC, CAR.CADILLAC_XT5_CC, CAR.CHEVROLET_MALIBU_CC}
 CC_REGEN_PADDLE_CAR = {CAR.CHEVROLET_BOLT_CC}
 # We're integrated at the Safety Data Gateway Module on these cars
-SDGM_CAR = {CAR.CADILLAC_XT4, CAR.CHEVROLET_TRAVERSE, CAR.BUICK_BABYENCLAVE, CAR.CHEVROLET_VOLT_2019}
+SDGM_CAR = {CAR.CADILLAC_XT4, CAR.CHEVROLET_TRAVERSE, CAR.BUICK_BABYENCLAVE, CAR.CHEVROLET_VOLT_2019, CAR.CADILLAC_CT6_2019, CAR.CHEVROLET_MALIBU_2019}
 
 # We're integrated at the camera with VOACC on these cars (instead of ASCM w/ OBD-II harness)
-CAMERA_ACC_CAR = {CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_SILVERADO, CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAX}
+CAMERA_ACC_CAR = {CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_SILVERADO, CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_NEW_TRAILBLAZER, CAR.CHEVROLET_TRAX}
 CAMERA_ACC_CAR.update({CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_EQUINOX_CC, CAR.GMC_YUKON_CC, CAR.CADILLAC_CT6_CC, CAR.CHEVROLET_TRAILBLAZER_CC, CAR.CADILLAC_XT5_CC, CAR.CHEVROLET_MALIBU_CC})
 # CAMERA_ACC_CAR.update(CC_ONLY_CAR)
 # Alt ASCMActiveCruiseControlStatus

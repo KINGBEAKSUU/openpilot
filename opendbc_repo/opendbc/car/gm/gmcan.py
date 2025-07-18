@@ -72,22 +72,18 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop):
   values = {
     "GasRegenCmdActive": enabled,
     "RollingCounter": idx,
-    "GasRegenCmdActiveInv": 1 - enabled,
     "GasRegenCmd": throttle,
     "GasRegenFullStopActive": at_full_stop,
-    "GasRegenAlwaysOne": 1,
-    "GasRegenAlwaysOne2": 1,
-    "GasRegenAlwaysOne3": 1,
-    #"NEW_SIGNAL_1" : 0 if at_full_stop else 3,
+    "GasRegenAccType": 1,
   }
 
   dat = packer.make_can_msg("ASCMGasRegenCmd", bus, values)[1]
-  values["GasRegenChecksum"] = (((0xff - dat[1]) & 0xff) << 16) | \
+  values["GasRegenChecksum"] = ((1 - enabled) << 24) | \
+                               (((0xff - dat[1]) & 0xff) << 16) | \
                                (((0xff - dat[2]) & 0xff) << 8) | \
                                ((0x100 - dat[3] - idx) & 0xff)
 
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
-
 
 def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_stop, at_full_stop, CP):
   mode = 0x1
@@ -196,14 +192,14 @@ def create_regen_paddle_command(packer, bus):
   return packer.make_can_msg("EBCMRegenPaddle", bus, values)
 
 def create_gm_cc_spam_command(packer, controller, CS, actuators):
-  if controller.params_.get_bool("IsMetric"):
-    _CV = CV.MS_TO_KPH
-    RATE_UP_MAX = 0.04
-    RATE_DOWN_MAX = 0.04
-  else:
-    _CV = CV.MS_TO_MPH
-    RATE_UP_MAX = 0.2
-    RATE_DOWN_MAX = 0.2
+  # if controller.params_.get_bool("IsMetric"):
+  #   _CV = CV.MS_TO_KPH
+  #   RATE_UP_MAX = 0.04
+  #   RATE_DOWN_MAX = 0.04
+  # else:
+  _CV = CV.MS_TO_MPH
+  RATE_UP_MAX = 0.2
+  RATE_DOWN_MAX = 0.2
 
   accel = actuators.accel * _CV  # m/s/s to mph/s
   speedSetPoint = int(round(CS.out.cruiseState.speed * _CV))

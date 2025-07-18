@@ -175,7 +175,7 @@ def get_default_params():
     ("SoftwareMenu", "1"),
     ("CustomSR", "0"),
     ("SteerRatioRate", "100"),
-    ("NNFF", "0"),
+    ("NNFF", "1"),
     ("NNFFLite", "0"),
   ]
   return default_params
