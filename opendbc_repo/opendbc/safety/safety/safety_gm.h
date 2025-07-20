@@ -250,6 +250,11 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 static int gm_fwd_hook(int bus_num, int addr) {
   int bus_fwd = -1;
 
+  // ASCM은 어떤 메시지도 포워딩하지 않음
+  if ((gm_hw == GM_ASCM) || gm_cc_long || gm_cam_long) {
+    return -1;
+  }
+
   if (gm_hw == GM_CAM) {
     if (bus_num == 0) {
       // block PSCMStatus; forwarded through openpilot to hide an alert from the camera
@@ -390,8 +395,8 @@ static safety_config gm_init(uint16_t param) {
     SET_RX_CHECKS(gm_ev_rx_checks, ret);
   } else {}
 
-  // ASCM does not forward any messages
-  if ((gm_hw == GM_ASCM) || gm_cc_long) {
+  // ASCM does not any work
+  if ((gm_hw == GM_ASCM) || gm_cc_long || gm_cam_long) {
   }
   return ret;
 }
