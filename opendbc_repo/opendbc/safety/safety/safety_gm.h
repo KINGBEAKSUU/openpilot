@@ -104,6 +104,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       }
       acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;  // 크루즈 메인스위치 체크(201핑거 29번째 비트)
     }
+    if (addr == 0xF1) {
+      brake_pressed = GET_BYTE(to_push, 1) >= 15U;
+    }
 
     // 프레임지연 동안(+정지중) 크루즈폴트 무시
     if (frame > skip_brake_disable_frame) {
@@ -389,6 +392,7 @@ static safety_config gm_init(uint16_t param) {
   } else if (gm_ev) {
     SET_RX_CHECKS(gm_ev_rx_checks, ret);
   } else {}
+
   return ret;
 }
 

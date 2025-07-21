@@ -248,6 +248,7 @@ class CarController(CarControllerBase):
         if self.CP.carFingerprint not in CC_ONLY_CAR:
           at_full_stop = CC.longActive and CS.out.standstill
           near_stop = CC.longActive and (abs(CS.out.vEgo) < self.params.NEAR_STOP_BRAKE_PHASE)
+          # base CanBus
           friction_brake_bus = CanBus.CHASSIS
           gas_bus = CanBus.POWERTRAIN
           # GM Camera exceptions
@@ -255,7 +256,7 @@ class CarController(CarControllerBase):
           if self.CP.networkLocation == NetworkLocation.fwdCamera:
             at_full_stop = at_full_stop and stopping
             friction_brake_bus = CanBus.POWERTRAIN
-            if self.CP.carFingerprint in CHEVROLET_MALIBU_2019:
+            if self.CP.carFingerprint in CAR.CHEVROLET_MALIBU_2019:
               gas_bus = CanBus.CAMERA
           #if self.CP.autoResumeSng:
           #  resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
