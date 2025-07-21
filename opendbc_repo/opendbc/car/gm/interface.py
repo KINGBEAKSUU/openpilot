@@ -172,7 +172,6 @@ class CarInterface(CarInterfaceBase):
     ret.steerActuatorDelay = 0.28  # Default delay, not measured yet
 
     ret.steerLimitTimer = 0.4
-    ret.radarTimeStep = 0.067  # GM radar runs at 15Hz instead of standard 20Hz
     ret.longitudinalActuatorDelay = Params().get_float("LongActuatorDelay")*0.01 # 0.5  # large delay to initially start braking
 
     if candidate == CAR.CHEVROLET_VOLT:
@@ -206,19 +205,19 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kf = 0.00004   # full torque for 20 deg at 80mph means 0.00007818594
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
-      ret.networkLocation = NetworkLocation.gateway
+      #ret.networkLocation = NetworkLocation.gateway
       ret.radarUnavailable = False
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
       ret.longitudinalTuning.kpBP = [0.]
       ret.longitudinalTuning.kpV = [1.0]
       ret.longitudinalTuning.kiBP = [0.]
-      ret.longitudinalTuning.kiV = [.1]
+      ret.longitudinalTuning.kiV = [0.]
       ret.longitudinalTuning.kf = 1.0
-      ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
+      ret.stoppingDecelRate = 0.7 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.2
       ret.vEgoStarting = 0.1
-      ret.stopAccel = -0.7
+      ret.stopAccel = -0.5
       ret.startingState = True
       ret.startAccel = 1.0
 
