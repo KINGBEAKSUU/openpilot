@@ -251,11 +251,11 @@ static int gm_fwd_hook(int bus_num, int addr) {
   int bus_fwd = -1;
 
   // ASCM은 어떤 메시지도 포워딩하지 않음
-  if ((gm_hw == GM_ASCM) || gm_cc_long || gm_cam_long) {
-    bus_fwd = -1;
+  if ((gm_hw == GM_ASCM) || gm_cc_long) {
+    return -1;
   }
 
-  if ((gm_hw == GM_CAM) || gm_cam_long) {
+  if (gm_hw == GM_CAM) {
     if (bus_num == 0) {
       // block PSCMStatus; forwarded through openpilot to hide an alert from the camera
       bool is_pscm_msg = (addr == 0x184);
