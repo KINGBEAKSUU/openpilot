@@ -252,10 +252,10 @@ static int gm_fwd_hook(int bus_num, int addr) {
 
   // ASCM은 어떤 메시지도 포워딩하지 않음
   if ((gm_hw == GM_ASCM) || gm_cc_long || gm_cam_long) {
-    return -1;
+    bus_fwd = -1;
   }
 
-  if (gm_hw == GM_CAM) {
+  if ((gm_hw == GM_CAM) || gm_cam_long) {
     if (bus_num == 0) {
       // block PSCMStatus; forwarded through openpilot to hide an alert from the camera
       bool is_pscm_msg = (addr == 0x184);
@@ -311,7 +311,7 @@ static safety_config gm_init(uint16_t param) {
   };
 
   static const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7},  // pt bus
-                                               {0x315, 2, 5}, {0x184, 2, 8}, {0x1E1, 2, 7}};  // camera bus
+                                               {0x315, 2, 5}, {0x2CB, 2, 8}, {0x184, 2, 8}, {0x1E1, 2, 7}};  // camera bus
 
   // TODO: do checksum and counter checks. Add correct timestep, 0.1s for now.
   static RxCheck gm_rx_checks[] = {
