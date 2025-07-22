@@ -208,7 +208,7 @@ class CarInterface(CarInterfaceBase):
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.openpilotLongitudinalControl = True
       ret.pcmCruise = False
-      ret.alphaLongitudinalAvailable = False #True
+      ret.alphaLongitudinalAvailable = True
       ret.radarUnavailable = False
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
