@@ -290,9 +290,9 @@ static safety_config gm_init(uint16_t param) {
   static const int GM_GAS_TO_CAN = 8;  // 1 / 0.125
 
   static const LongitudinalLimits GM_ASCM_LONG_LIMITS = {
-    .max_gas = 1018 * GM_GAS_TO_CAN,
-    .min_gas = -650 * GM_GAS_TO_CAN,
-    .inactive_gas = -650 * GM_GAS_TO_CAN,
+    .max_gas = 1024 * GM_GAS_TO_CAN,
+    .min_gas = -644 * GM_GAS_TO_CAN,
+    .inactive_gas = -644 * GM_GAS_TO_CAN,
     .max_brake = 400,
   };
 
@@ -302,9 +302,9 @@ static safety_config gm_init(uint16_t param) {
 
 
   static const LongitudinalLimits GM_CAM_LONG_LIMITS = {
-    .max_gas = 1346 * GM_GAS_TO_CAN,
-    .min_gas = -540 * GM_GAS_TO_CAN,
-    .inactive_gas = -500 * GM_GAS_TO_CAN,
+    .max_gas = 1352 * GM_GAS_TO_CAN,
+    .min_gas = -534 * GM_GAS_TO_CAN,
+    .inactive_gas = -494 * GM_GAS_TO_CAN,
     .max_brake = 400,
   };
 
