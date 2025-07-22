@@ -218,9 +218,8 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   // GAS/REGEN: safety check
   if (addr == 0x2CB) {
     bool apply = GET_BIT(to_send, 0U);
-    if (apply) {
-      if(!controls_allowed) print("@@auto cruise control enabled....\n");
-        controls_allowed = true;        
+    if (apply && !controls_allowed) {
+      controls_allowed = true;        
     }
     int gas_regen = (((GET_BYTE(to_send, 1) & 0x7U) << 16) | (GET_BYTE(to_send, 2) << 8) | GET_BYTE(to_send, 3)) - 180272U;
 
