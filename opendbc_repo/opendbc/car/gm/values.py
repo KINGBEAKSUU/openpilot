@@ -84,6 +84,12 @@ class GMSafetyFlags(IntFlag):
   PEDAL_LONG = 64  # TODO: This can be inferred
   GAS_INTERCEPTOR = 128
 
+class GMFlags(IntFlag):
+  PEDAL_LONG = 1
+  CC_LONG = 2
+  TPMS_MSG = 4
+  HAS_ASCM = 8 #for ASCM(Malibu2019)
+
 @dataclass
 class GMCarDocs(CarDocs):
   package: str = "Adaptive Cruise Control (ACC)"
@@ -106,7 +112,7 @@ class GMCarSpecs(CarSpecs):
 @dataclass
 class GMPlatformConfig(PlatformConfig):
   dbc_dict: DbcDict = field(default_factory=lambda: {
-    Bus.pt: 'gm_global_a_powertrain_cam',
+    Bus.pt: 'gm_global_a_powertrain_volt',
     Bus.radar: 'gm_global_a_object',
     Bus.chassis: 'gm_global_a_chassis',
   })
@@ -118,6 +124,9 @@ class GMASCMPlatformConfig(GMPlatformConfig):
     Bus.radar: 'gm_global_a_object',
     Bus.chassis: 'gm_global_a_chassis',
   })
+
+  def __post_init__(self):
+    self.flags |= GMFlags.HAS_ASCM
 
 @dataclass
 class GMSDGMPlatformConfig(GMPlatformConfig):
@@ -296,11 +305,6 @@ class CanBus:
   CHASSIS = 2
   LOOPBACK = 128
   DROPPED = 192
-
-class GMFlags(IntFlag):
-  PEDAL_LONG = 1
-  CC_LONG = 2
-  TPMS_MSG = 4
 
 
 # In a Data Module, an identifier is a string used to recognize an object,

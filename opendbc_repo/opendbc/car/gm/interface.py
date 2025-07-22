@@ -117,17 +117,17 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kiBP = [0.]
 
     if candidate in (CAMERA_ACC_CAR | SDGM_CAR):
-      ret.alphaLongitudinalAvailable = candidate not in CC_ONLY_CAR
+      ret.alphaLongitudinalAvailable = candidate not in (CC_ONLY_CAR | SDGM_CAR)
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM.value
-      ret.minEnableSpeed = -1 if candidate in SDGM_CAR else 5 * CV.KPH_TO_MS
+      ret.minEnableSpeed = 5 * CV.KPH_TO_MS
       ret.minSteerSpeed = 10 * CV.KPH_TO_MS
 
       # Tuning for experimental long
       ret.longitudinalTuning.kpV = [1.0]
-      ret.longitudinalTuning.kiV = [1.0]
+      ret.longitudinalTuning.kiV = [1.7]
       ret.stoppingDecelRate = 2.0  # reach brake quickly after enabling
       ret.stopAccel = -0.4
       ret.startingState = True
@@ -178,7 +178,7 @@ class CarInterface(CarInterfaceBase):
       ret.longitudinalTuning.kpBP = [0.]
       ret.longitudinalTuning.kpV = [1.0]
       ret.longitudinalTuning.kiBP = [0.]
-      ret.longitudinalTuning.kiV = [.35]
+      ret.longitudinalTuning.kiV = [0.]
       ret.longitudinalTuning.kf = 1.0
       ret.stoppingDecelRate = 0.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.2
@@ -205,7 +205,10 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kf = 0.00004   # full torque for 20 deg at 80mph means 0.00007818594
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
-      #ret.networkLocation = NetworkLocation.gateway
+      ret.networkLocation = NetworkLocation.fwdCamera
+      ret.openpilotLongitudinalControl = True
+      ret.pcmCruise = False
+      ret.alphaLongitudinalAvailable = True
       ret.radarUnavailable = False
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
@@ -399,14 +402,14 @@ class CarInterface(CarInterfaceBase):
         ret.vEgoStarting = 0.25
 
     elif candidate in CC_ONLY_CAR:
-      ret.alphaLongitudinalAvailable = True
+      ret.alphaLongitudinalAvailable = False
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.CC_LONG.value
       if alpha_long:
         ret.openpilotLongitudinalControl = True
         ret.flags |= GMFlags.CC_LONG.value
       ret.radarUnavailable = True
       ret.minEnableSpeed = 24 * CV.MPH_TO_MS
-      ret.pcmCruise = True
+      ret.pcmCruise = False
 
       ret.stoppingDecelRate = 11.18  # == 25 mph/s (.04 rate)
 
