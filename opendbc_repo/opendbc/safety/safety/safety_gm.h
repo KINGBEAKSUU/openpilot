@@ -226,7 +226,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
     bool violation = false;
     // Allow apply bit in pre-enabled and overriding states
-    //violation |= !controls_allowed && apply;
+    violation |= !controls_allowed && apply;
     violation |= longitudinal_gas_checks(gas_regen, *gm_long_limits);
 
     if (violation) {
