@@ -258,9 +258,9 @@ class CarController(CarControllerBase):
             friction_brake_bus = CanBus.POWERTRAIN
             if self.CP.carFingerprint in CAR.CHEVROLET_MALIBU_2019:
               gas_bus = CanBus.CAMERA
-          #if self.CP.autoResumeSng:
-          #  resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
-          #  at_full_stop = at_full_stop and not resume
+          if self.CP.autoResumeSng:
+            resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
+            at_full_stop = at_full_stop and not resume
 
           if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
             if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
