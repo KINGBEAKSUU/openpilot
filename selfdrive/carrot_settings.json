@@ -1544,9 +1544,9 @@
       "egroup": "LONG",
       "etitle": "StoppingStartAccelx0.01(0)",
       "edescr": "",
-      "min": -100,
+      "min": -150,
       "max": 0,
-      "default": 0,
+      "default": -50,
       "unit": 10
     },
     {
