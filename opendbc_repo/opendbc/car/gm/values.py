@@ -37,21 +37,21 @@ class CarControllerParams:
 
   def __init__(self, CP):
     # Gas/brake lookups
-    self.ZERO_GAS = 6.0  # Coasting
+    self.ZERO_GAS = 3.0  # Coasting
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
 
     if CP.carFingerprint in (CAMERA_ACC_CAR | SDGM_CAR) and CP.carFingerprint not in CC_ONLY_CAR:
-      self.MAX_GAS = 1352.0
-      self.MAX_ACC_REGEN = -534.0
-      self.INACTIVE_REGEN = -494.0
+      self.MAX_GAS = 1346.0
+      self.MAX_ACC_REGEN = -540.0
+      self.INACTIVE_REGEN = -500.0
       # Camera ACC vehicles have no regen while enabled.
       # Camera transitions to MAX_ACC_REGEN from ZERO_GAS and uses friction brakes instantly
       max_regen_acceleration = -0.2
 
     else:
-      self.MAX_GAS = 1024.0  # Safety limit, not ACC max. Stock ACC >2042 from standstill.
-      self.MAX_ACC_REGEN = -644.0  # Max ACC regen is slightly less than max paddle regen
-      self.INACTIVE_REGEN = -644.0
+      self.MAX_GAS = 1018.0  # Safety limit, not ACC max. Stock ACC >2042 from standstill.
+      self.MAX_ACC_REGEN = -650.0  # Max ACC regen is slightly less than max paddle regen
+      self.INACTIVE_REGEN = -650.0
       # ICE has much less engine braking force compared to regen in EVs,
       # lower threshold removes some braking deadzone
       max_regen_acceleration = -1. if CP.carFingerprint in EV_CAR else -0.1
