@@ -159,16 +159,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       gas_interceptor_prev = gas_interceptor;
       // gm_pcm_cruise = false;
     }
-
-    bool stock_ecu_detected = (addr == 0x180);  // ASCMLKASteeringCmd
-
-    // Check ASCMGasRegenCmd only if we're blocking it
-    if (!gm_pcm_cruise && !gm_pedal_long && (addr == 0x2CB)) {
-      stock_ecu_detected = true;
-    }
-    // 운전자 가스오버라이드에도 롱컨 유지
-    alternative_experience |= ALT_EXP_DISABLE_DISENGAGE_ON_GAS;
-    generic_rx_checks(stock_ecu_detected);
   }
 }
 
@@ -234,13 +224,13 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   }
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
-  if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long || gm_cc_long || gm_cam_long)) {
+  if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long || gm_cc_long)) {
     int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
     // For standard CC, allow spamming of SET / RESUME
-    if (gm_cc_long || gm_cam_long) {
-      allowed_btn |= ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
+    if (gm_cc_long) {
+      allowed_btn |= cruise_engaged_prev && ((button == GM_BTN_SET) || (button == GM_BTN_RESUME) || (button == GM_BTN_UNPRESS));
     }
 
     if (!allowed_btn) {
