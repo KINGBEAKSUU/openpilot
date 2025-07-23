@@ -125,16 +125,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       // enter controls on rising edge of ACC, exit controls when ACC off
       if (gm_pcm_cruise && gm_has_acc) {
         bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
-        // 이전 상태 저장
-        bool prev = cruise_engaged_prev;
-        // 기존 stock ACC 토글 로직
         pcm_cruise_check(cruise_engaged);
-        // Rising edge(Off→Active) 시점에 허용
-        if (cruise_engaged && !prev) {
-          controls_allowed = true;
-        }
-        // 상태 갱신
-        cruise_engaged_prev = cruise_engaged;
       }
     }
 
@@ -299,7 +290,7 @@ static safety_config gm_init(uint16_t param) {
   };
 
   static const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7},  // pt bus
-                                               {0x315, 2, 5}, {0x2CB, 2, 8}, {0x184, 2, 8}, {0x1E1, 2, 7}};  // camera bus
+                                               {0x315, 2, 5}, {0x184, 2, 8}, {0x1E1, 2, 7}};  // camera bus
 
   // TODO: do checksum and counter checks. Add correct timestep, 0.1s for now.
   static RxCheck gm_rx_checks[] = {
