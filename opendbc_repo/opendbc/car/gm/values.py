@@ -12,14 +12,14 @@ Ecu = CarParams.Ecu
 
 class CarControllerParams:
   STEER_MAX = 300  # GM limit is 3Nm. Used by carcontroller to generate LKA output
-  STEER_STEP = 4  # Active control frames per command (~33hz)
+  STEER_STEP = 4  # Active control frames per command (Kans: ~25hz로 낮춰 부드럽게)
   INACTIVE_STEER_STEP = 10  # Inactive control frames per command (10hz)
   STEER_DELTA_UP = 5  # Delta rates require review due to observed EPS weakness
   STEER_DELTA_DOWN = 7
   STEER_DRIVER_ALLOWANCE = 65
   STEER_DRIVER_MULTIPLIER = 4
   STEER_DRIVER_FACTOR = 100
-  NEAR_STOP_BRAKE_PHASE = 0.3 # m/s 차량속도가 이보다 작아질 때, carcontroller.py 쪽에서 near_stop을 True로 간주. 이 값이 커질수록 차량이 더 빠른 속도에서 '정지 직전' 상태로 판단됨 → 마찰 브레이크를 조기에 더 강하게 적용
+  NEAR_STOP_BRAKE_PHASE = 0.3 # m/s (Kans: 이 값이 높을수록 빨리 마찰브레이크 사용, but 강한 제동에 들어갈 수있름)
   SNG_INTERCEPTOR_GAS = 18. / 255.
   SNG_TIME = 30  # frames until the above is reached
 
@@ -37,7 +37,7 @@ class CarControllerParams:
 
   def __init__(self, CP):
     # Gas/brake lookups
-    self.ZERO_GAS = 3.0  # Coasting
+    self.ZERO_GAS = 1.0  # Coasting(Kans: 등속주행에서 가속 조금 높여봄.)
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
 
     if CP.carFingerprint in (CAMERA_ACC_CAR | SDGM_CAR) and CP.carFingerprint not in CC_ONLY_CAR:
@@ -46,7 +46,7 @@ class CarControllerParams:
       self.INACTIVE_REGEN = -500.0
       # Camera ACC vehicles have no regen while enabled.
       # Camera transitions to MAX_ACC_REGEN from ZERO_GAS and uses friction brakes instantly
-      max_regen_acceleration = -0.2
+      max_regen_acceleration = -0.02 #(Kans:가감속 임계값을 -로. 이 값이 높을수록 빨리 제동에 진입함. 양수는 곤란)
 
     else:
       self.MAX_GAS = 1018.0  # Safety limit, not ACC max. Stock ACC >2042 from standstill.
