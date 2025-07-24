@@ -277,8 +277,10 @@ class CarInterface(CarInterfaceBase):
       ret.startAccel = .9
 
     elif candidate in (CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAILBLAZER_CC):
-      ret.pcmCruise = False
+      ret.networkLocation = NetworkLocation.fwdCamera
       ret.openpilotLongitudinalControl = True
+      ret.pcmCruise = False
+      ret.alphaLongitudinalAvailable = True
       ret.steerActuatorDelay = 0.2
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
@@ -290,14 +292,16 @@ class CarInterface(CarInterfaceBase):
       ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.2
       ret.vEgoStarting = 0.1
-      ret.stopAccel = -0.4
+      ret.stopAccel = -0.5
       ret.startingState = True
-      ret.startAccel = .7
+      ret.startAccel = 1.5
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.CHEVROLET_NEW_TRAILBLAZER:
-      ret.pcmCruise = False
+      ret.networkLocation = NetworkLocation.fwdCamera
       ret.openpilotLongitudinalControl = True
+      ret.pcmCruise = False
+      ret.alphaLongitudinalAvailable = True
       ret.steerActuatorDelay = 0.2
       ret.minEnableSpeed = -1 * CV.MPH_TO_MS
       ret.minSteerSpeed = 7 * CV.MPH_TO_MS
@@ -309,9 +313,9 @@ class CarInterface(CarInterfaceBase):
       ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.2
       ret.vEgoStarting = 0.1
-      ret.stopAccel = -0.4
+      ret.stopAccel = -0.5
       ret.startingState = True
-      ret.startAccel = .7
+      ret.startAccel = 1.5
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate in (CAR.CHEVROLET_SUBURBAN, CAR.CHEVROLET_SUBURBAN_CC):
