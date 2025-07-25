@@ -163,18 +163,18 @@ class CarController(CarControllerBase):
             Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
             self.activateCruise_after_brake = True # 브레이크신호는 한번만 보내고 초기화
       else:
-        # CamAcc: Auto Cruise(DECEL_SET → SET)
+        # CamAcc: Auto Cruise(UNPRESS)
         if CS.out.activateCruise and not CS.out.cruiseState.enabled:
           self.activateCruise_after_brake = False
           if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
             self.last_button_frame = self.frame
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
+            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
             self.waiting_for_release = True
 
-        # Release (DECEL_SET → UNPRESS)
+        # Release (DECEL_SET → SET)
         elif self.waiting_for_release and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
           self.last_button_frame = self.frame
-          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
+          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
           self.waiting_for_release = False
 
         # CamAcc: AutoResume 1st step(CANCEL버튼 전송 = 브레이크 토글용)
