@@ -37,7 +37,7 @@ class CarControllerParams:
 
   def __init__(self, CP):
     # Gas/brake lookups
-    self.ZERO_GAS = 3.0  # Coasting(Kans: 등속주행에서 가속 조금 높여봄.)
+    self.ZERO_GAS = 2.0  # Coasting(Kans: 등속주행에서 가속 조금 높여봄.)
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
 
     if CP.carFingerprint in (CAMERA_ACC_CAR | SDGM_CAR) and CP.carFingerprint not in CC_ONLY_CAR:
@@ -46,7 +46,7 @@ class CarControllerParams:
       self.INACTIVE_REGEN = -500.0
       # Camera ACC vehicles have no regen while enabled.
       # Camera transitions to MAX_ACC_REGEN from ZERO_GAS and uses friction brakes instantly
-      max_regen_acceleration = -0.2 #(Kans:가감속 임계값을 -로. 이 값이 높을수록 빨리 제동에 진입함. 양수는 곤란)
+      max_regen_acceleration = -0.4 #(Kans:가감속 임계값을 -로. 이 값이 높을수록 빨리 제동에 진입함. 그러나 너무 예민해질 수 있고 드득이 생길 수 있음.)
 
     else:
       self.MAX_GAS = 1018.0  # Safety limit, not ACC max. Stock ACC >2042 from standstill.
