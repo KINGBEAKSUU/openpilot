@@ -37,7 +37,7 @@ class CarControllerParams:
 
   def __init__(self, CP):
     # Gas/brake lookups
-    self.ZERO_GAS = 3.0  # Coasting(Kans: 등속주행에서 가속 조금 높여봄.)
+    self.ZERO_GAS = 0.0  # Coasting(Kans: 등속주행에서 가속 조금 높여봄.)
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
 
     if CP.carFingerprint in (CAMERA_ACC_CAR | SDGM_CAR) and CP.carFingerprint not in CC_ONLY_CAR:
