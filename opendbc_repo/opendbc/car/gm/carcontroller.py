@@ -171,10 +171,9 @@ class CarController(CarControllerBase):
             can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
             self.waiting_for_release = True
         elif self.waiting_for_release and (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-          if CS.out.activateCruise and not CS.out.cruiseState.enabled:
-            self.last_button_frame = self.frame
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
-            self.waiting_for_release = False
+          self.last_button_frame = self.frame
+          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.UNPRESS))
+          self.waiting_for_release = False
 
         # CamAcc: AutoResume 1st step(CANCEL버튼 전송 = 브레이크 토글용)
         elif actuators.longControlState == LongCtrlState.starting:
