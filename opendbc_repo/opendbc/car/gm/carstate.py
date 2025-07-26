@@ -182,7 +182,7 @@ class CarState(CarStateBase):
       ret.cruiseState.available = True
       self.cruiseMain_on = True
     ret.espDisabled = pt_cp.vl["ESPStatus"]["TractionControlOn"] != 1
-    if self.CP.carFingerprint in CAR.CHEVROLET_MALIBU_2019:
+    if self.CP.carFingerprint in (CAR.CHEVROLET_MALIBU_2019, CAR.CHEVROLET_TRAILBLAZER):
       ret.accFaulted = False
     else:
       ret.accFaulted = (pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.FAULTED or
