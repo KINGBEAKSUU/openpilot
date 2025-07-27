@@ -150,7 +150,8 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     bool stock_ecu_detected = (addr == 0x180);  // ASCMLKASteeringCmd
 
     // Check ASCMGasRegenCmd only if we're blocking it
-    if (!gm_pcm_cruise && !gm_pedal_long && (addr == 0x2CB)) {
+    // Kans: gm_cam_long, gm_cc_long 차량은 순정 0x2CB 무시.
+    if (!gm_pcm_cruise && !gm_pedal_long && (addr == 0x2CB) && !(gm_cam_long || gm_cc_long)) {
       stock_ecu_detected = true;
     }
     // 운전자 가스오버라이드에도 롱컨 유지
