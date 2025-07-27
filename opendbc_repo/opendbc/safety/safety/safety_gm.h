@@ -70,6 +70,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
   static int frame = 0;  //브레크신호 프레임 초기화
   frame++;
 
+  // 운전자 가스오버라이드에도 롱컨 유지
+  alternative_experience |= ALT_EXP_DISABLE_DISENGAGE_ON_GAS;
+
   if (GET_BUS(to_push) == 0U) {
     int addr = GET_ADDR(to_push);
 
@@ -154,8 +157,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     if (!gm_pcm_cruise && !gm_pedal_long && (addr == 0x2CB) && !gm_cam_long) {
       stock_ecu_detected = true;
     }
-    // 운전자 가스오버라이드에도 롱컨 유지
-    alternative_experience |= ALT_EXP_DISABLE_DISENGAGE_ON_GAS;
     generic_rx_checks(stock_ecu_detected);
   }
 }
