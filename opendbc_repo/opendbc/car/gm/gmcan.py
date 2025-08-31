@@ -5,15 +5,17 @@ from opendbc.car.common.conversions import Conversions as CV
 
 # GM: AutoResume: brake signal to CAN
 def create_brake_command(packer, bus, apply_brake, idx):
+  rc = idx & 0x3  # 2비트 롤링카운터
   mode = 0xA if apply_brake > 0 else 0x1
+  apply_brake = max(0, min(0xFFF, apply_brake))
   brake = (0x1000 - apply_brake) & 0xFFF
-  checksum = (0x10000 - (mode << 12) - brake - idx) & 0xFFFF
+  checksum = (0x10000 - (mode << 12) - brake - rc) & 0xFFFF
 
   values = {
-    "RollingCounter": idx,
+    "RollingCounter": rc,
     "FrictionBrakeMode": mode,
     "FrictionBrakeChecksum": checksum,
-    "FrictionBrakeCmd": -apply_brake
+    "FrictionBrakeCmd": brake,
   }
 
   return packer.make_can_msg("EBCMFrictionBrakeCmd", bus, values)
@@ -85,7 +87,6 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop):
 
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
 
-
 def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_stop, at_full_stop, CP):
   mode = 0x1
 
@@ -105,13 +106,14 @@ def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_s
 
   apply_brake = max(0, min(0xFFF, apply_brake))
   brake = (0x1000 - apply_brake) & 0xfff
-  checksum = (0x10000 - (mode << 12) - brake - idx) & 0xffff
+  rc = idx & 0x3  # 2비트 롤링카운터
+  checksum = (0x10000 - (mode << 12) - brake - rc) & 0xffff
 
   values = {
-    "RollingCounter": idx,
+    "RollingCounter": rc,
     "FrictionBrakeMode": mode,
     "FrictionBrakeChecksum": checksum,
-    "FrictionBrakeCmd": (0x1000 - apply_brake) & 0xfff,
+    "FrictionBrakeCmd": brake,
   }
 
   return packer.make_can_msg("EBCMFrictionBrakeCmd", bus, values)

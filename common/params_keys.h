@@ -289,4 +289,9 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"NNFF", PERSISTENT},
     {"NNFFLite", PERSISTENT},
     {"NNFFModelName", CLEAR_ON_OFFROAD_TRANSITION},
+
+    {"NearStopBrakePhase", PERSISTENT},
+    {"MaxRegenAcceleration", PERSISTENT},
+    {"CruiseDelay", PERSISTENT},
+    {"ResumeDelay", PERSISTENT},
 };

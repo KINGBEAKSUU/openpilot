@@ -4,7 +4,7 @@ import numpy as np
 from cereal import car
 from openpilot.common.conversions import Conversions as CV
 
-from opendbc.car import structs
+from opendbc.car import structs, DT_CTRL
 GearShifter = structs.CarState.GearShifter
 
 
@@ -223,6 +223,13 @@ class VCruiseCarrot:
     self.useLaneLineSpeed = self.params.get_int("UseLaneLineSpeed")
     self.useLaneLineSpeedApply = self.useLaneLineSpeed
 
+  @property
+  def cruise_is_on(self) -> bool:
+    #_activate_cruise가 0이 아니면 True
+    try:
+      return int(self._activate_cruise) != 0
+    except Exception:
+      return False
 
   @property
   def v_cruise_initialized(self):
@@ -700,16 +707,22 @@ class VCruiseCarrot:
       else:
         v_cruise_kph = self._v_cruise_desired(CS, v_cruise_kph)
     elif self._gas_pressed_count == -1:
-      if 0 < self.d_rel < CS.vEgo * 0.8:
-        if CS.vEgo < 1.0:
-          self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (safe speed)")
-        else:
-          self._cruise_control(-1, 0, "Cruise off (lead car too close)")
+      if self.d_rel <= 0.0: #리드카 없음
+        self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (no lead)")
+      elif (CS.vEgo < 1.0) and (self.d_rel >= 5.0): # 저속이고 안전거리 5m이상
+        self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (safe speed)")
+      elif self.d_rel >= max(10.0, CS.vEgo * 0.8): # 충분히 안전한 거리(10m이상/또는 v*0.8이상)
+        self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (safe dist)")
+      elif self.d_rel <= max(3.0, CS.vEgo * 0.6): # 위험한 거리
+        self._cruise_control(-1, 0, "Cruise off (lead car too close)")
       elif self.v_ego_kph_set < 30:
         self._cruise_control(-1, 0, "Cruise off (gas speed)")
       elif self.xState == 3:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(-1, 3, "Cruise off (traffic sign)")
+      elif self.xState == 5:
+        v_cruise_kph = self.v_ego_kph_set
+        self._cruise_control(1, -1, "Cruise on (traffic sign changed)")
       elif self.v_ego_kph_set >= self.autoGasTokSpeed and not CC.enabled:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (gas pressed)")
@@ -722,9 +735,10 @@ class VCruiseCarrot:
           if self.xState == 3:  # 감속중
             v_cruise_kph = self.v_ego_kph_set
           self._cruise_control(1, 0, "Cruise on (traffic sign)")
-        elif 0 < self.d_rel < 20: 
+        elif 0 < self.d_rel < 20:
+          delay_frames = int(0.20 / DT_CTRL) # 2초 지연후 ON(폴트방지용) 
           # v_cruise_kph = self.v_ego_kph_set # 전방에 차가 가까이 있을때, 기존속도 유지
-          self._cruise_control(1, -1 if self.v_ego_kph_set < 1 else 0, "Cruise on (lead car)")
+          self._cruise_control(1, -1 if self.v_ego_kph_set < 1 else delay_frames, "Cruise on (lead car)")
 
     elif self._brake_pressed_count < 0 and self._gas_pressed_count < 0:
       if not CC.enabled:
