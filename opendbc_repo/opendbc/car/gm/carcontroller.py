@@ -66,6 +66,8 @@ class CarController(CarControllerBase):
     self.resume_frame = 0
     self.acc_engaged_latch = 0
     self.btn_idx = 0
+    self._last_brake_idx = None  # 직전 전송 idx 저장용
+    self._brk_rc = -1
     self.cruiseDelay_time = Params().get_float("CruiseDelay")
     self.resumeDelay_time = Params().get_float("ResumeDelay")
 
@@ -103,8 +105,8 @@ class CarController(CarControllerBase):
       if steerDeltaDown > 0:
         self.params.STEER_DELTA_DOWN = steerDeltaDown
 
-      self.cruiseDelay_time = params.get_float("CruiseDelay")
-      self.resumeDelay_time = params.get_float("ResumeDelay")
+      self.cruiseDelay_time = params.get_float("CruiseDelay") * 0.01
+      self.resumeDelay_time = params.get_float("ResumeDelay") * 0.01
 
     self.long_pitch = Params().get_bool("LongPitch")
     self.use_ev_tables = Params().get_bool("EVTable")
@@ -175,7 +177,9 @@ class CarController(CarControllerBase):
         # Kans: AutoResume 1st step
         if actuators.longControlState == LongCtrlState.starting:
           if CS.out.cruiseState.enabled and (not Params().get_bool("ActivateCruiseAfterBrake")) and (not self.activateCruise_after_brake): #브레이크신호 한번만 보내기 위한 조건.
-            idx = (self.frame // 4) % 4
+            # 전송시점에 RC증가(+1)
+            self._brk_rc = (self._brk_rc + 1) & 0x3
+            idx = self._brk_rc
             brake_force = -0.5  #롱컨캔슬을 위한 브레이크값(0.0 이하)
             apply_brake = self.brake_input(brake_force)
             # 브레이크신호 전송(롱컨 꺼짐)
@@ -185,17 +189,31 @@ class CarController(CarControllerBase):
               can_sends.append(gmcan.create_brake_command(self.packer_pt, CanBus.POWERTRAIN, apply_brake, idx))
             Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
             self.activateCruise_after_brake = True # 브레이크신호는 한번만 보내고 초기화
+
+            # 다음 프레임(0-브레이크)까지의 기준을 위해 프레임 초기화
+            self.last_button_frame = self.frame
+            # 직전 idx를 다음 단계에서 +1로 쓰기 위해 저장
+            self._last_brake_idx = idx
           elif self.activateCruise_after_brake and Params().get_bool("ActivateCruiseAfterBrake"):
-          # 카운터는 직전 프레임 대비 +1이 되게 보냄 (2비트면 내부에서 &0x3)
-            idx_next = ((self.frame // 4) + 1) % 4
-
-            if self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
-              can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, 0, idx_next))
-            elif self.CP.carFingerprint in CAMERA_ACC_CAR:
-              can_sends.append(gmcan.create_brake_command(self.packer_pt, CanBus.POWERTRAIN, 0, idx_next))
-
-            # 0브레이크는 한 번만 — 로컬 플래그 내려서 재전송 방지
-            self.activateCruise_after_brake = False
+            # 브레이크 True보낸다음 최소간격 0.08s
+            if (self.frame - self.last_button_frame) * DT_CTRL >= 0.08:
+              # 직전전송 idx+1(프레임 아닌, 저장값 중심)
+              if self._last_brake_idx is None:
+                # 직전전송값 없으면 RC 증가로 대체
+                self._brk_rc = (self._brk_rc + 1) & 0x3
+                idx_next = self._brk_rc
+              else:
+                idx_next = (self._last_brake_idx + 1) & 0x3
+                self._brk_rc = idx_next  # 내부 RC와 동기화
+              if self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
+                can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, 0, idx_next))
+              elif self.CP.carFingerprint in CAMERA_ACC_CAR:
+                can_sends.append(gmcan.create_brake_command(self.packer_pt, CanBus.POWERTRAIN, 0, idx_next))
+              # 0브레이크는 한 번만 — 로컬 플래그 내려서 재전송 방지
+              self.activateCruise_after_brake = False
+              # 버튼/다음 단계 간격을 위한 기준 업데이트
+              self.last_button_frame = self.frame
+              self._last_brake_idx = None
 
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
