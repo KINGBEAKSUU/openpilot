@@ -103,12 +103,6 @@ class CarController(CarControllerBase):
       if steerDeltaDown > 0:
         self.params.STEER_DELTA_DOWN = steerDeltaDown
 
-      nearStopBrake = params.get_float("NearStopBrakePhase")
-      maxRegenAcceleration = params.get_float("MaxRegenAcceleration")
-      if nearStopBrake > 0:
-        self.params.NEAR_STOP_BRAKE_PHASE = nearStopBrake
-      if maxRegenAcceleration < 0:
-        self.params.max_regen_acceleration = maxRegenAcceleration
       self.cruiseDelay_time = params.get_float("CruiseDelay")
       self.resumeDelay_time = params.get_float("ResumeDelay")
 
@@ -185,7 +179,7 @@ class CarController(CarControllerBase):
             brake_force = -0.5  #롱컨캔슬을 위한 브레이크값(0.0 이하)
             apply_brake = self.brake_input(brake_force)
             # 브레이크신호 전송(롱컨 꺼짐)
-            if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:  
+            if self.CP.carFingerprint == CAR.CHEVROLET_VOLT:  
               can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
             elif self.CP.carFingerprint in CAMERA_ACC_CAR:
               can_sends.append(gmcan.create_brake_command(self.packer_pt, CanBus.POWERTRAIN, apply_brake, idx))
@@ -195,7 +189,7 @@ class CarController(CarControllerBase):
           # 카운터는 직전 프레임 대비 +1이 되게 보냄 (2비트면 내부에서 &0x3)
             idx_next = ((self.frame // 4) + 1) % 4
 
-            if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
+            if self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
               can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, 0, idx_next))
             elif self.CP.carFingerprint in CAMERA_ACC_CAR:
               can_sends.append(gmcan.create_brake_command(self.packer_pt, CanBus.POWERTRAIN, 0, idx_next))
@@ -278,7 +272,7 @@ class CarController(CarControllerBase):
 
           if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
             self.acc_engaged_latch = self.frame + int(0.2 / DT_CTRL)
-          if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
+          if self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
             if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
               acc_engaged = False
             else:
@@ -302,7 +296,7 @@ class CarController(CarControllerBase):
 
           # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
           can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop))
-          if self.CP.carFingerprint in CAR.CHEVROLET_VOLT:
+          if self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
             can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, CanBus.CHASSIS, self.apply_brake,
                                                                idx, CC.enabled, near_stop, at_full_stop, self.CP))
           elif self.CP.carFingerprint in CAMERA_ACC_CAR:

@@ -24,8 +24,8 @@ def get_default_params():
     # kans
     ("LongPitch", "1"),
     ("EVTable", "1"),
-    ("NearStopBrakePhase", "40"),
-    ("MaxRegenAcceleration", "-20"),
+    ("ThresholdPress", "6"),
+    ("ThresholdRelease", "3"),
     ("CruiseDelay", "8"),
     ("ResumeDelay", "8"),
 

@@ -45,6 +45,8 @@ class CarState(CarStateBase):
 
     # cruiseMain default(test from nd0706-vision)
     self.cruiseMain_on = True if Params().get_int("AutoEngage") == 2 else False
+    # Malibu
+    self._malibu_gas_pressed_prev = False
 
   def update_button_enable(self, buttonEvents: list[structs.CarState.ButtonEvent]):
     if not self.CP.pcmCruise:
@@ -143,8 +145,23 @@ class CarState(CarStateBase):
     else:
       raw_gas = int(pt_cp.vl["AcceleratorPedal2"]["AcceleratorPedal2"])
       ret.gas = raw_gas / 254.0
-      if self.CP.carFingerprint in (CAR.CHEVROLET_TRAILBLAZER):
+      if self.CP.carFingerprint == CAR.CHEVROLET_TRAILBLAZER:
         ret.gasPressed = ret.gas > 0.15
+      elif self.CP.carFingerprint == CAR.CHEVROLET_MALIBU_2019:
+        # 히스테리시스 임계값(튜닝 필요)
+        press_th = Params().get_float("ThresholdPress")  # 0.06
+        release_th = Params().get_float("ThresholdRelease")  # 0.03
+        if press_th is None:
+          press_th = 0.06
+        if release_th is None:
+          release_th = 0.03
+        if not self._malibu_gas_pressed_prev:
+          cur = ret.gas >= press_th  # 이전에 안 밟힌 상태였다면 press_th 기준
+        else:
+          cur = ret.gas >= release_th  # 이전에 밟힌 상태였다면 release_th 기준
+        ret.gasPressed = cur
+        self._malibu_gas_pressed_prev = cur
+
       else:
         ret.gasPressed = (raw_gas > 0)  # safety와 1:1 일치
         # ret.gasPressed = ret.gas > 1e-5
@@ -176,7 +193,7 @@ class CarState(CarStateBase):
     ret.cruiseState.available = pt_cp.vl["ECMEngineStatus"]["CruiseMainOn"] != 0
     self.cruiseMain_on =  ret.cruiseState.available
     ret.espDisabled = pt_cp.vl["ESPStatus"]["TractionControlOn"] != 1
-    if self.CP.carFingerprint in (CAR.CHEVROLET_TRAILBLAZER):
+    if self.CP.carFingerprint == CAR.CHEVROLET_TRAILBLAZER:
       ret.accFaulted = False
     else:
       ret.accFaulted = ((pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.FAULTED and not ret.standstill) or
@@ -200,7 +217,7 @@ class CarState(CarStateBase):
 
     self.pcm_acc_status = pt_cp.vl["AcceleratorPedal2"]["CruiseState"]
 
-    ret.vCluRatio = 1.0 if self.CP.carFingerprint in CAR.CHEVROLET_VOLT else 0.96
+    ret.vCluRatio = 1.0 if self.CP.carFingerprint == CAR.CHEVROLET_VOLT else 0.96
 
     # Don't add event if transitioning from INIT, unless it's to an actual button
     if self.cruise_buttons != CruiseButtons.UNPRESS or prev_cruise_buttons != CruiseButtons.INIT:
