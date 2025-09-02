@@ -521,6 +521,7 @@ class RadarD:
     lane_xs = md.laneLines[1].x
     left_ys = md.laneLines[1].y
     right_ys = md.laneLines[2].y
+    lane_line_available = md.laneLineProbs[1] > 0.5 and md.laneLineProbs[2] > 0.5
     
     left_list, right_list, center_list = [], [], []
 
@@ -548,13 +549,13 @@ class RadarD:
 
       # cut-in
       #cut_in_width = 3.0 #3.4  # 끼어들기 차폭
-      if left_y < - y_with_vel < right_y and (3 < c.dRel < 20 and c.vLead > 4 and c.cnt > int(2.0/DT_MDL) and  c.yRel_filtered * c.yvLead_filtered < 0):
+      if lane_line_available and left_y < - y_with_vel < right_y and (3 < c.dRel < 20 and c.vLead > 4 and c.cnt > int(2.0/DT_MDL) and  c.yRel_filtered * c.yvLead_filtered < 0):
       #if abs(dy_with_vel) < cut_in_width / 2 and (3 < c.dRel < 20 and c.vLead > 4 and c.cnt > int(2.0/DT_MDL) and  dy * c.yvLead_filtered < 0):
         if not self.leadCutIn['status'] or c.dRel < self.leadCutIn['dRel']:
           c.cut_in_count += 1
         else:
           c.cut_in_count = 0
-        if c.cut_in_count > int(1.0/DT_MDL):
+        if c.cut_in_count > int(0.5/DT_MDL):
           self.leadCutIn = c.get_RadarState(lead_msg.prob)
       else:
         c.cut_in_count = 0
@@ -573,11 +574,14 @@ class RadarD:
         key=lambda d: d['dRel'],
         default={'status': False}
     )
-    self.leadCenter = min(
-        (ld for ld in center_list if ld['vLead'] > 5 and ld['radar']),
-        key=lambda d: d['dRel'],
-        default={'status': False}
-    )
+    if lane_line_available:
+      self.leadCenter = min(
+          (ld for ld in center_list if ld['vLead'] > 5 and ld['radar']),
+          key=lambda d: d['dRel'],
+          default={'status': False}
+      )
+    else:
+      self.leadCenter = None
 
     def _ok(ld):
         return (ld.get('vLead', 0) > 2 and
