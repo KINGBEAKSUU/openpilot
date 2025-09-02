@@ -176,7 +176,7 @@ class CarController(CarControllerBase):
 
         # Kans: AutoResume 1st step
         if actuators.longControlState == LongCtrlState.starting:
-          if CS.out.cruiseState.enabled and (not Params().get_bool("ActivateCruiseAfterBrake")) and (not self.activateCruise_after_brake): #브레이크신호 한번만 보내기 위한 조건.
+          if CS.out.cruiseState.enabled and not self.activateCruise_after_brake: #브레이크신호 한번만 보내기 위한 조건.
             # 전송시점에 RC증가(+1)
             self._brk_rc = (self._brk_rc + 1) & 0x3
             idx = self._brk_rc
@@ -194,7 +194,7 @@ class CarController(CarControllerBase):
             self.last_button_frame = self.frame
             # 직전 idx를 다음 단계에서 +1로 쓰기 위해 저장
             self._last_brake_idx = idx
-          elif self.activateCruise_after_brake and Params().get_bool("ActivateCruiseAfterBrake"):
+          elif self.activateCruise_after_brake:
             # 브레이크 True보낸다음 최소간격 0.08s
             if (self.frame - self.last_button_frame) * DT_CTRL >= 0.08:
               # 직전전송 idx+1(프레임 아닌, 저장값 중심)
