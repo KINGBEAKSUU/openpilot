@@ -164,18 +164,33 @@ class CarController(CarControllerBase):
             self.autoCruise_frame = self.frame
             self.autoCruise_activate = False
           self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
-          if not self.autoCruise_activate:
-            if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-                self.last_button_frame = self.frame
-                self.send_btn(can_sends, CruiseButtons.DECEL_SET)
-            if (self.frame - self.autoCruise_frame) * DT_CTRL >= self.cruiseDelay_time:
+          # starting중에는 아래로직 수행금지(=오토크루즈 버튼 금지)
+          if actuators.longControlState != LongCtrlState.starting:
+            # 버튼 최소 간격: 1슬롯(0.04s), 가스페달눌림 스킵은 선택
+            if not self.autoCruise_activate and ((self.frame - self.last_button_frame) * DT_CTRL > 0.04):  # and not CS.out.gasPressed
+              self.last_button_frame = self.frame
+              self.send_btn(can_sends, CruiseButtons.DECEL_SET)
+              # 한번만 버튼 전송: 추가스팸 방지
               self.autoCruise_activate = True
+            # 여전히 enable이 안되면 쿨다운(8슬롯) 이후에 다시 1회 시도
+            if (not CS.out.cruiseState.enabled) and self.autoCruise_activate:
+              if (self.frame - self.last_button_frame) * DT_CTRL > 0.08):  #and (not CS.out.gasPressed):
+                # 재시도 준비 (스팸 없이 다시 1회만 눌릴 수 있게)
+                self.autoCruise_frame = self.frame
+                self.autoCruise_activate = False
+          else:
+            # 일단, starting 동안엔 오토크루즈 버튼을 절대 누르지 않음
+            #if (self.frame - self.autoCruise_frame) * DT_CTRL >= self.cruiseDelay_time:
+            #  self.autoCruise_frame = self.frame
+            #  self.autoCruise_activate = True
+            pass
         else:
           self.autoCruise_frame = 0
           self.autoCruise_activate = False
 
-        # Kans: AutoResume 1st step
+        # Kans: AutoResume 1st step (브레이크 True펄스후 → 0-브레이크전송로직)
         if actuators.longControlState == LongCtrlState.starting:
+          # 브레이크 펄스(0xA) — 한 번만
           if CS.out.cruiseState.enabled and not self.activateCruise_after_brake: #브레이크신호 한번만 보내기 위한 조건.
             # 전송시점에 RC증가(+1)
             self._brk_rc = (self._brk_rc + 1) & 0x3
@@ -274,6 +289,7 @@ class CarController(CarControllerBase):
           can_sends.append(create_gas_interceptor_command(self.packer_pt, interceptor_gas_cmd, idx))
           if self.CP.carFingerprint in CC_REGEN_PADDLE_CAR and press_regen_paddle:
             can_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN))
+
         if self.CP.carFingerprint not in CC_ONLY_CAR:
           at_full_stop = CC.longActive and CS.out.standstill
           near_stop = CC.longActive and (abs(CS.out.vEgo) < self.params.NEAR_STOP_BRAKE_PHASE)
@@ -283,10 +299,6 @@ class CarController(CarControllerBase):
           if self.CP.networkLocation == NetworkLocation.fwdCamera and self.CP.carFingerprint not in CC_ONLY_CAR:
             at_full_stop = at_full_stop and stopping
             friction_brake_bus = CanBus.POWERTRAIN
-
-          #if self.CP.autoResumeSng:
-          #  resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
-          #  at_full_stop = at_full_stop and not resume
 
           if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
             self.acc_engaged_latch = self.frame + int(0.2 / DT_CTRL)
