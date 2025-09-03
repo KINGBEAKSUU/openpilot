@@ -302,9 +302,9 @@ class CarController(CarControllerBase):
                 brk_idx_next = (self._last_brake_idx + 1) & 0x3
                 self._brk_rc = brk_idx_next  # 내부 RC와 동기화
               if self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
-                can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, 0, idx_next))
+                can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, 0, brk_idx_next))
               elif self.CP.carFingerprint in CAMERA_ACC_CAR:
-                can_sends.append(gmcan.create_brake_command(self.packer_pt, CanBus.POWERTRAIN, 0, idx_next))
+                can_sends.append(gmcan.create_brake_command(self.packer_pt, CanBus.POWERTRAIN, 0, brk_idx_next))
               # 0브레이크는 한 번만 — 로컬 플래그 내려서 재전송 방지
               self.activateCruise_after_brake = False
               # 버튼/다음 단계 간격을 위한 기준 업데이트
