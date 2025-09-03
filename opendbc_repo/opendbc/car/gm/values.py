@@ -46,7 +46,7 @@ class CarControllerParams:
       self.INACTIVE_REGEN = -500.0
       # Camera ACC vehicles have no regen while enabled.
       # Camera transitions to MAX_ACC_REGEN from ZERO_GAS and uses friction brakes instantly
-      max_regen_acceleration = 0.0 #(Kans:가감속 임계값. 높을수록 빨리 제동에 진입하지만 예민해질 수 있고 드득이 생길 수 있음.)
+      max_regen_acceleration = -0.3 #(Kans:가감속 임계값. 높을수록 빨리 제동에 진입하지만 예민해질 수 있고 드득이 생길 수 있음.)
 
     else:
       self.MAX_GAS = 1018.0  # Safety limit, not ACC max. Stock ACC >2042 from standstill.
