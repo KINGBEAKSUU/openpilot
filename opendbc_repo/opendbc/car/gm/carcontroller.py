@@ -174,7 +174,7 @@ class CarController(CarControllerBase):
               self.autoCruise_activate = True
             # 여전히 enable이 안되면 쿨다운(8슬롯) 이후에 다시 1회 시도
             if (not CS.out.cruiseState.enabled) and self.autoCruise_activate:
-              if ((self.frame - self.last_button_frame) * DT_CTRL > 0.08):  #and (not CS.out.gasPressed):
+              if ((self.frame - self.last_button_frame) * DT_CTRL > self.cruiseDelay_time):  #and (not CS.out.gasPressed):
                 # 재시도 준비 (스팸 없이 다시 1회만 눌릴 수 있게)
                 self.autoCruise_frame = self.frame
                 self.autoCruise_activate = False
