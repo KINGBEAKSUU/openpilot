@@ -169,7 +169,10 @@ class CarController(CarControllerBase):
             # 버튼 최소 간격: 1슬롯(0.04s), 가스페달눌림 스킵은 선택
             if not self.autoCruise_activate and ((self.frame // 4) - (self.last_button_frame // 4)) >= 1:  # and not CS.out.gasPressed
               self.last_button_frame = self.frame
-              self.send_btn(can_sends, CruiseButtons.DECEL_SET)
+              if self.CP.carFingerprint in CAMERA_ACC_CAR:
+                can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
+              else:
+                self.send_btn(can_sends, CruiseButtons.DECEL_SET)
               # 한번만 버튼 전송: 추가스팸 방지
               self.autoCruise_activate = True
             # 여전히 enable이 안되면 쿨다운(8슬롯) 이후에 다시 1회 시도
