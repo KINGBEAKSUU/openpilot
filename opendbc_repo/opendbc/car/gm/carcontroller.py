@@ -68,8 +68,8 @@ class CarController(CarControllerBase):
     self.btn_idx = 0
     self._last_brake_idx = None  # 직전 전송 idx 저장용
     self._brk_rc = -1
-    self.cruiseDelay_time = Params().get_float("CruiseDelay")
-    self.resumeDelay_time = Params().get_float("ResumeDelay")
+    self.cruiseDelay_time = 0.0
+    self.resumeDelay_time = 0.0
 
   @staticmethod
   def calc_pedal_command(accel: float, long_active: bool, car_velocity) -> tuple[float, bool]:
@@ -104,9 +104,6 @@ class CarController(CarControllerBase):
         self.params.STEER_DELTA_UP = steerDeltaUp
       if steerDeltaDown > 0:
         self.params.STEER_DELTA_DOWN = steerDeltaDown
-
-      self.cruiseDelay_time = params.get_float("CruiseDelay") * 0.01
-      self.resumeDelay_time = params.get_float("ResumeDelay") * 0.01
 
     self.long_pitch = Params().get_bool("LongPitch")
     self.use_ev_tables = Params().get_bool("EVTable")
@@ -157,6 +154,9 @@ class CarController(CarControllerBase):
       can_sends.append(gmcan.create_steering_control(self.packer_pt, CanBus.POWERTRAIN, apply_torque, idx, CC.latActive))
 
     if self.CP.openpilotLongitudinalControl:
+      if self.frame % 50 == 0:
+        self.cruiseDelay_time = Params().get_int("CruiseDelay")
+	  
       if Params().get_int("AutoCruiseControl") > 0:
         # Kans: autoCruise
         if (CS.out.activateCruise or self.v_cruise_carrot.cruise_is_on) and not CS.out.cruiseState.enabled:
@@ -167,14 +167,14 @@ class CarController(CarControllerBase):
           # starting중에는 아래로직 수행금지(=오토크루즈 버튼 금지)
           if actuators.longControlState != LongCtrlState.starting:
             # 버튼 최소 간격: 1슬롯(0.04s), 가스페달눌림 스킵은 선택
-            if not self.autoCruise_activate and ((self.frame - self.last_button_frame) * DT_CTRL > 0.04):  # and not CS.out.gasPressed
+            if not self.autoCruise_activate and ((self.frame // 4) - (self.last_button_frame // 4)) >= 1:  # and not CS.out.gasPressed
               self.last_button_frame = self.frame
               self.send_btn(can_sends, CruiseButtons.DECEL_SET)
               # 한번만 버튼 전송: 추가스팸 방지
               self.autoCruise_activate = True
             # 여전히 enable이 안되면 쿨다운(8슬롯) 이후에 다시 1회 시도
             if (not CS.out.cruiseState.enabled) and self.autoCruise_activate:
-              if ((self.frame - self.last_button_frame) * DT_CTRL > self.cruiseDelay_time):  #and (not CS.out.gasPressed):
+              if ((self.frame // 4) - (self.last_button_frame // 4)) >= self.cruiseDelay_time:  #and (not CS.out.gasPressed):
                 # 재시도 준비 (스팸 없이 다시 1회만 눌릴 수 있게)
                 self.autoCruise_frame = self.frame
                 self.autoCruise_activate = False
@@ -232,6 +232,7 @@ class CarController(CarControllerBase):
 
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
+        self.resumeDelay_time = Params().get_float("ResumeDelay") * 0.01
         # GM: softHold
         stopping = actuators.longControlState == LongCtrlState.stopping or CS.out.softHoldActive > 0
 
