@@ -243,9 +243,9 @@ class CarrotPlanner:
       stopSign = model_x < 20.0 and model_v < 10.0
     elif v_ego_kph < 82.0:
       stopSign = (model_x < d_rel - 2.0 and
-                  model_x < np.interp(v[0] * 3.6, [60, 80], [90.0, 120]) and
+                  model_x < np.interp(v[0] * 3.6, [60, 80], [90.0, 110]) and
                   ((model_v < 2.0) or (model_v < v[0] * 0.5)) and
-                  abs(y[-1]) < 3.5)
+                  abs(y[-1]) < 6.0)
       # 정상주행중 감속하는 경우(카메라 감속등), 오감지가 많음. 
       # 회생감속시:v_cruise=0에는 신호호감지하도록함.
       if v_cruise != 0 and (self.xState == XState.e2eCruise and a_ego < -1.0):
