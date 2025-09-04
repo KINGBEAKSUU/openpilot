@@ -252,7 +252,7 @@ class CarController(CarControllerBase):
                 self.last_button_frame = self.frame
                 if self.CP.carFingerprint in CAMERA_ACC_CAR:
                   can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
-                else:
+                elif self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
                   self.send_btn(can_sends, CruiseButtons.DECEL_SET)
                 # 한번만 버튼 전송: 추가스팸 방지
                 self.autoCruise_activate = True
