@@ -245,29 +245,20 @@ class CarController(CarControllerBase):
               self.autoCruise_frame = self.frame
               self.autoCruise_activate = False
             self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
-            # starting중에는 아래로직 수행금지(=오토크루즈 버튼 금지)
-            if actuators.longControlState != LongCtrlState.starting:
-              # 버튼 최소 간격: 1슬롯(0.04s), 가스페달눌림 스킵은 선택
-              if not self.autoCruise_activate and (self.frame - self.last_button_frame) * DT_CTRL >= 0.04:  # and not CS.out.gasPressed
-                self.last_button_frame = self.frame
-                if self.CP.carFingerprint in CAMERA_ACC_CAR:
-                  can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
-                elif self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
-                  self.send_btn(can_sends, CruiseButtons.DECEL_SET)
-                # 한번만 버튼 전송: 추가스팸 방지
-                self.autoCruise_activate = True
-              # 여전히 enable이 안되면 쿨다운(8슬롯) 이후에 다시 1회 시도
-              if (not CS.out.cruiseState.enabled) and self.autoCruise_activate:
-                if (self.frame - self.last_button_frame) * DT_CTRL >= self.cruiseDelay_time:  #and (not CS.out.gasPressed):
-                  # 재시도 준비 (스팸 없이 다시 1회만 눌릴 수 있게)
-                  self.autoCruise_frame = self.frame
+            if actuators.longControlState not in [LongCtrlState.starting, LongCtrlState.stopping]:
+              if not self.autoCruise_activate:
+                if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
+                    self.last_button_frame = self.frame
+                    if self.CP.carFingerprint in CAMERA_ACC_CAR:
+                      can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
+                    elif self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
+                      self.send_btn(can_sends, CruiseButtons.DECEL_SET)
+
+                    self.autoCruise_activate = True  # 전송 직후 잠금
+                    self.autoCruise_frame = self.frame  # 쿨다운 기준점
+              if self.autoCruise_activate:
+                if (self.frame - self.autoCruise_frame) * DT_CTRL >= self.cruiseDelay_time:
                   self.autoCruise_activate = False
-            else:
-              # 일단, starting 동안엔 오토크루즈 버튼을 절대 누르지 않음
-              #if (self.frame - self.autoCruise_frame) * DT_CTRL >= self.cruiseDelay_time:
-              #  self.autoCruise_frame = self.frame
-              #  self.autoCruise_activate = True
-              pass
           else:
             self.autoCruise_frame = 0
             self.autoCruise_activate = False
