@@ -47,6 +47,11 @@ class CarState(CarStateBase):
     self.cruiseMain_on = True if Params().get_int("AutoEngage") == 2 else False
     # Malibu
     self._malibu_gas_pressed_prev = False
+    # accFault hyst
+    self._standstill_hyst = True
+    self._ss_enter = 0.086   # STANDSTILL_THRESHOLD = 10 * 0.0311 * CV.KPH_TO_MS(.277) 값
+    self._ss_exit  = 0.15   # m/s, 스탠드스틸에서 '나갈' 때 임계 (≈0.18 km/h)
+    self._creep_max = 0.45  # m/s, 크리핑 윈도 (≈1.08 km/h)
 
   def update_button_enable(self, buttonEvents: list[structs.CarState.ButtonEvent]):
     if not self.CP.pcmCruise:
@@ -112,7 +117,17 @@ class CarState(CarStateBase):
     ret.vEgoRaw = float(np.mean([ret.wheelSpeeds.fl, ret.wheelSpeeds.fr, ret.wheelSpeeds.rl, ret.wheelSpeeds.rr]))
     ret.vEgo, ret.aEgo = self.update_speed_kf(ret.vEgoRaw)
     # sample rear wheel speeds, standstill=True if ECM allows engagement with brake
-    ret.standstill = abs(ret.wheelSpeeds.rl) <= STANDSTILL_THRESHOLD and abs(ret.wheelSpeeds.rr) <= STANDSTILL_THRESHOLD
+    # accFault hyst
+    v_rl = abs(ret.wheelSpeeds.rl)
+    v_rr = abs(ret.wheelSpeeds.rr)
+    if self._standstill_hyst:
+      if (v_rl > self._ss_exit) or (v_rr > self._ss_exit):
+        self._standstill_hyst = False
+    else:
+      if (v_rl < self._ss_enter) and (v_rr < self._ss_enter):
+        self._standstill_hyst = True
+    ret.standstill = self._standstill_hyst  # 기존 ret.standstill 대체
+    #ret.standstill = abs(ret.wheelSpeeds.rl) <= STANDSTILL_THRESHOLD and abs(ret.wheelSpeeds.rr) <= STANDSTILL_THRESHOLD
 
     if pt_cp.vl["ECMPRDNL2"]["ManualMode"] == 1:
       ret.gearShifter = self.parse_gear_shifter("T")
@@ -196,7 +211,9 @@ class CarState(CarStateBase):
     if self.CP.carFingerprint == CAR.CHEVROLET_TRAILBLAZER:
       ret.accFaulted = False
     else:
-      ret.accFaulted = ((pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.FAULTED and not ret.standstill) or
+      # accFault hyst
+      creeping = max(v_rl, v_rr) < self._creep_max
+      ret.accFaulted = ((pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.FAULTED and not creeping) or
                         pt_cp.vl["EBCMFrictionBrakeStatus"]["FrictionBrakeUnavailable"] == 1)
 
     ret.cruiseState.enabled = pt_cp.vl["AcceleratorPedal2"]["CruiseState"] != AccState.OFF
