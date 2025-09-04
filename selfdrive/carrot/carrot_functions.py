@@ -79,7 +79,7 @@ class CarrotPlanner:
     self.stopSignCount = 0
 
     self.stop_distance = 6.0
-    self.trafficStopDistanceAdjust = 0.3 #params.get_float("TrafficStopDistanceAdjust") / 100.
+    self.trafficStopDistanceAdjust = 0.4 #params.get_float("TrafficStopDistanceAdjust") / 100.
     self.comfortBrake = 2.4
     self.comfort_brake = self.comfortBrake
 
@@ -242,7 +242,7 @@ class CarrotPlanner:
     if v_ego_kph < 1.0:
       stopSign = model_x < 20.0 and model_v < 10.0
     elif v_ego_kph < 82.0:
-      margin = float(np.interp(v_ego_kph, [0, 20, 40, 60, 82], [2.0, 3.0, 4.0, 5.0, 5.5]))
+      margin = float(np.interp(v_ego_kph, [0, 20, 40, 60, 82], [3.0, 3.5, 4.0, 4.5, 5.0]))
       stopSign = (model_x < d_rel - margin and
                   model_x < np.interp(v[0] * 3.6, [60, 80], [90.0, 110]) and
                   ((model_v < 2.5) or (model_v < v[0] * 0.5)) and
