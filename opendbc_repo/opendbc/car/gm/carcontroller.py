@@ -218,7 +218,6 @@ class CarController(CarControllerBase):
           if self.CP.carFingerprint in CC_REGEN_PADDLE_CAR and press_regen_paddle:
             can_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN))
 
-
         at_full_stop = CC.longActive and CS.out.standstill
         near_stop = CC.longActive and (abs(CS.out.vEgo) < self.params.NEAR_STOP_BRAKE_PHASE)
         friction_brake_bus = CanBus.CHASSIS
@@ -248,16 +247,15 @@ class CarController(CarControllerBase):
             if actuators.longControlState not in [LongCtrlState.starting, LongCtrlState.stopping]:
               if not self.autoCruise_activate:
                 if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-                    self.last_button_frame = self.frame
-                    if self.CP.carFingerprint in CAMERA_ACC_CAR:
-                      can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
-                    elif self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
-                      self.send_btn(can_sends, CruiseButtons.DECEL_SET)
+                  self.last_button_frame = self.frame
+                  if self.CP.carFingerprint in CAMERA_ACC_CAR:
+                    can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
+                  elif self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
+                    self.send_btn(can_sends, CruiseButtons.DECEL_SET)
 
-                    self.autoCruise_activate = True  # 전송 직후 잠금
-                    self.autoCruise_frame = self.frame  # 쿨다운 기준점
-              if self.autoCruise_activate:
-                if (self.frame - self.autoCruise_frame) * DT_CTRL >= self.cruiseDelay_time:
+                  self.autoCruise_activate = True  # 전송 직후 잠금
+                  self.autoCruise_frame = self.frame  # 쿨다운 기준점
+                if self.autoCruise_activate and (self.frame - self.autoCruise_frame) * DT_CTRL >= self.cruiseDelay_time:
                   self.autoCruise_activate = False
           else:
             self.autoCruise_frame = 0
