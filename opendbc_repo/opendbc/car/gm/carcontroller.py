@@ -283,7 +283,7 @@ class CarController(CarControllerBase):
               if (self.frame - self.last_button_frame) * DT_CTRL >= 0.08:
                 # 직전전송 idx+1(프레임 아닌, 저장값 중심)
                 self._brk_rc = ((self._last_brake_idx if self._last_brake_idx is not None else self._brk_rc) + 1) & 0x3
-                 brk_idx_next = self._brk_rc
+                brk_idx_next = self._brk_rc
                 if self.CP.carFingerprint == CAR.CHEVROLET_VOLT:
                   can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, 0, brk_idx_next))
                 elif self.CP.carFingerprint in CAMERA_ACC_CAR:
