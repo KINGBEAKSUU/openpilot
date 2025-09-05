@@ -399,8 +399,8 @@ class CarController(CarControllerBase):
       bus = CanBus.CAMERA if self.CP.carFingerprint in CAMERA_ACC_CAR else CanBus.POWERTRAIN
     # RollinfCounter초기화
     if bus == CanBus.CAMERA:
-    if self.btn_rc_cam < 0:
-      self.btn_rc_cam = CS.buttons_counter & 0x3
+      if self.btn_rc_cam < 0:
+        self.btn_rc_cam = CS.buttons_counter & 0x3
     elif bus == CanBus.POWERTRAIN:
       if self.btn_rc_pt < 0:
         self.btn_rc_pt = CS.buttons_counter & 0x3
