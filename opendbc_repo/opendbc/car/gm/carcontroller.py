@@ -408,7 +408,7 @@ class CarController(CarControllerBase):
     if bus == CanBus.CAMERA:
       self.btn_rc_cam = (self.btn_rc_cam + 1) & 0x3
       rc = self.btn_rc_cam
-    elif bus == CanBus.POWERTRAIN
+    elif bus == CanBus.POWERTRAIN:
       self.btn_rc_pt = (self.btn_rc_pt + 1) & 0x3
       rc = self.btn_rc_pt
     else:
