@@ -4,7 +4,7 @@ import numpy as np
 from cereal import car
 from openpilot.common.conversions import Conversions as CV
 
-from opendbc.car import structs
+from opendbc.car import structs, DT_CTRL
 GearShifter = structs.CarState.GearShifter
 
 
@@ -223,6 +223,13 @@ class VCruiseCarrot:
     self.useLaneLineSpeed = self.params.get_int("UseLaneLineSpeed")
     self.useLaneLineSpeedApply = self.useLaneLineSpeed
 
+  @property
+  def cruise_is_on(self) -> bool:
+    #_activate_cruise가 0이 아니면 True
+    try:
+      return int(self._activate_cruise) != 0
+    except Exception:
+      return False
 
   @property
   def v_cruise_initialized(self):
@@ -605,9 +612,9 @@ class VCruiseCarrot:
         v_cruise_kph = ((v_cruise_kph // self._cruise_speed_unit) + 1) * self._cruise_speed_unit
 
     elif v_cruise_kph < 30: #self.nRoadLimitSpeed:
-      v_cruise_kph = 30 #self.nRoadLimitSpeed
+      v_cruise_kph = 14 #self.nRoadLimitSpeed
     else:
-      for speed in range (40, 160, self._cruise_speed_unit):
+      for speed in range (15, 160, self._cruise_speed_unit):
         if v_cruise_kph < speed:
           v_cruise_kph = speed
           break
@@ -700,23 +707,31 @@ class VCruiseCarrot:
       else:
         v_cruise_kph = self._v_cruise_desired(CS, v_cruise_kph)
     elif self._gas_pressed_count == -1:
-      if 0 < self.d_rel < CS.vEgo * 0.8:
-        if CS.vEgo < 1.0:
-          self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (safe speed)")
+      if (self.d_rel > 200.0) or (self.d_rel == float('inf')): #리드카 없음
+        self._cruise_control(1, 0, "Cruise on (no lead)")
+      elif 0 < self.d_rel < CS.vEgo * 1.5:
+        if CS.vEgo < 0.9:
+          self._cruise_control(1, 0, "Cruise on (safe speed)")
         else:
-          self._cruise_control(-1, 0, "Cruise off (lead car too close)")
-      elif self.v_ego_kph_set < 30:
+          pass # self._cruise_control(-1, 0, "Cruise off (lead car too close)")
+      elif self.v_ego_kph_set < 14:
         self._cruise_control(-1, 0, "Cruise off (gas speed)")
       elif self.xState == 3:
+        #v_cruise_kph = self.v_ego_kph_set
+        #self._cruise_control(-1, 3, "Cruise off (traffic sign)")
+        pass
+      elif self.xState == 5:
         v_cruise_kph = self.v_ego_kph_set
-        self._cruise_control(-1, 3, "Cruise off (traffic sign)")
+        self._cruise_control(1, -1, "Cruise on (traffic sign changed)")
       elif self.v_ego_kph_set >= self.autoGasTokSpeed and not CC.enabled:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (gas pressed)")
     elif self._brake_pressed_count == -1 and self._soft_hold_active == 0:
       if self.v_ego_kph_set > self.autoGasTokSpeed:
-        v_cruise_kph = self.v_ego_kph_set
-        self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (speed)")
+        if (self.d_rel > 200.0) or (self.d_rel == float('inf')):
+          self._cruise_control(1, 0, "Cruise on (no lead)")
+        elif 0 < self.d_rel < 40.0:
+          self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (speed)")
       elif abs(CS.steeringAngleDeg) < 20:
         if self.xState in [3, 5]:
           if self.xState == 3:  # 감속중
@@ -729,7 +744,7 @@ class VCruiseCarrot:
     elif self._brake_pressed_count < 0 and self._gas_pressed_count < 0:
       if not CC.enabled:
         if self.d_rel > 0 and CS.vEgo > 0.02:
-          safe_state, safe_dist = self._check_safe_stop(CS, 4)
+          safe_state, safe_dist = self._check_safe_stop(CS, 5)
           if abs(CS.steeringAngleDeg) > 70:
             pass
           elif not safe_state:

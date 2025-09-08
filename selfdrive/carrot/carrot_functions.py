@@ -79,7 +79,7 @@ class CarrotPlanner:
     self.stopSignCount = 0
 
     self.stop_distance = 6.0
-    self.trafficStopDistanceAdjust = 1.5 #params.get_float("TrafficStopDistanceAdjust") / 100.
+    self.trafficStopDistanceAdjust = 0.4 #params.get_float("TrafficStopDistanceAdjust") / 100.
     self.comfortBrake = 2.4
     self.comfort_brake = self.comfortBrake
 
@@ -173,6 +173,7 @@ class CarrotPlanner:
       self.cruiseMaxVals6 = self.params.get_float("CruiseMaxVals6") / 100.
     elif self.params_count == 40:
       self.stop_distance = self.params.get_float("StopDistanceCarrot") / 100.
+      self.comfortBrake = self.params.get_float("ComfortBrake") / 100.
       self.j_lead_factor = self.params.get_float("JLeadFactor3") / 100.
       self.eco_over_speed = self.params.get_int("CruiseEcoControl")
       self.autoNaviSpeedDecelRate = float(self.params.get_int("AutoNaviSpeedDecelRate")) * 0.01
@@ -236,14 +237,15 @@ class CarrotPlanner:
   def check_model_stopping(self, v_cruise, v, v_ego, a_ego, model_x, y, d_rel):
     v_ego_kph = v_ego * CV.MS_TO_KPH
     model_v = self.vFilter.process(v[-1])
-    startSign = model_v > 5.0 or model_v > (v[0] + 2)
+    startSign = model_v > 4.0 and model_v > (v[0] + 1.2)
 
     if v_ego_kph < 1.0:
       stopSign = model_x < 20.0 and model_v < 10.0
     elif v_ego_kph < 82.0:
-      stopSign = (model_x < d_rel - 3.0 and
-                  model_x < np.interp(v[0] * 3.6, [60, 80], [120.0, 150]) and
-                  ((model_v < 3.0) or (model_v < v[0] * 0.7)) and
+      margin = float(np.interp(v_ego_kph, [0, 20, 40, 60], [3.5, 4.0, 4.5, 5.0]))
+      stopSign = (model_x < d_rel - margin and
+                  model_x < np.interp(v[0] * 3.6, [60, 80], [80.0, 110]) and
+                  ((model_v < 3.0) or (model_v < v[0] * 0.6)) and
                   abs(y[-1]) < 5.0)
       # 정상주행중 감속하는 경우(카메라 감속등), 오감지가 많음. 
       # 회생감속시:v_cruise=0에는 신호호감지하도록함.
@@ -252,21 +254,9 @@ class CarrotPlanner:
     else:
       stopSign = False
 
-    # self.stopSignCount = (
-    #   self.stopSignCount + 1
-    #   if (
-    #     stopSign
-    #     and (
-    #       model_x > get_safe_obstacle_distance(
-    #         v_ego,
-    #         t_follow=0,
-    #         comfort_brake=COMFORT_BRAKE,
-    #         stop_distance=-1.0,
-    #       )
-    #     )
-    #   )
-    #   else 0
-    # )
+    # Ksns: 상호배타 처리: 둘 다 True면 stopSign 우선 제거 (출발 우선)
+    if stopSign and startSign:
+      stopSign = False
     self.stopSignCount = self.stopSignCount + 1 if stopSign else 0
     self.startSignCount = self.startSignCount + 1 if startSign and not stopSign else 0
 

@@ -5,8 +5,11 @@ from opendbc.car import Bus, structs
 from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.gm.values import DBC, CanBus
 from opendbc.car.interfaces import RadarInterfaceBase
+from openpilot.common.params import Params
+from openpilot.common.filter_simple import MyMovingAverage
 
-RADAR_HEADER_MSG = 1120
+RADAR_HEADER_MSG = 1120  # F_LRR_Obj_Header
+CAMERA_DATA_HEADER_MSG = 1056  # F_Vision_Obj_Header
 SLOT_1_MSG = RADAR_HEADER_MSG + 1
 NUM_SLOTS = 20
 
@@ -15,7 +18,9 @@ NUM_SLOTS = 20
 LAST_RADAR_MSG = RADAR_HEADER_MSG + NUM_SLOTS
 
 
-def create_radar_can_parser(car_fingerprint):
+def create_radar_can_parser(radar_tracks, car_fingerprint):
+  if not radar_tracks:
+    return None
   # C1A-ARS3-A by Continental
   radar_targets = list(range(SLOT_1_MSG, SLOT_1_MSG + NUM_SLOTS))
   signals = list(zip(['FLRRNumValidTargets',
@@ -25,7 +30,8 @@ def create_radar_can_parser(car_fingerprint):
                      ['TrkRange'] * NUM_SLOTS + ['TrkRangeRate'] * NUM_SLOTS +
                      ['TrkRangeAccel'] * NUM_SLOTS + ['TrkAzimuth'] * NUM_SLOTS +
                      ['TrkWidth'] * NUM_SLOTS + ['TrkObjectID'] * NUM_SLOTS,
-                     [RADAR_HEADER_MSG] * 7 + radar_targets * 6, strict=True))
+                     [RADAR_HEADER_MSG] * 7 + radar_targets * 6,
+                     [CAMERA_DATA_HEADER_MSG] * 7 + radar_targets * 6, strict=True))
 
   messages = list({(s[1], 14) for s in signals})
 
@@ -36,12 +42,16 @@ class RadarInterface(RadarInterfaceBase):
   def __init__(self, CP):
     super().__init__(CP)
 
-    self.rcp = None if CP.radarUnavailable else create_radar_can_parser(CP.carFingerprint)
+    self.radar_tracks = Params().get_int("EnableRadarTracks") >= 1
+    self.updated_tracks = set()
+    self.rcp = create_radar_can_parser(self.radar_tracks, CP.carFingerprint)
 
     self.trigger_msg = LAST_RADAR_MSG
     self.updated_messages = set()
 
+    self.frame = 0
   def update(self, can_strings):
+    self.frame += 1
     if self.rcp is None:
       return super().update(None)
 
@@ -52,6 +62,18 @@ class RadarInterface(RadarInterfaceBase):
       return None
 
     ret = structs.RadarData()
+
+    if self.radar_tracks and self.rcp is not None:
+      vls_t = self.rcp.update(can_strings)
+      self.updated_tracks.update(vls_t)
+      if self.trigger_msg in self.updated_tracks:
+        self.updated_tracks.clear()
+        ret = structs.RadarData()
+        if not self.rcp.can_valid:
+          ret.errors.canError = True
+        ret.points = list(self.pts.values())
+        return ret
+
     header = self.rcp.vl[RADAR_HEADER_MSG]
     fault = header['FLRRSnsrBlckd'] or header['FLRRSnstvFltPrsntInt'] or \
       header['FLRRYawRtPlsblityFlt'] or header['FLRRHWFltPrsntInt'] or \
