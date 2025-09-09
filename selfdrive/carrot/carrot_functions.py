@@ -243,7 +243,7 @@ class CarrotPlanner:
       stopSign = model_x < 20.0 and model_v < 10.0
     elif v_ego_kph < 82.0:
       margin_raw = float(np.interp(v_ego_kph, [0, 20, 40, 60], [3.5, 4.0, 4.5, 5.0]))
-      margin =  raw_margin - self.trafficStopDistanceAdjust
+      margin =  margin_raw - self.trafficStopDistanceAdjust
       stopSign = (model_x < d_rel - margin and
                   model_x < np.interp(v[0] * 3.6, [60, 80], [80.0, 110]) and
                   ((model_v < 3.0) or (model_v < v[0] * 0.6)) and
