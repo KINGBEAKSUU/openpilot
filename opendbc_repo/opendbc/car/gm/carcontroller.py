@@ -294,19 +294,20 @@ class CarController(CarControllerBase):
                 friction_sent_this_tick = True
 
         # Kans: AutoResume 2nd step
-        if actuators.longControlState == LongCtrlState.starting:
-          if self.resume_frame == 0:
-            self.resume_frame = self.frame
+        if Params().get_int("AutoEngage") == 2:
+          if actuators.longControlState == LongCtrlState.starting:
+            if self.resume_frame == 0:
+              self.resume_frame = self.frame
+              self.resume_activate = False
+            if not self.resume_activate:
+              if (self.frame - self.last_button_frame) * DT_CTRL >= 0.04:
+                self.last_button_frame = self.frame
+                self.send_btn(CS, can_sends, CruiseButtons.RES_ACCEL)
+              if (self.frame - self.resume_frame) * DT_CTRL >= self.resumeDelay_time:
+                self.resume_activate = True
+          else:
+            self.resume_frame = 0
             self.resume_activate = False
-          if not self.resume_activate:
-            if (self.frame - self.last_button_frame) * DT_CTRL >= 0.04:
-              self.last_button_frame = self.frame
-              self.send_btn(CS, can_sends, CruiseButtons.RES_ACCEL)
-            if (self.frame - self.resume_frame) * DT_CTRL >= self.resumeDelay_time:
-              self.resume_activate = True
-        else:
-          self.resume_frame = 0
-          self.resume_activate = False
 
         # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
         can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop))
