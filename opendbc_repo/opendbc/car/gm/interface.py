@@ -120,7 +120,7 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kpBP = [0.]
     ret.longitudinalTuning.kiBP = [0.]
 
-    if candidate in (CAMERA_ACC_CAR | SDGM_CAR):
+    if candidate in (CAMERA_ACC_CAR):
       ret.alphaLongitudinalAvailable = True #candidate not in SDGM_CAR
       ret.networkLocation = NetworkLocation.gateway
       ret.radarUnavailable = True  # no radar
@@ -224,7 +224,7 @@ class CarInterface(CarInterfaceBase):
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
       ret.networkLocation = NetworkLocation.gateway
-      ret.flags |= GMFlags.HAS_ASCM.value
+      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_ASCM_LONG.value
       ret.openpilotLongitudinalControl = True
       ret.pcmCruise = False
       ret.alphaLongitudinalAvailable = True
