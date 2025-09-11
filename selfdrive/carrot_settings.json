@@ -1576,7 +1576,32 @@
       "unit": 10
     },
     {
-
+      "group": "주행튜닝",
+      "name": "ThresholdPress",
+      "title": "가속페달 눌림값x0.01(6)",
+      "descr": "이전에 가속페달 안밟혔을때",
+      "egroup": "LONG",
+      "etitle": "ThresholdPressx0.01(6)",
+      "edescr": "",
+      "min": 0,
+      "max": 10,
+      "default": 6,
+      "unit": 1
+    },
+    {
+      "group": "주행튜닝",
+      "name": "ThresholdRelease",
+      "title": "가속페달 눌림값 x0.01(3)",
+      "descr": "이전에 가속페달이 밟혔을때",
+      "egroup": "LONG",
+      "etitle": "ThresholdRelease. x0.01(3)",
+      "edescr": "",
+      "min": 0,
+      "max": 10,
+      "default": 3,
+      "unit": 1
+    },
+    {
       "group": "주행튜닝",
       "name": "CruiseDelay",
       "title": "오토크루즈용 SET전송 반복타임.x0.01초(8)",

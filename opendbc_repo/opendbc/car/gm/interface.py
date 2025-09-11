@@ -120,8 +120,8 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kpBP = [0.]
     ret.longitudinalTuning.kiBP = [0.]
 
-    if candidate in (CAMERA_ACC_CAR):
-      ret.alphaLongitudinalAvailable = True #candidate not in SDGM_CAR
+    if candidate in (CAMERA_ACC_CAR | SDGM_CAR):
+      ret.alphaLongitudinalAvailable = candidate not in SDGM_CAR
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
@@ -223,7 +223,7 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kf = 0.00004   # full torque for 20 deg at 80mph means 0.00007818594
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
-      ret.networkLocation = NetworkLocation.gateway
+      ret.networkLocation = NetworkLocation.fwdCamera
       ret.openpilotLongitudinalControl = True
       ret.radarUnavailable = False
       ret.pcmCruise = False
@@ -235,6 +235,7 @@ class CarInterface(CarInterfaceBase):
       ret.stopAccel = -0.4
       ret.startingState = True
       ret.startAccel = .9
+      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
 
     elif candidate == CAR.BUICK_LACROSSE:
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
@@ -332,7 +333,7 @@ class CarInterface(CarInterfaceBase):
       ret.minSteerSpeed = 30 * CV.MPH_TO_MS
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
     elif candidate == CAR.CADILLAC_CT6_2019:
-      ret.networkLocation = NetworkLocation.gateway
+      ret.networkLocation = NetworkLocation.fwdCamera
       ret.openpilotLongitudinalControl = True
       ret.radarUnavailable = False
       ret.pcmCruise = False

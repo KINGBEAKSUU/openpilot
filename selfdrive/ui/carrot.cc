@@ -2077,7 +2077,7 @@ public:
             float v, v_lat, y_rel;
             float t = radar_lat_factor;   // 예측 시간
             float model_prob = 0.0f;
-            float score = 0.0f;
+            //float score = 0.0f;
             float dRel = l.getDRel();
 
             // 현재점 투영
@@ -2092,7 +2092,7 @@ public:
 
               bool radar = l.getRadar();
               model_prob = l.getModelProb();
-              score = l.getScore();
+              //score = l.getScore();
 
               // 속도 크기/표시값 (v_ego 없이 간단 처리)
               float v_abs = std::sqrt(v * v + v_lat * v_lat);
@@ -2124,7 +2124,7 @@ public:
                 wStr = 35 * (int)strlen(str);
                 ui_fill_rect(s->vg,
                   { (int)(x - wStr / 2), (int)(y - 35), wStr, 42 },
-                  (!radar) ? COLOR_BLUE : (model_prob == 0.01f) ? COLOR_ORANGE : (v_sum > 0.f) ? COLOR_GREEN : COLOR_RED,
+                  (!radar) ? COLOR_BLUE : (model_prob == 0.01f) ? COLOR_GREEN : (v_sum > 0.f) ? COLOR_ORANGE : COLOR_RED,
                   15);
                 ui_draw_text(s, x, y, str, 40, COLOR_WHITE, BOLD);
 
@@ -2132,7 +2132,7 @@ public:
                   sprintf(str, "%.1f", y_rel);
                   ui_draw_text(s, x, y - 40, str, 30, COLOR_WHITE, BOLD);
 
-                  sprintf(str, "%.3f", score);
+                  sprintf(str, "%.1f", (s->scene.is_metric)? dRel : dRel * KM_TO_MILE);
                   ui_draw_text(s, x, y + 30, str, 30, COLOR_WHITE, BOLD);
                 }
               }

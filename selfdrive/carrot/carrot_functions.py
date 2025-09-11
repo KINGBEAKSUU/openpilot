@@ -79,7 +79,7 @@ class CarrotPlanner:
     self.stopSignCount = 0
 
     self.stop_distance = 6.0
-    self.trafficStopDistanceAdjust = 1.8 #params.get_float("TrafficStopDistanceAdjust") / 100.
+    self.trafficStopDistanceAdjust = 2.0 #params.get_float("TrafficStopDistanceAdjust") / 100.
     self.comfortBrake = 2.4
     self.comfort_brake = self.comfortBrake
 
@@ -237,15 +237,13 @@ class CarrotPlanner:
   def check_model_stopping(self, v_cruise, v, v_ego, a_ego, model_x, y, d_rel):
     v_ego_kph = v_ego * CV.MS_TO_KPH
     model_v = self.vFilter.process(v[-1])
-    startSign = model_v > 4.0 and model_v > (v[0] + 1.2)
+    startSign = model_v > 4.5 and model_v > (v[0] + 1.6)
 
     if v_ego_kph < 1.0:
       stopSign = model_x < 20.0 and model_v < 10.0
     elif v_ego_kph < 82.0:
-      margin_raw = float(np.interp(v_ego_kph, [0, 20, 40, 60], [3.5, 4.0, 4.5, 5.0]))
-      margin =  margin_raw - self.trafficStopDistanceAdjust
-      stopSign = (model_x < d_rel - margin and
-                  model_x < np.interp(v[0] * 3.6, [60, 80], [80.0, 110]) and
+      stopSign = (model_x < d_rel - 4.0 and
+                  model_x < np.interp(v[0] * 3.6, [60, 80], [100.0, 110]) and
                   ((model_v < 3.0) or (model_v < v[0] * 0.6)) and
                   abs(y[-1]) < 5.0)
       # 정상주행중 감속하는 경우(카메라 감속등), 오감지가 많음. 

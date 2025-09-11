@@ -612,9 +612,9 @@ class VCruiseCarrot:
         v_cruise_kph = ((v_cruise_kph // self._cruise_speed_unit) + 1) * self._cruise_speed_unit
 
     elif v_cruise_kph < 30: #self.nRoadLimitSpeed:
-      v_cruise_kph = 14 #self.nRoadLimitSpeed
+      v_cruise_kph = 30 #self.nRoadLimitSpeed
     else:
-      for speed in range (15, 160, self._cruise_speed_unit):
+      for speed in range (40, 160, self._cruise_speed_unit):
         if v_cruise_kph < speed:
           v_cruise_kph = speed
           break
@@ -707,8 +707,10 @@ class VCruiseCarrot:
       else:
         v_cruise_kph = self._v_cruise_desired(CS, v_cruise_kph)
     elif self._gas_pressed_count == -1:
-      if 0 < self.d_rel < CS.vEgo * 1.5:
-        if CS.vEgo < 1.0:
+      if (self.d_rel is None) or (not np.isfinite(self.d_rel)) or (self.d_rel > 200.0): #리드카 없음
+        self._cruise_control(1, 0, "Cruise on (no lead)")
+      elif 0 < self.d_rel < CS.vEgo * 1.5:
+        if CS.vEgo < 0.9:
           self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (safe speed)")
         else:
           self._cruise_control(-1, 0, "Cruise off (lead car too close)")
@@ -724,7 +726,9 @@ class VCruiseCarrot:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (gas pressed)")
     elif self._brake_pressed_count == -1 and self._soft_hold_active == 0:
-      if self.v_ego_kph_set > self.autoGasTokSpeed:
+      if (self.d_rel is None) or (not np.isfinite(self.d_rel)) or (self.d_rel > 200.0): #리드카 없음
+        self._cruise_control(1, 0, "Cruise on (no lead)")
+      elif self.v_ego_kph_set > self.autoGasTokSpeed:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (speed)")
       elif abs(CS.steeringAngleDeg) < 20:
@@ -739,7 +743,7 @@ class VCruiseCarrot:
     elif self._brake_pressed_count < 0 and self._gas_pressed_count < 0:
       if not CC.enabled:
         if self.d_rel > 0 and CS.vEgo > 0.02:
-          safe_state, safe_dist = self._check_safe_stop(CS, 4)
+          safe_state, safe_dist = self._check_safe_stop(CS, 5)
           if abs(CS.steeringAngleDeg) > 70:
             pass
           elif not safe_state:

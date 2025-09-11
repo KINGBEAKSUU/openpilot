@@ -24,6 +24,8 @@ def get_default_params():
     # kans
     ("LongPitch", "1"),
     ("EVTable", "1"),
+    ("ThresholdPress", "6"),
+    ("ThresholdRelease", "3"),
     ("CruiseDelay", "8"),
     ("ResumeDelay", "8"),
     ("CompletedTrainingVersion", "0"),
@@ -91,6 +93,7 @@ def get_default_params():
     ("MapTurnSpeedFactor", "90"),
     ("StoppingAccel", "0"),
     ("StopDistanceCarrot", "550"),
+    ("ComfortBrake", "240"),
     ("JLeadFactor3", "0"),
     ("CruiseButtonMode", "0"),
     ("CancelButtonMode", "0"),
