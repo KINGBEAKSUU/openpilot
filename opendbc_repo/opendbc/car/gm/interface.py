@@ -122,7 +122,7 @@ class CarInterface(CarInterfaceBase):
 
     if candidate in (CAMERA_ACC_CAR):
       ret.alphaLongitudinalAvailable = True #candidate not in SDGM_CAR
-      ret.networkLocation = NetworkLocation.gateway
+      ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM.value
@@ -224,26 +224,17 @@ class CarInterface(CarInterfaceBase):
 
     elif candidate in CAR.CHEVROLET_MALIBU_2019:
       ret.networkLocation = NetworkLocation.gateway
-      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_ASCM_LONG.value
       ret.openpilotLongitudinalControl = True
+      ret.radarUnavailable = False
       ret.pcmCruise = False
       ret.alphaLongitudinalAvailable = True
-      ret.radarUnavailable = False
-      ret.minEnableSpeed = -1 * CV.MPH_TO_MS
-      ret.minSteerSpeed = 7 * CV.MPH_TO_MS
-      ret.longitudinalTuning.kpBP = [0.]
-      ret.longitudinalTuning.kpV = [0.8]
-      ret.longitudinalTuning.kiBP = [0.]
-      ret.longitudinalTuning.kiV = [0.]
-      ret.longitudinalTuning.kf = 1.0
-      ret.stoppingDecelRate = 0.5 # brake_travel/s while trying to stop
+      ret.minEnableSpeed = -1
+      ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.5
-      ret.vEgoStarting = 0.45
-      ret.stopAccel = -0.5
+      ret.vEgoStarting = 0.4
+      ret.stopAccel = -0.4
       ret.startingState = True
-      ret.startAccel = 1.0
-
-      CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
+      ret.startAccel = .9
 
     elif candidate == CAR.BUICK_LACROSSE:
       CarInterfaceBase.configure_torque_tune(candidate, ret.lateralTuning)
@@ -347,7 +338,6 @@ class CarInterface(CarInterfaceBase):
       ret.pcmCruise = False
       ret.alphaLongitudinalAvailable = True
       ret.minEnableSpeed = -1
-      ret.startingState = True
       ret.stoppingDecelRate = 1.2 # brake_travel/s while trying to stop
       ret.vEgoStopping = 0.5
       ret.vEgoStarting = 0.4
