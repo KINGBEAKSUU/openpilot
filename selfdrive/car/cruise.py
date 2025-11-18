@@ -718,7 +718,7 @@ class VCruiseCarrot:
       else:
         v_cruise_kph = self._v_cruise_desired(CS, v_cruise_kph)
     elif self._gas_pressed_count == -1:
-      if 0 < self.d_rel < CS.vEgo * 0.8:
+      if 0 < self.d_rel < max(10.0, CS.vEgo * 1.2):
         if CS.vEgo < 1.0:
           self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (safe speed)")
         else:
@@ -728,11 +728,21 @@ class VCruiseCarrot:
       elif self.xState == 3:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(-1, 3, "Cruise off (traffic sign)")
+      elif self.xState == 5:
+        v_cruise_kph = self.v_ego_kph_set
+        self._cruise_control(1, -1, "Cruise on (traffic light green)")
       elif self.v_ego_kph_set >= self.autoGasTokSpeed and not CC.enabled:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (gas pressed)")
-    elif self._brake_pressed_count == -1 and self._soft_hold_active == 0:
-      if self.v_ego_kph_set > self.autoGasTokSpeed:
+    elif (-5 <= self._brake_pressed_count <= -1) and self._soft_hold_active == 0:
+      tr_gap = 0.8 # 0.8초 앞 정도만 가까운 거리로 설정.
+      MAX_CRUISE_DIST = min(30.0, max(15.0, CS.vEgo * tr_gap)) # 크루즈온 최소 거리.
+      lead_present = (self.d_rel is not None) and np.isfinite(self.d_rel) and (2.0 <= self.d_rel <= MAX_CRUISE_DIST)
+      lead_absent = not lead_present
+      if lead_absent:
+        v_cruise_kph = self.v_ego_kph_set
+        self._cruise_control(1, -1, "Cruise on (no lead)")
+      elif self.v_ego_kph_set > self.autoGasTokSpeed:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (speed)")
       elif abs(CS.steeringAngleDeg) < 20:
@@ -740,8 +750,7 @@ class VCruiseCarrot:
           if self.xState == 3:  # 감속중
             v_cruise_kph = self.v_ego_kph_set
           self._cruise_control(1, 0, "Cruise on (traffic sign)")
-        elif 0 < self.d_rel < 20: 
-          # v_cruise_kph = self.v_ego_kph_set # 전방에 차가 가까이 있을때, 기존속도 유지
+        elif 0 < self.d_rel < 20:
           self._cruise_control(1, -1 if self.v_ego_kph_set < 1 else 0, "Cruise on (lead car)")
 
     elif self._brake_pressed_count < 0 and self._gas_pressed_count < 0:
@@ -797,7 +806,7 @@ class VCruiseCarrot:
       self._gas_tok = False
       #if self._cruise_cancel_state and self._soft_hold_active == 2:
       #  self._cruise_control(-1, -1, "Cruise off,softhold mode (gasPressed)")
-      self._soft_hold_active = 0
+      self._soft_hold_active = 0  # 페달 밟았으면 soft hold 해제
     else:
       self._gas_tok = True if 0 < self._gas_pressed_count < self._gas_tok_timer else False
       self._gas_pressed_count = min(-1, self._gas_pressed_count - 1)
@@ -812,6 +821,7 @@ class VCruiseCarrot:
       if self._brake_pressed_count == 1 and self.enabled_last:
         self._v_cruise_kph_at_brake = self.v_cruise_kph
         self._add_log(f"{self.v_cruise_kph} Cruise speed at brake")
+      # 정지 상태에서 일정 시간 이상 브레이크 → soft hold 진입
       self._soft_hold_count = self._soft_hold_count + 1 if CS.vEgo < 0.1 and CS.gearShifter == GearShifter.drive else 0
       if self.autoCruiseControl == 0 or self.CP.pcmCruise:
         self._soft_hold_active = 0

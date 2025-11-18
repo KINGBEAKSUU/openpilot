@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 import math
 from opendbc.can import CANParser
 from opendbc.car import Bus, structs
@@ -6,7 +6,8 @@ from opendbc.car.common.conversions import Conversions as CV
 from opendbc.car.gm.values import DBC, CanBus
 from opendbc.car.interfaces import RadarInterfaceBase
 
-RADAR_HEADER_MSG = 1120
+RADAR_HEADER_MSG = 1120  # F_LRR_Obj_Header
+CAMERA_DATA_HEADER_MSG = 1056  # F_Vision_Obj_Header
 SLOT_1_MSG = RADAR_HEADER_MSG + 1
 NUM_SLOTS = 20
 
@@ -36,23 +37,30 @@ class RadarInterface(RadarInterfaceBase):
   def __init__(self, CP):
     super().__init__(CP)
 
+    # CP.radarUnavailable == True 인 차량은 레이더 완전 비사용 (비전-only 모드)
     self.rcp = None if CP.radarUnavailable else create_radar_can_parser(CP.carFingerprint)
 
+    # 한 프레임이 완성되었다고 보는 트리거 메시지
     self.trigger_msg = LAST_RADAR_MSG
     self.updated_messages = set()
+    self.radar_ts = CP.radarTimeStep
 
   def update(self, can_strings):
+    # 레이더가 완전히 비활성(CP.radarUnavailable=True)인 경우
     if self.rcp is None:
       return super().update(None)
 
     vls = self.rcp.update(can_strings)
     self.updated_messages.update(vls)
 
+    # 아직 모든 target 메시지를 받지 못함
     if self.trigger_msg not in self.updated_messages:
       return None
 
     ret = structs.RadarData()
     header = self.rcp.vl[RADAR_HEADER_MSG]
+
+    # Kans: Fault 검출
     fault = header['FLRRSnsrBlckd'] or header['FLRRSnstvFltPrsntInt'] or \
       header['FLRRYawRtPlsblityFlt'] or header['FLRRHWFltPrsntInt'] or \
       header['FLRRAntTngFltPrsnt'] or header['FLRRAlgnFltPrsnt']
@@ -82,15 +90,18 @@ class RadarInterface(RadarInterfaceBase):
           self.pts[targetId] = structs.RadarData.RadarPoint()
           self.pts[targetId].trackId = targetId
         distance = cpt['TrkRange']
+
+        # 값 업데이트
         self.pts[targetId].dRel = distance  # from front of car
         # From driver's pov, left is positive
         self.pts[targetId].yRel = math.sin(cpt['TrkAzimuth'] * CV.DEG_TO_RAD) * distance
         self.pts[targetId].vRel = cpt['TrkRangeRate']
         self.pts[targetId].vLead = self.pts[targetId].vRel + self.v_ego
         self.pts[targetId].aRel = float('nan')
-        self.pts[targetId].yvRel = 0# float('nan')
+        self.pts[targetId].yvRel = 0  # float('nan') 도 가능하지만 0으로 고정
         self.pts[targetId].measured = True
 
+    # 이전 프레임에서 사라진 타겟 제거
     for oldTarget in list(self.pts.keys()):
       if oldTarget not in currentTargets:
         del self.pts[oldTarget]

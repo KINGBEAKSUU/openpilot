@@ -34,7 +34,7 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"DoReboot", CLEAR_ON_MANAGER_START},
     {"DoShutdown", CLEAR_ON_MANAGER_START},
     {"DoUninstall", CLEAR_ON_MANAGER_START},
-    {"AlphaLongitudinalEnabled", PERSISTENT | DEVELOPMENT_ONLY},
+    {"AlphaLongitudinalEnabled", PERSISTENT},
     {"ExperimentalMode", PERSISTENT},
     {"ExperimentalModeConfirmed", PERSISTENT},
     {"FirmwareQueryDone", CLEAR_ON_MANAGER_START | CLEAR_ON_ONROAD_TRANSITION},
@@ -251,6 +251,7 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"UseLaneLineSpeed", PERSISTENT},
     {"UseLaneLineCurveSpeed", PERSISTENT},
     {"AdjustLaneOffset", PERSISTENT},
+    {"AdjustCurveOffset", PERSISTENT},
     {"LaneChangeNeedTorque", PERSISTENT},
     {"LaneChangeDelay", PERSISTENT },
     {"LaneChangeBsd", PERSISTENT},
@@ -296,6 +297,9 @@ inline static std::unordered_map<std::string, uint32_t> keys = {
     {"NNFF", PERSISTENT},
     {"NNFFLite", PERSISTENT},
     {"NNFFModelName", CLEAR_ON_OFFROAD_TRANSITION},
-
     {"HardwareC3xLite", PERSISTENT},
+    // Kans
+    {"CruiseDelay", PERSISTENT},
+    {"ResumeDelay", PERSISTENT},
+    {"AccelForce", PERSISTENT},
 };

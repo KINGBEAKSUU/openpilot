@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from cereal import log
 from opendbc.car.vehicle_model import ACCELERATION_DUE_TO_GRAVITY
 from openpilot.common.realtime import DT_CTRL, DT_MDL
@@ -61,8 +61,22 @@ def get_lag_adjusted_curvature(CP, v_ego, psis, curvatures, steer_actuator_delay
   desired_curvature = 2 * average_curvature_desired - current_curvature_desired
 
   # This is the "desired rate of the setpoint" not an actual desired rate
+  ### Kans: 커브가 길어질수록 조향 유지력(stability) 복원, 즉 안쪽 쏠림방지용 ###
+  curve_delta = abs(desired_curvature - current_curvature_desired)
+  # curve_delta: 목표 곡률(desired)과 현재 곡률(이전 스텝 setpoint)의 차이(절대값)
+  # 값이 작다 = 곡률변화가 거의 없음(커브 중·후반부)
+  # 값이 크다 = 커브 진입/탈출/급변 구간(주로 커브초반, 탈출)
+  stability_factor = np.interp(curve_delta, [0.0, 0.0005, 0.0020, 0.0030], [0.96, 0.97, 0.99, 1.0],)
+  # curve_delta가 0에 가까우면 0.96~0.94 수준으로 살짝 줄여서 안쪽 쏠림을 완화.
+  # curve_delta가 커질수록  0.9 근처까지 줄여서 핸들이 확 꺾이지 않도록 완만하게 진입.
+  # 숫자의미: 0.0005~0.002는 ‘완만↔급’ 변화 구간 정도. 차량/타이어에 따라 미세조정 여지 있음.
   max_curvature_rate = MAX_LATERAL_JERK / (v_ego**2) # inexact calculation, check https://github.com/commaai/openpilot/pull/24755
-  safe_desired_curvature = np.clip(desired_curvature,
+  # curve_scale=전체 곡률을 약간만 줄여주는 기본 스케일.
+  # 저속에서는 0.9 부근으로 더 완만하게, 고속에서도 1.0까지는 올리지 않고 0.97 정도로 살짝만 줄여 안쪽 차선으로 과하게 말리지 않도록 한다.
+  curve_scale = np.interp(v_ego, [0.0, 15.0, 25.0], [0.95, 0.97, 0.99])
+  # 최종안전곡률: 모델곡률(desired_curvature)에 curve_scale * stability_factor를 곱해
+  # 항상 원래보다 더 완만하거나 같은 곡률을 사용하게 한다.
+  safe_desired_curvature = np.clip(desired_curvature * curve_scale * stability_factor,
                                 current_curvature_desired - max_curvature_rate * DT_MDL,
                                 current_curvature_desired + max_curvature_rate * DT_MDL)
   return safe_desired_curvature

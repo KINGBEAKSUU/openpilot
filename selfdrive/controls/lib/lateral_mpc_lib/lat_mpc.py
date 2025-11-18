@@ -3,7 +3,7 @@ import os
 import time
 import numpy as np
 
-from casadi import SX, vertcat, sin, cos
+from casadi import SX, vertcat, sin, cos, fmin, fmax
 # WARNING: imports outside of constants will not trigger a rebuild
 from openpilot.selfdrive.modeld.constants import ModelConstants
 
@@ -19,7 +19,7 @@ X_DIM = 4
 P_DIM = 2
 COST_E_DIM = 3
 COST_DIM = COST_E_DIM + 2
-SPEED_OFFSET = 10.0
+SPEED_OFFSET = 3.5
 MODEL_NAME = 'lat'
 ACADOS_SOLVER_TYPE = 'SQP_RTI'
 N = 32
@@ -91,6 +91,8 @@ def gen_lat_ocp():
   ocp.cost.yref_e = np.zeros((COST_E_DIM, ))
   # Add offset to smooth out low speed control
   # TODO unclear if this right solution long term
+  # Kans: dynamic SPEED_OFFSET by v_ego
+  SPEED_OFFSET = fmin(fmax(0.2 * v_ego, 2.0), 5.0)
   v_ego_offset = v_ego + SPEED_OFFSET
   # TODO there are two costs on psi_rate_ego_dot, one
   # is correlated to jerk the other to steering wheel movement
@@ -174,6 +176,8 @@ class LateralMpc:
     self.yref[:,0] = y_pts
     v_ego = p_cp[0, 0]
     # rotation_radius = p_cp[1]
+    # Kans: dynamic SPEED_OFFSET by v_ego
+    SPEED_OFFSET = fmin(fmax(0.2 * v_ego, 2.0), 5.0)
     self.yref[:,1] = heading_pts * (v_ego + SPEED_OFFSET)
     self.yref[:,2] = yaw_rate_pts * (v_ego + SPEED_OFFSET)
     for i in range(N):

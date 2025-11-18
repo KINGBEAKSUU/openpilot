@@ -159,11 +159,13 @@ class LanePlanner:
       #self.lane_width_right_filtered.x = self.lane_width_right #바로적용
 
     self.adjustLaneOffset = float(self.params.get_int("AdjustLaneOffset")) * 0.01
-    self.adjustCurveOffset = self.adjustLaneOffset #float(self.params.get_int("AdjustCurveOffset")) * 0.01
+    self.adjustCurveOffset = float(self.params.get_int("AdjustCurveOffset")) * 0.01
     ADJUST_OFFSET_LIMIT = 0.4 #max(self.adjustLaneOffset, self.adjustCurveOffset)
     offset_curve = 0.0
     ## curve offset
-    offset_curve = np.interp(abs(curve_speed), [50, 200], [self.adjustCurveOffset, 0.0]) * np.sign(curve_speed)
+    ##offset_curve = np.interp(abs(curve_speed), [25, 250], [self.adjustCurveOffset, 0.0]) * (-np.sign(curve_speed))
+    ratio = np.clip(abs(curve_speed) / 300.0, 0.0, 1.0)
+    offset_curve = float(self.adjustCurveOffset * (1.0 - np.power(ratio, 0.35)) * np.sign(curve_speed))
 
     offset_lane = 0.0
     if self.lane_width_left_filtered.x > 2.2 and self.lane_width_right_filtered.x > 2.2: #양쪽에 차로가 여유 있는경우

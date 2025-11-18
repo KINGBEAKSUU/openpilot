@@ -8,6 +8,7 @@ import cereal.messaging as messaging
 from cereal import car, log
 from msgq.visionipc import VisionIpcClient, VisionStreamType
 from opendbc.safety import ALTERNATIVE_EXPERIENCE
+from opendbc.car.gm.values import CAR, DBC
 
 
 from openpilot.common.params import Params
@@ -127,7 +128,8 @@ class SelfdriveD:
     self.rk = Ratekeeper(100, print_delay_threshold=None)
     
     self.atc_type_last = ""
-
+    # Kans
+    self.radar_faulted_frame = 0
 
     # some comma three with NVMe experience NVMe dropouts mid-drive that
     # cause loggerd to crash on write, so ignore it only on that platform
@@ -136,7 +138,7 @@ class SelfdriveD:
       self.ignored_processes = {'loggerd', }
 
     # Determine startup event
-    self.startup_event = EventName.startup if build_metadata.openpilot.comma_remote and build_metadata.tested_channel else EventName.startupMaster
+    self.startup_event = EventName.startup # if build_metadata.openpilot.comma_remote and build_metadata.tested_channel else EventName.startupMaster
     if not car_recognized:
       self.startup_event = EventName.startupNoCar
     elif car_recognized and self.CP.passive:
@@ -318,7 +320,18 @@ class SelfdriveD:
       elif self.sm['radarState'].radarErrors.radarUnavailableTemporary:
         self.events.add(EventName.radarTempUnavailable)
       else:
-        self.events.add(EventName.radarFault)
+        # except Malibu SASCM
+        if self.CP.carFingerprint == CAR.CHEVROLET_MALIBU_SASCM:
+          if self.radar_faulted_frame == 0:
+            self.radar_faulted_frame = self.sm.frame
+          if (self.sm.frame - self.radar_faulted_frame) * DT_CTRL >= 0.5: 
+            self.events.add(EventName.radarFault)
+        else:
+          self.events.add(EventName.radarFault)
+    else:
+      # radarState가 다시 valid로 돌아오면 타이머 리셋
+      self.radar_faulted_frame = 0
+
     if not self.sm.valid['pandaStates']:
       self.events.add(EventName.usbError)
     if CS.canTimeout:

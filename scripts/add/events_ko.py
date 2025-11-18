@@ -929,7 +929,7 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
       "기어 [R] 상태",
       "",
       AlertStatus.normal, AlertSize.full,
-      Priority.LOWEST, VisualAlert.none, AudibleAlert.none, .2, creation_delay=0.5),
+      Priority.LOWEST, VisualAlert.none, AudibleAlert.reverseGear, .2, creation_delay=0.5),
     ET.USER_DISABLE: SoftDisableAlert("기어 [R] 상태"),
     ET.NO_ENTRY: NoEntryAlert("기어 [R] 상태"),
   },

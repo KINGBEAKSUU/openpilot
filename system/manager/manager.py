@@ -24,6 +24,10 @@ def get_default_params():
     # kans
     ("LongPitch", "1"),
     ("EVTable", "1"),
+    ("CruiseDelay", "8"),
+    ("ResumeDelay", "8"),
+    ("AccelForce", "950"),
+
     ("CompletedTrainingVersion", "0"),
     ("DisengageOnAccelerator", "0"),
     ("GsmMetered", "1"),
@@ -91,6 +95,7 @@ def get_default_params():
     ("ModelTurnSpeedFactor", "0"),
     ("StoppingAccel", "0"),
     ("StopDistanceCarrot", "550"),
+    ("ComfortBrake", "240"),
     ("JLeadFactor3", "0"),
     ("CruiseButtonMode", "0"),
     ("CancelButtonMode", "0"),
@@ -120,7 +125,7 @@ def get_default_params():
     ("LongTuningKiV", "0"),
     ("LongTuningKf", "100"),
     ("LongActuatorDelay", "20"),
-    ("VEgoStopping", "50"),
+    ("VEgoStopping", "10"),
     ("RadarReactionFactor", "100"),
     ("EnableRadarTracks", "0"),
     ("RadarLatFactor", "0"),
@@ -144,6 +149,7 @@ def get_default_params():
     ("PathOffset", "0"),
     ("UseLaneLineCurveSpeed", "0"),
     ("AdjustLaneOffset", "0"),
+    ("AdjustCurveOffset", "0"),
     ("LaneChangeNeedTorque", "0"),
     ("LaneChangeDelay", "0"),
     ("LaneChangeBsd", "0"),
@@ -181,7 +187,7 @@ def get_default_params():
     ("SoftwareMenu", "1"),
     ("CustomSR", "0"),
     ("SteerRatioRate", "100"),
-    ("NNFF", "0"),
+    ("NNFF", "1"),
     ("NNFFLite", "0"),
   ]
   return default_params
@@ -303,7 +309,7 @@ def manager_thread() -> None:
     ignore.append("pandad")
   ignore += [x for x in os.getenv("BLOCK", "").split(",") if len(x) > 0]
 
-  if params.get("HardwareC3xLite"):
+  if params.get("HardwareC3xLite", encoding='utf8'):
     ignore += ["micd", "soundd", "loggerd"]
     params.put("RecordAudio", "0")
 

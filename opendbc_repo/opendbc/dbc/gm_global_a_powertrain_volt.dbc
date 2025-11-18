@@ -62,6 +62,12 @@ VAL_TABLE_ HandsOffSWDetectionMode 2 "Failed" 1 "Enabled" 0 "Disabled" ;
 
 BO_ 189 EBCMRegenPaddle: 7 K17_EBCM
  SG_ RegenPaddle : 7|4@0+ (1,0) [0|0] ""  NEO
+ SG_ Byte1 : 8|8@1+ (1,0) [0|255] "" NEO
+ SG_ Byte2 : 16|8@1+ (1,0) [0|255] "" NEO
+ SG_ Byte3 : 24|8@1+ (1,0) [0|255] "" NEO
+ SG_ Byte4 : 32|8@1+ (1,0) [0|255] "" NEO
+ SG_ Byte5 : 40|8@1+ (1,0) [0|255] "" NEO
+ SG_ Byte6 : 48|8@1+ (1,0) [0|255] "" NEO
 
 BO_ 190 ECMAcceleratorPos: 6 K20_ECM
  SG_ BrakePedalPos : 15|8@0+ (1,0) [0|0] "sticky"  NEO
@@ -172,10 +178,15 @@ BO_ 500 SportMode: 6 XXX
  SG_ SportMode : 15|1@0+ (1,0) [0|1] "" XXX
 
 BO_ 501 ECMPRDNL2: 8 K20_ECM
- SG_ TransmissionState : 48|4@1+ (1,0) [0|7] "" NEO
+ SG_ Byte0 : 0|8@1+ (1,0) [0|255] "" NEO
+ SG_ Byte1 : 8|8@1+ (1,0) [0|255] "" NEO
+ SG_ Byte2 : 16|8@1+ (1,0) [0|255] "" NEO
  SG_ PRNDL2 : 27|4@0+ (1,0) [0|255] "" NEO
+ SG_ Byte4 : 32|8@1+ (1,0) [0|255] "" NEO
  SG_ ManualMode : 41|1@0+ (1,0) [0|1] "" NEO
-
+ SG_ TransmissionState : 48|4@1+ (1,0) [0|7] "" NEO
+ SG_ Byte7 : 56|8@1+ (1,0) [0|255] "" NEO
+ 
 BO_ 532 BRAKE_RELATED: 6 XXX
  SG_ UserBrakePressure : 0|9@0+ (1,0) [0|511] "" XXX
 
@@ -274,6 +285,12 @@ BO_ 1296 ASCM_510: 4 K124_ASCM
 
 BO_ 1300 VIN_Part1: 8 K20_ECM
  SG_ VINPart1 : 7|64@0+ (1,0) [0|0] ""  NEO
+
+BO_ 1323 TPMS: 4 K17_EBCM
+ SG_ PRESSURE_RL : 31|8@0+ (5.67,0) [0|1500] "kPa" XXX
+ SG_ PRESSURE_RR : 23|8@0+ (5.67,0) [0|1500] "kPa" XXX
+ SG_ PRESSURE_FL : 15|8@0+ (5.67,0) [0|1500] "kPa" XXX
+ SG_ PRESSURE_FR : 7|8@0+ (5.67,0) [0|1500] "kPa" XXX
 
 BO_ 1912 PSCM_778: 8 K43_PSCM
 
