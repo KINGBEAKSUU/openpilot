@@ -155,7 +155,7 @@ class CarInterface(CarInterfaceBase):
       if ret.alphaLongitudinalAvailable and alpha_long:
         ret.pcmCruise = False
         ret.openpilotLongitudinalControl = True
-        ret.safetyConfigs[0].safetyParam |= Panda.FLAG_GM_HW_CAM_LONG
+        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
 
     else:  # ASCM, OBD-II harness
       ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_ASCM_LONG.value
