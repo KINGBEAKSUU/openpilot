@@ -149,6 +149,12 @@ class CarrotPlanner:
       else:
         self.myDrivingMode = myDrivingMode
 
+      self.mySafeFactor = 1.0
+      if self.myDrivingMode == DrivingMode.Eco: # eco
+        self.mySafeFactor = self.myEcoModeFactor
+      elif self.myDrivingMode == DrivingMode.Safe: #safe
+        self.mySafeFactor = self.mySafeModeFactor
+
     if self.params_count == 10:
       self.myHighModeFactor = 1.2 #float(self.params.get_int("MyHighModeFactor")) / 100.
       self.trafficLightDetectMode = self.params.get_int("TrafficLightDetectMode") # 0: None, 1:Stop, 2:Stop&Go
@@ -169,6 +175,7 @@ class CarrotPlanner:
       self.cruiseMaxVals6 = self.params.get_float("CruiseMaxVals6") / 100.
     elif self.params_count == 40:
       self.stop_distance = self.params.get_float("StopDistanceCarrot") / 100.
+      self.comfortBrake = self.params.get_float("ComfortBrake") / 100.
       self.j_lead_factor = self.params.get_float("JLeadFactor3") / 100.
       self.eco_over_speed = self.params.get_int("CruiseEcoControl")
       self.autoNaviSpeedDecelRate = float(self.params.get_int("AutoNaviSpeedDecelRate")) * 0.01
@@ -234,43 +241,35 @@ class CarrotPlanner:
   def check_model_stopping(self, v_cruise, v, v_ego, a_ego, model_x, y, d_rel):
     v_ego_kph = v_ego * CV.MS_TO_KPH
     model_v = self.vFilter.process(v[-1])
-    startSign = model_v > 5.0 or model_v > (v[0] + 2)
 
+    # 출발(파란불) 후보
+    # 너무 작은 속도에서도 출발로 오감지되는 것 방지: 약간 완화
+    startSign = model_v > 5.5 and model_v > (v[0]  + 2.5)
+    # 정지(빨간불) 후보
     if v_ego_kph < 1.0:
-      stopSign = model_x < 20.0 and model_v < 10.0
+      # 거의 정지 상태: 교차로 부근에서 신호가 30m 안에 있고
+      # 모델이 =-5미터내에서 속도가 조금 있어도 적신호로 본다.
+      stopSign = model_x < 30.0 and model_v < 10.0 and (abs(y[-1]) < 5.0)
+
     elif v_ego_kph < 82.0:
-      stopSign = (model_x < d_rel - 3.0 and
-                  model_x < np.interp(v[0] * 3.6, [60, 80], [120.0, 150]) and
-                  ((model_v < 3.0) or (model_v < v[0] * 0.7)) and
+      # 속도에 따른 정지선탐지 거리(120~160m)
+      stopSign = (model_x < d_rel - 2.5 and
+                  model_x < np.interp(v[0] * 3.6, [30, 60, 80], [100, 130.0, 160]) and
+                  ((model_v < 2.2) or (model_v < v[0] * 0.6)) and
                   abs(y[-1]) < 5.0)
-      # 정상주행중 감속하는 경우(카메라 감속등), 오감지가 많음. 
-      # 회생감속시:v_cruise=0에는 신호호감지하도록함.
+      # 정상 주행 중 카메라 감속으로 인한 오감지 방지
+      # (크루즈 세트 살아 있고, e2eCruise + 제법 강한 감속인 경우는 제외)
       if v_cruise != 0 and (self.xState == XState.e2eCruise and a_ego < -1.0):
         stopSign = False
     else:
       stopSign = False
 
-    # self.stopSignCount = (
-    #   self.stopSignCount + 1
-    #   if (
-    #     stopSign
-    #     and (
-    #       model_x > get_safe_obstacle_distance(
-    #         v_ego,
-    #         t_follow=0,
-    #         comfort_brake=COMFORT_BRAKE,
-    #         stop_distance=-1.0,
-    #       )
-    #     )
-    #   )
-    #   else 0
-    # )
     self.stopSignCount = self.stopSignCount + 1 if stopSign else 0
     self.startSignCount = self.startSignCount + 1 if startSign and not stopSign else 0
 
-    if self.stopSignCount * DT_MDL > 0.0:
+    if self.stopSignCount * DT_MDL > 0.05: # 빨간불: 0.1초 이상 감지될 때
       self.trafficState = TrafficState.red
-    elif self.startSignCount * DT_MDL > 0.2:
+    elif self.startSignCount * DT_MDL > 0.3: # 파란불: 0.3초 이상 감지될 때
       self.trafficState = TrafficState.green
     else:
       self.trafficState = TrafficState.off
@@ -352,14 +351,6 @@ class CarrotPlanner:
     v_ego_cluster_kph = v_ego_cluster * CV.MS_TO_KPH
 
     leadOne = radarstate.leadOne
-    self.mySafeFactor = 1.0
-    if leadOne.status and leadOne.vLead < 5 and leadOne.aLead < 0.2 and v_ego > 1.0: # 앞차가 매우 느리거나 정지한경우
-      self.myDrivingMode = DrivingMode.Safe
-    if self.myDrivingMode == DrivingMode.Eco: # eco
-      self.mySafeFactor = self.myEcoModeFactor
-    elif self.myDrivingMode == DrivingMode.Safe: #safe
-      self.mySafeFactor = self.mySafeModeFactor
-
     if self.frame % 20 == 0: # every 1 sec
       vLead = 0
       aLead = 0
@@ -439,8 +430,8 @@ class CarrotPlanner:
           self.comfort_brake = self.comfortBrake * 0.9
           #self.comfort_brake = COMFORT_BRAKE
           self.trafficStopAdjustRatio = np.interp(v_ego_kph, [0, 100], [1.0, 0.7])
-          stop_dist = self.xStop * np.interp(self.xStop, [0, 50], [1.0, self.trafficStopAdjustRatio])  ##�����Ÿ��� ���� �����Ÿ� ��������
-          if stop_dist > 10.0: ### 10M�̻��϶���, self.actual_stop_distance�� ������Ʈ��.
+          stop_dist = self.xStop * np.interp(self.xStop, [0, 50], [1.0, self.trafficStopAdjustRatio])  ## 남은거리에 따라 정지거리 비율조정
+          if stop_dist > 10.0:
             self.actual_stop_distance = stop_dist
           stop_model_x = 0
           self.fakeCruiseDistance = 0 if self.actual_stop_distance > 10.0 else 10.0

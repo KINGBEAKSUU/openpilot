@@ -114,12 +114,45 @@ class LateralPlanner:
       self.v_plan = np.clip(car_speed, MIN_SPEED, np.inf)
       self.v_ego = self.v_plan[0]
       self.plan_a = np.array(md.acceleration.x)
-      if md.velocity.x[-1] < md.velocity.x[0] * 0.7:  # TODO: 모델이 감속을 요청하는 경우 속도테이블이 레인모드를 할수 없음. 속도테이블을 새로 만들어야함..
+
+      # Kans: 감속,커브,차선 기반 레인리스 전환
+      lane_left_prob = 1.0
+      lane_right_prob = 1.0
+      if model_active and len(md.laneLines) >= 3:
+        lane_left_prob = float(getattr(md.laneLines[1], "prob", 0.0))
+        lane_right_prob = float(getattr(md.laneLines[2], "prob", 0.0))
+      lane_bad = (lane_left_prob < 0.5 and lane_right_prob < 0.5)
+      # TODO: 모델이 감속을 요청하는 경우 속도테이블이 레인모드를 할수 없음. 속도테이블을 새로 만들어야함.. 
+      ratio_limit = 0.55
+      if md.velocity.x[0] < 11.0:  # ~40km/h 미만시 레인리스 감속은 더 낮은 속도에서 시작.
+        ratio_limit = 0.45
+      elif md.velocity.x[0] > 25.0:  # ~90km/h 초과시엔 0.7%속도에서 시작
+        ratio_limit = 0.7
+      # 모델 속도와 실제 속도를 함께 고려 (둘 중 하나라도 심한 감속이면 True)
+      v_model_start = md.velocity.x[0]
+      v_model_end = md.velocity.x[7]
+      v_ego_now = sm['carState'].vEgo
+      v_ego_prev = getattr(self, "v_ego_prev", v_ego_now)
+      self.v_ego_prev = v_ego_now  # 다음 루프 대비 저장
+      # 모델기반 감속판정
+      model_decel = (v_model_end < v_model_start * (ratio_limit))
+      # 실제차량 속도기반 감속판정
+      real_decel = (v_ego_now < v_ego_prev * 0.9)  # 10%감속 감지
+      decelerating = model_decel or real_decel
+      # 커브 판단
+      if len(md.orientationRate.z):
+        curve_strength = float(np.mean(np.abs(np.array(md.orientationRate.z)[:5])))
+      else:
+        curve_strength = 0.0
+      curve_threshold = 0.3  # 시속40~60, 반경40~60m 정도의 IC램프급 커브에 대응하는 수준
+      curving = (curve_strength > curve_threshold)
+      # 감속,커브,차선조건이 동시에 발생할 때만 레인리스
+      if (decelerating and curving and lane_bad) or v_ego_car < 8.0:
         self.lanemode_possible_count = 0
         self.laneless_only = True
       else:
         self.lanemode_possible_count += 1
-        if self.lanemode_possible_count > int(1/DT_MDL):
+        if self.lanemode_possible_count > int(1 / DT_MDL):
           self.laneless_only = False
 
     # Parse model predictions

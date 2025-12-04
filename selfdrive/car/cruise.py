@@ -4,7 +4,7 @@ import numpy as np
 from cereal import car
 from openpilot.common.conversions import Conversions as CV
 
-from opendbc.car import structs
+from opendbc.car import structs, DT_CTRL
 GearShifter = structs.CarState.GearShifter
 
 
@@ -167,8 +167,8 @@ class VCruiseCarrot:
 
     self.v_ego_kph_set = 0
     self._cruise_speed_min, self._cruise_speed_max = 5, 161
-    self._cruise_speed_unit = 10
-    self._cruise_speed_unit_basic = 1
+    self._cruise_speed_unit = 5
+    self._cruise_speed_unit_basic = 5
     self._cruise_button_mode = 2
     self._cancel_button_mode = 0
     self._lfa_button_mode = 0
@@ -222,6 +222,12 @@ class VCruiseCarrot:
 
     self.useLaneLineSpeed = self.params.get_int("UseLaneLineSpeed")
     self.useLaneLineSpeedApply = self.useLaneLineSpeed
+
+    # Kans:Cruise ON 래치 관련
+    self._activate_cruise_raw = 0  # self._activate_cruise 복사본
+    self._activate_cruise_on_latch = 0  # ON이었던 적이 있다, 없다(1,0)
+    self._activate_cruise_on_timer = 0  # 래치 타이머
+    self.activate_cruise_on_hold_time = 0.5  # ON래치 유지시간
 
 
   @property
@@ -622,10 +628,10 @@ class VCruiseCarrot:
       else:
         v_cruise_kph = ((v_cruise_kph // self._cruise_speed_unit) + 1) * self._cruise_speed_unit
 
-    elif v_cruise_kph < 30: #self.nRoadLimitSpeed:
-      v_cruise_kph = 30 #self.nRoadLimitSpeed
+    elif v_cruise_kph < 15: #self.nRoadLimitSpeed:
+      v_cruise_kph = 15 #self.nRoadLimitSpeed
     else:
-      for speed in range (40, 160, self._cruise_speed_unit):
+      for speed in range (15, 160, self._cruise_speed_unit):
         if v_cruise_kph < speed:
           v_cruise_kph = speed
           break
@@ -674,6 +680,15 @@ class VCruiseCarrot:
         self._soft_hold_active = 0
         return
       self._activate_cruise = enable
+      # Kans: 크르즈온/오프 래치
+      self._activate_cruise_raw = enable  # 복사본
+      if enable > 0:  # ON(1)이면, hold_time(0.5s)유지
+        self._activate_cruise_on_timer = int(self.activate_cruise_on_hold_time / DT_CTRL)
+        self._activate_cruise_on_latch = 1  # 래치 온
+      elif enable < 0:  # OFF(-1)면 래치해제
+        self._activate_cruise_on_timer = 0
+        self._activate_cruise_on_latch = 0
+
       self._cancel_timer = int(cancel_timer / 0.01)   # DT_CTRL: 0.01
       self._add_log(reason)
 
@@ -691,6 +706,13 @@ class VCruiseCarrot:
       return False, d_final
 
   def _update_cruise_state(self, CS, CC, v_cruise_kph):
+    # Kans: activateCruise ON 래치 타이머 관리
+    if self._activate_cruise_on_timer > 0:  # 아직 래치 유지중이면
+      self._activate_cruise_on_timer -= 1  # -1 씩 내림.
+      self._activate_cruise_on_latch = 1  # 안전하게 1로 유지 (혹시 외부에서 건드렸어도)
+    else:  # 타이머가 0이하면 래치 해제
+      self._activate_cruise_on_latch = 0
+
     if not CC.enabled:
       self._pause_auto_speed_up = False
       if self._brake_pressed_count == -1 and self._soft_hold_active > 0:
@@ -718,31 +740,48 @@ class VCruiseCarrot:
       else:
         v_cruise_kph = self._v_cruise_desired(CS, v_cruise_kph)
     elif self._gas_pressed_count == -1:
-      if 0 < self.d_rel < CS.vEgo * 0.8:
+      has_lead = (self.d_rel is not None) and np.isfinite(self.d_rel)
+      safe_lead = has_lead and (0.0 < self.d_rel < max(10.0, CS.vEgo * 1.2))
+      if safe_lead:
         if CS.vEgo < 1.0:
           self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (safe speed)")
         else:
           self._cruise_control(-1, 0, "Cruise off (lead car too close)")
+      elif not has_lead and self.v_ego_kph_set >= self.autoGasTokSpeed and not CC.enabled:
+        v_cruise_kph = self.v_ego_kph_set
+        self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (gas pressed, no lead)")
       elif self.v_ego_kph_set < 30:
         self._cruise_control(-1, 0, "Cruise off (gas speed)")
       elif self.xState == 3:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(-1, 3, "Cruise off (traffic sign)")
+      elif self.xState == 5:
+        v_cruise_kph = self.v_ego_kph_set
+        self._cruise_control(1, -1, "Cruise on (traffic light green)")
       elif self.v_ego_kph_set >= self.autoGasTokSpeed and not CC.enabled:
         v_cruise_kph = self.v_ego_kph_set
         self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (gas pressed)")
-    elif self._brake_pressed_count == -1 and self._soft_hold_active == 0:
-      if self.v_ego_kph_set > self.autoGasTokSpeed:
+    elif (-15 <= self._brake_pressed_count <= -1) and self._soft_hold_active == 0:
+      tr_gap = 0.8 # 0.8초앞 정도를 가까운 거리로 설정.
+      MAX_CRUISE_DIST = min(30.0, max(15.0, CS.vEgo * tr_gap)) # 크루즈온 최소 거리.
+      has_lead = (self.d_rel is not None) and np.isfinite(self.d_rel)
+      safe_lead = has_lead and (3.0 <= self.d_rel <= MAX_CRUISE_DIST)
+      if not has_lead:
         v_cruise_kph = self.v_ego_kph_set
-        self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (speed)")
-      elif abs(CS.steeringAngleDeg) < 20:
-        if self.xState in [3, 5]:
-          if self.xState == 3:  # 감속중
-            v_cruise_kph = self.v_ego_kph_set
-          self._cruise_control(1, 0, "Cruise on (traffic sign)")
-        elif 0 < self.d_rel < 20: 
-          # v_cruise_kph = self.v_ego_kph_set # 전방에 차가 가까이 있을때, 기존속도 유지
-          self._cruise_control(1, -1 if self.v_ego_kph_set < 1 else 0, "Cruise on (lead car)")
+        self._cruise_control(1, -1, "Cruise on (no lead)")
+      elif safe_lead:
+        if self.v_ego_kph_set > self.autoGasTokSpeed:
+          v_cruise_kph = self.v_ego_kph_set
+          self._cruise_control(1, -1 if self.aTarget > 0.0 else 0, "Cruise on (speed)")
+        elif abs(CS.steeringAngleDeg) < 20:
+          if self.xState in [3, 5]:
+            if self.xState == 3:  # 감속중
+              v_cruise_kph = self.v_ego_kph_set
+            self._cruise_control(1, 0, "Cruise on (traffic sign)")
+          elif 0 < self.d_rel < 20:
+            self._cruise_control(1, -1 if self.v_ego_kph_set < 1 else 0, "Cruise on (lead car)")
+      else:
+        self._add_log(f"Skip auto cruise: weird lead d={self.d_rel:.1f}m")
 
     elif self._brake_pressed_count < 0 and self._gas_pressed_count < 0:
       if not CC.enabled:
@@ -797,7 +836,7 @@ class VCruiseCarrot:
       self._gas_tok = False
       #if self._cruise_cancel_state and self._soft_hold_active == 2:
       #  self._cruise_control(-1, -1, "Cruise off,softhold mode (gasPressed)")
-      self._soft_hold_active = 0
+      self._soft_hold_active = 0  # 페달 밟았으면 soft hold 해제
     else:
       self._gas_tok = True if 0 < self._gas_pressed_count < self._gas_tok_timer else False
       self._gas_pressed_count = min(-1, self._gas_pressed_count - 1)
@@ -812,6 +851,7 @@ class VCruiseCarrot:
       if self._brake_pressed_count == 1 and self.enabled_last:
         self._v_cruise_kph_at_brake = self.v_cruise_kph
         self._add_log(f"{self.v_cruise_kph} Cruise speed at brake")
+      # 정지 상태에서 일정 시간 이상 브레이크 → soft hold 진입
       self._soft_hold_count = self._soft_hold_count + 1 if CS.vEgo < 0.1 and CS.gearShifter == GearShifter.drive else 0
       if self.autoCruiseControl == 0 or self.CP.pcmCruise:
         self._soft_hold_active = 0
@@ -820,3 +860,15 @@ class VCruiseCarrot:
     else:
       self._soft_hold_count = 0
       self._brake_pressed_count = min(-1, self._brake_pressed_count - 1)
+
+  def get_activate_cruise(self):
+    """
+      carcontroller.py에서 사용할 activateCruise 값.
+      -1: 크루즈 OFF, 1: ON 0: 없었음
+    """
+    if self._activate_cruise_raw < 0:  # 1) OFF(-1) 최우선. 한번 보내고 초기화(0)
+      self._activate_cruise_raw = 0
+      return -1
+    if self._activate_cruise_on_latch > 0:  # ON 래치가 살아 있으면 1
+      return 1
+    return 0  # 그외 0

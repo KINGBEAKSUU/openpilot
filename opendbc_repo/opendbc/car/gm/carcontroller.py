@@ -2,15 +2,15 @@ from openpilot.common.params import Params
 from openpilot.common.filter_simple import FirstOrderFilter
 
 import numpy as np
+import math
 from opendbc.can.packer import CANPacker
 from opendbc.car import Bus, DT_CTRL, apply_driver_steer_torque_limits, structs, create_gas_interceptor_command
 from opendbc.car.gm import gmcan
 from opendbc.car.common.conversions import Conversions as CV
-from opendbc.car.gm.values import DBC, CanBus, CarControllerParams, CruiseButtons, GMFlags, CC_ONLY_CAR, EV_CAR, AccState, CC_REGEN_PADDLE_CAR, CAR
+from opendbc.car.gm.values import DBC, CanBus, CarControllerParams, CruiseButtons, GMFlags, CC_ONLY_CAR, EV_CAR, AccState, CC_REGEN_PADDLE_CAR, CAR, CAMERA_ACC_CAR, SDGM_CAR, SASCM_CAR
 from opendbc.car.interfaces import CarControllerBase
 from openpilot.selfdrive.controls.lib.drive_helpers import apply_deadzone
 from opendbc.car.vehicle_model import ACCELERATION_DUE_TO_GRAVITY
-from openpilot.selfdrive.car.cruise import VCruiseCarrot
 
 VisualAlert = structs.CarControl.HUDControl.VisualAlert
 NetworkLocation = structs.CarParams.NetworkLocation
@@ -21,10 +21,10 @@ CAMERA_CANCEL_DELAY_FRAMES = 10
 # Enforce a minimum interval between steering messages to avoid a fault
 MIN_STEER_MSG_INTERVAL_MS = 15
 
-# constants for pitch compensation
-PITCH_DEADZONE = 0.01 # [radians] 0.01 ? 1% grade
-BRAKE_PITCH_FACTOR_BP = [5., 10.] # [m/s] smoothly revert to planned accel at low speeds
-BRAKE_PITCH_FACTOR_V = [0., 1.] # [unitless in [0,1]]; don't touch
+# Constants for pitch compensation
+PITCH_DEADZONE = 0.01  # [radians] 0.01 ≈ 1% grade
+BRAKE_PITCH_FACTOR_BP = [5., 10.]  # [m/s] smoothly revert to planned accel at low speeds
+BRAKE_PITCH_FACTOR_V = [0., 1.]  # [unitless in [0,1]]; don't touch
 
 class CarController(CarControllerBase):
   def __init__(self, dbc_names, CP):
@@ -33,7 +33,8 @@ class CarController(CarControllerBase):
     self.apply_torque_last = 0
     self.apply_gas = 0
     self.apply_brake = 0
-    self.apply_speed = 0 # kans: button spam
+    # kans: button spam
+    self.apply_speed = 0
     self.frame = 0
     self.last_steer_frame = 0
     self.last_button_frame = 0
@@ -51,13 +52,30 @@ class CarController(CarControllerBase):
     self.packer_ch = CANPacker(DBC[self.CP.carFingerprint][Bus.chassis])
 
     self.long_pitch = False
-    self.use_ev_tables = False
+    #self.use_ev_tables = False
 
     self.pitch = FirstOrderFilter(0., 0.09 * 4, DT_CTRL * 4)  # runs at 25 Hz
     self.accel_g = 0.0
-    # GM: AutoResume
+
+    # Kans: AutoResume
     self.activateCruise_after_brake = False
-    self.v_cruise_carrot = VCruiseCarrot(self.CP)
+    self.autoCruise_activate = False
+    self.autoCruise_frame = 0
+    self.resume_activate = False
+    self.resume_frame = 0
+    self._pending_activateCruise = False
+    self.btn_rc_pt = -1
+    self.btn_rc_cam = -1
+    self._last_brake_idx = None  # 직전전송 idx 저장용
+    self._brk_rc = -1
+    self.cruiseDelay_time = 0.0
+    self.resumeDelay_time = 0.0
+    self._hill_detected = False
+    self.accel_force = 0
+    self.pulse_frame = 0
+    self.resume_fault_guard = 0
+    self.autoCruise_try_count = 0  # 오토크루즈 버튼 재시도 횟수
+    self.last_pulse_reset_frame = 0  # 리쥼펄스 최소유지"보장"용
 
   @staticmethod
   def calc_pedal_command(accel: float, long_active: bool, car_velocity) -> tuple[float, bool]:
@@ -80,9 +98,8 @@ class CarController(CarControllerBase):
     return pedal_gas, press_regen_paddle
 
   def update(self, CC, CS, now_nanos):
-
+    params = Params()
     if self.frame % 50 == 0:
-      params = Params()
       steerMax = params.get_int("CustomSteerMax")
       steerDeltaUp = params.get_int("CustomSteerDeltaUp")
       steerDeltaDown = params.get_int("CustomSteerDeltaDown")
@@ -92,8 +109,9 @@ class CarController(CarControllerBase):
         self.params.STEER_DELTA_UP = steerDeltaUp
       if steerDeltaDown > 0:
         self.params.STEER_DELTA_DOWN = steerDeltaDown
-    self.long_pitch = Params().get_bool("LongPitch")
-    self.use_ev_tables = Params().get_bool("EVTable")
+
+    self.long_pitch = params.get_bool("LongPitch")
+    #self.use_ev_tables = params.get_bool("EVTable")
 
     actuators = CC.actuators
     accel = brake_accel = actuators.accel
@@ -102,7 +120,6 @@ class CarController(CarControllerBase):
     hud_v_cruise = hud_control.setSpeed
     if hud_v_cruise > 70:
       hud_v_cruise = 0
-
 
     # Send CAN commands.
     can_sends = []
@@ -141,37 +158,16 @@ class CarController(CarControllerBase):
       can_sends.append(gmcan.create_steering_control(self.packer_pt, CanBus.POWERTRAIN, apply_torque, idx, CC.latActive))
 
     if self.CP.openpilotLongitudinalControl:
-
-      if self.CP.carFingerprint in (CAR.CHEVROLET_VOLT):
-        button_counter = (CS.buttons_counter + 1) % 4
-        # Auto Cruise
-        if CS.out.activateCruise and not CS.out.cruiseState.enabled:
-          self.activateCruise_after_brake = False # 오토크루즈가 되기 위해 브레이크 신호는 OFF여야 함.
-          if (self.frame - self.last_button_frame) * DT_CTRL > 0.04: # 25Hz(40ms 버튼주기)
-            self.last_button_frame = self.frame
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, button_counter, CruiseButtons.DECEL_SET))
-
-        # GM: AutoResume
-        elif actuators.longControlState == LongCtrlState.starting:
-          if CS.out.cruiseState.enabled and not self.activateCruise_after_brake: #브레이크신호 한번만 보내기 위한 조건.
-            idx = (self.frame // 4) % 4
-            brake_force = -0.5  #롱컨캔슬을 위한 브레이크값(0.0 이하)
-            apply_brake = self.brake_input(brake_force)
-            # 브레이크신호 전송(롱컨 꺼짐)
-            can_sends.append(gmcan.create_brake_command(self.packer_ch, CanBus.CHASSIS, apply_brake, idx))
-            Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True) # cruise.py에 브레이크 ON신호 전달
-            self.activateCruise_after_brake = True # 브레이크신호는 한번만 보내고 초기화
-      else:
-        auto_cruise_control = self.v_cruise_carrot.autoCruiseControl
-        if (CS.out.activateCruise or auto_cruise_control > 0) and \
-           not CS.out.cruiseState.enabled:
-          if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-            self.last_button_frame = self.frame
-            can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.DECEL_SET))
-        
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
-      # GM: softHold
+        friction_sent_this_tick = False
+        self.cruiseDelay_time = params.get_float("CruiseDelay") * 0.01
+        self.resumeDelay_time = params.get_float("ResumeDelay") * 0.01
+        auto_cruise_enabled = params.get_int("AutoCruiseControl") > 0
+        auto_engage_enabled = params.get_int("AutoEngage") == 2
+        self.accel_force = params.get_int("AccelForce")
+
+        # GM: softHold
         stopping = actuators.longControlState == LongCtrlState.stopping or CS.out.softHoldActive > 0
 
         # Pitch compensated acceleration;
@@ -186,6 +182,13 @@ class CarController(CarControllerBase):
         near_stop = CC.longActive and (abs(CS.out.vEgo) < self.params.NEAR_STOP_BRAKE_PHASE)
         interceptor_gas_cmd = 0
         press_regen_paddle = False
+
+        # 언덕감지(accel_g가 클수록 높은 경사)
+        if self.accel_g > 0.25:
+          self._hill_detected = True
+        else:
+          self._hill_detected = False
+
         if not CC.longActive:
           # ASCM sends max regen when not enabled
           self.apply_gas = self.params.INACTIVE_REGEN
@@ -196,13 +199,14 @@ class CarController(CarControllerBase):
           press_regen_paddle = False
         else:
           # Normal operation
-          if self.CP.carFingerprint in EV_CAR and self.use_ev_tables:
+          if self.CP.carFingerprint in EV_CAR:
             self.params.update_ev_gas_brake_threshold(CS.out.vEgo)
             self.apply_gas = int(round(np.interp(accel if self.long_pitch else actuators.accel, self.params.EV_GAS_LOOKUP_BP, self.params.GAS_LOOKUP_V)))
             self.apply_brake = int(round(np.interp(brake_accel if self.long_pitch else actuators.accel, self.params.EV_BRAKE_LOOKUP_BP, self.params.BRAKE_LOOKUP_V)))
           else:
             self.apply_gas = int(round(np.interp(accel if self.long_pitch else actuators.accel, self.params.GAS_LOOKUP_BP, self.params.GAS_LOOKUP_V)))
             self.apply_brake = int(round(np.interp(brake_accel if self.long_pitch else actuators.accel, self.params.BRAKE_LOOKUP_BP, self.params.BRAKE_LOOKUP_V)))
+
           # Don't allow any gas above inactive regen while stopping
           # FIXME: brakes aren't applied immediately when enabling at a stop
           if stopping:
@@ -227,7 +231,7 @@ class CarController(CarControllerBase):
         if self.CP.enableGasInterceptorDEPRECATED:
           can_sends.append(create_gas_interceptor_command(self.packer_pt, interceptor_gas_cmd, idx))
           if self.CP.carFingerprint in CC_REGEN_PADDLE_CAR and press_regen_paddle:
-            can_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN))
+            can_sends.append(gmcan.create_regen_paddle_command(self.packer_pt, CanBus.POWERTRAIN, True))
         if self.CP.carFingerprint not in CC_ONLY_CAR:
           at_full_stop = CC.longActive and CS.out.standstill
           near_stop = CC.longActive and (abs(CS.out.vEgo) < self.params.NEAR_STOP_BRAKE_PHASE)
@@ -237,25 +241,261 @@ class CarController(CarControllerBase):
           if self.CP.networkLocation == NetworkLocation.fwdCamera and self.CP.carFingerprint not in CC_ONLY_CAR:
             at_full_stop = at_full_stop and stopping
             friction_brake_bus = CanBus.POWERTRAIN
-
+            if self.CP.carFingerprint in SDGM_CAR:
+              friction_brake_bus = CanBus.CHASSIS
 
           if self.CP.autoResumeSng:
             resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
             at_full_stop = at_full_stop and not resume
 
           if CC.cruiseControl.resume and CS.pcm_acc_status == AccState.STANDSTILL:
-            acc_engaged = False
+            if self.CP.carFingerprint in EV_CAR:
+              acc_engaged = False
+            else:
+              acc_engaged = CC.enabled
           else:
             acc_engaged = CC.enabled
 
-          if actuators.longControlState in [LongCtrlState.stopping, LongCtrlState.starting]:
-            if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-              self.last_button_frame = self.frame
-              can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.POWERTRAIN, (CS.buttons_counter + 1) % 4, CruiseButtons.RES_ACCEL))
-          # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
-          can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop))
-          can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake,
-                                                               idx, CC.enabled, near_stop, at_full_stop, self.CP))
+          # Kans: 오토크루즈 대기 플래그
+          if CS.out.activateCruise > 0:
+            self._pending_activateCruise = True
+
+          # Kans: 리쥼용 가속펄스 로직
+          has_lead = (CS.lead_distance is not None) and np.isfinite(CS.lead_distance)
+          d_rel = CS.lead_distance if has_lead else float('inf')
+          lead_follow_ok = has_lead and (2.0 < CS.lead_distance < 10.0) and (CS.lead_speed > 0.1)
+          # 신호 대기 상황: 앞차 없고, 스탠드스틸일 때
+          no_lead_signal_ok = (not has_lead) and CS.out.standstill
+          lead_ok = lead_follow_ok or no_lead_signal_ok
+
+          # pid로그용 상태 문자열
+          state_map = {LongCtrlState.off: "off", LongCtrlState.stopping: "stopping",
+                       LongCtrlState.starting: "starting", LongCtrlState.pid: "pid"}
+          state_name = state_map.get(actuators.longControlState, str(actuators.longControlState))
+
+          resume_pulse = 0
+          auto_longcontrol = auto_cruise_enabled or auto_engage_enabled
+          acc_state = CS.out.accStatus  # = AcceleratorPedal2.CruiseState raw 값 (0~4)
+          acc_not_engaged = acc_state in (AccState.OFF, AccState.STANDBY)
+
+          # 펄스 관련 상수(언덕/평지 최소 유지시간 + 쿨다운)
+          MIN_HILL_PULSE = 0.30   # 언덕에서 최소 0.30s는 밀어주기
+          MIN_FLAT_PULSE = 0.20   # 평지에서 최소 0.20s는 밀어주기
+          PULSE_COOLDOWN = 0.50   # 펄스 끊고 난 뒤 재시작까지 최소 0.50s 대기
+
+          if self._hill_detected and auto_longcontrol:
+            if actuators.longControlState == LongCtrlState.stopping:
+              # 언덕 펄스 도중 정지 상태로 돌아가면 펄스 취소
+              if self.pulse_frame != 0:
+                dt = (self.frame - self.pulse_frame) * DT_CTRL
+                print(f"[언덕펄스취소] 시간={dt:.2f}s 이유=stopping 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f}")
+              self.pulse_frame = 0
+              self.last_pulse_reset_frame = self.frame
+              resume_pulse = 0
+            elif actuators.longControlState == LongCtrlState.starting:
+              # 언덕 펄스 시작: 마지막 리셋 후 쿨다운이 지난 경우에만 시작
+              if self.pulse_frame == 0 and lead_ok:
+                cooldown_ok = (self.frame - self.last_pulse_reset_frame) * DT_CTRL > PULSE_COOLDOWN
+                if cooldown_ok:
+                  self.pulse_frame = self.frame
+                  print(f"[언덕펄스시작] 차속도={CS.out.vEgo:.2f}m/s 액셀={actuators.accel:.1f} 각도={self.accel_g:.1f} 거리={d_rel:.1f}")
+              # 펄스가 활성 상태이면 유지/종료 판단
+              if self.pulse_frame != 0:
+                dt = (self.frame - self.pulse_frame) * DT_CTRL
+                if dt < 1.0:  # 언덕 펄스 유지시간 (최대 1.0s)
+                  resume_pulse = int(self.accel_force)
+                  at_full_stop = False
+                else:
+                  if 1.0 <= dt < 1.0 + DT_CTRL:  # 1.0s를 막 넘긴 시점에 한 번만 로그
+                    print(f"[언덕펄스종료] 시간={dt:.2f}s 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f}")
+                  resume_pulse = 0
+                  self.pulse_frame = 0
+                  self.last_pulse_reset_frame = self.frame
+
+            else:
+              # 언덕인데 starting/lead_ok 조건을 벗어나면 펄스 취소
+              if self.pulse_frame != 0:
+                dt = (self.frame - self.pulse_frame) * DT_CTRL
+                # 언덕에서는 최소 MIN_HILL_PULSE 만큼은 유지하려고 시도
+                if dt < MIN_HILL_PULSE and CC.longActive and not CS.out.brakePressed:
+                  # 너무 짧게 끊으려는 상황이면 한 번은 더 밀어줌
+                  resume_pulse = int(self.accel_force)
+                  at_full_stop = False
+                  # 필요시 디버그용:
+                  # print(f"[언덕펄스 유지] 시간={dt:.2f}s pid={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f}")
+                else:
+                  print(f"[언덕펄스취소] 시간={dt:.2f}s pid={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f}")
+                  resume_pulse = 0
+                  self.pulse_frame = 0
+                  self.last_pulse_reset_frame = self.frame
+              else:
+                resume_pulse = 0
+
+          elif not self._hill_detected and at_full_stop and auto_longcontrol:
+            if actuators.longControlState == LongCtrlState.stopping:
+              # 평지 펄스 도중 다시 stopping으로 가면 취소
+              if self.pulse_frame != 0:
+                dt = (self.frame - self.pulse_frame) * DT_CTRL
+                print(f"[평지펄스취소] 시간={dt:.2f}s 원인={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f}")
+              self.pulse_frame = 0
+              self.last_pulse_reset_frame = self.frame
+              resume_pulse = 0
+
+            elif actuators.longControlState == LongCtrlState.starting:
+              # 평지 펄스 시작: 마지막 리셋 후 쿨다운이 지난 경우에만 시작
+              if self.pulse_frame == 0 and lead_ok:
+                cooldown_ok = (self.frame - self.last_pulse_reset_frame) * DT_CTRL > PULSE_COOLDOWN
+                if cooldown_ok:
+                  self.pulse_frame = self.frame
+                  print(f"[평지펄스시작] 차속도={CS.out.vEgo:.1f}m/s 액셀={actuators.accel:.1f} 각도={self.accel_g:.1f} 거리={d_rel:.1f} 리드속도={CS.lead_speed:.1f}")
+
+              # 펄스가 활성 상태이면 유지/종료 판단
+              if self.pulse_frame != 0:
+                dt = (self.frame - self.pulse_frame) * DT_CTRL
+                if dt < 1.0:  # 평지 펄스 유지시간 (최대 1.0s)
+                  resume_pulse = int(self.accel_force)
+                  at_full_stop = False
+                else:
+                  # 1.0s를 막 넘긴 시점에 한 번만 로그
+                  if 1.0 <= dt < 1.0 + DT_CTRL:
+                    print(f"[평지펄스종료] 시간={dt:.2f}s 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f} 리드속도={CS.lead_speed:.1f}")
+                  resume_pulse = 0
+                  self.pulse_frame = 0
+                  self.last_pulse_reset_frame = self.frame
+
+            else:
+              # 평지인데 starting/lead_ok 조건을 벗어나면 펄스 취소
+              if self.pulse_frame != 0:
+                dt = (self.frame - self.pulse_frame) * DT_CTRL
+                # 평지에서도 최소 MIN_FLAT_PULSE 만큼은 유지
+                if dt < MIN_FLAT_PULSE and CC.longActive and not CS.out.brakePressed:
+                  resume_pulse = int(self.accel_force)
+                  at_full_stop = False
+                  # print(f"[평지펄스 유지] 시간={dt:.2f}s pid={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 리드속도={CS.lead_speed:.1f}")
+                else:
+                  print(f"[평지펄스취소] 시간={dt:.2f}s pid={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f} 리드속도={CS.lead_speed:.1f}")
+                  resume_pulse = 0
+                  self.pulse_frame = 0
+                  self.last_pulse_reset_frame = self.frame
+              else:
+                resume_pulse = 0
+
+          else:
+            # 언덕도 아니고(at_full_stop 조건 밖) 또는 기타 상황:
+            # -> 펄스/타이머 초기화
+            if self.pulse_frame != 0:
+              dt = (self.frame - self.pulse_frame) * DT_CTRL
+              # 너무 짧게 끊으려는 경우에는 한 번 더 유지 (언덕/평지 공통 최소 시간 적용)
+              min_pulse = MIN_HILL_PULSE if self._hill_detected else MIN_FLAT_PULSE
+              if dt < min_pulse and CC.longActive and not CS.out.brakePressed:
+                resume_pulse = int(self.accel_force)
+                at_full_stop = False
+                # print(f"[펄스 유지] 시간={dt:.2f}s 이유=언덕모드={self._hill_detected} 상태={at_full_stop} 각도={self.accel_g:.1f}")
+              else:
+                print(f"[펄스초기화] 시간={dt:.2f}s 이유=언덕모드={self._hill_detected} 상태={at_full_stop} 각도={self.accel_g:.1f}")
+                self.pulse_frame = 0
+                self.last_pulse_reset_frame = self.frame
+                resume_pulse = 0
+            else:
+              resume_pulse = 0
+
+          # 리쥼 펄스 활성 상태 (저속에서만 유지)
+          resume_active = auto_longcontrol and (resume_pulse > 0 and CS.out.vEgo < 3.5) and lead_ok  # 내차 3.5m/s(≈12.6km/h)까지 펄스 유지
+
+          # Kans: 오토크루즈 / 오토리쥼 메인 분기
+          if auto_cruise_enabled and self._pending_activateCruise and not CS.out.cruiseState.enabled:
+            # Kans: AutoCruise (0.25초 윈도 안에 최대 2회 버튼 시도)
+            if not self.autoCruise_activate:
+              self.autoCruise_activate = True
+              self.autoCruise_frame = self.frame
+              self.autoCruise_try_count = 0
+
+            if self.autoCruise_activate:
+              within_window = (self.frame - self.autoCruise_frame) * DT_CTRL <= self.cruiseDelay_time  # 예: 0.25초
+
+              if within_window and self.autoCruise_try_count < 2:
+                if (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
+                  btn = CruiseButtons.RES_ACCEL if CS.out.activateCruise == 1 else CruiseButtons.DECEL_SET
+                  self.send_btn(CS, can_sends, btn)
+                  self.last_button_frame = self.frame
+                  self.autoCruise_try_count += 1
+
+              # 종료 조건: 시간 초과 / 2회 시도 완료 / 크루즈 실제 ON
+              if (not within_window) or (self.autoCruise_try_count >= 2) or CS.out.cruiseState.enabled:
+                self.autoCruise_activate = False
+                self.autoCruise_frame = 0
+                self.autoCruise_try_count = 0
+                self._pending_activateCruise = False
+
+          elif auto_engage_enabled and actuators.longControlState == LongCtrlState.starting:
+            # Kans: SNG AutoResume: 1st step: 브레이크 펄스 (ActivateCruiseAfterBrake 플래그 세팅)
+            ready_brake = (self.resume_fault_guard == 0) or CS.out.cruiseState.enabled
+            if CC.longActive and not CS.out.brakePressed and not self.activateCruise_after_brake and not resume_active and ready_brake:
+              self._brk_rc = (self._brk_rc + 1) & 0x3
+              brk_idx = self._brk_rc
+              apply_brake = self.brake_input(-self.brake_strength())
+              # 브레이크신호 전송(롱컨 임시해제)
+              can_sends.append(gmcan.create_brake_command(self.packer_ch, friction_brake_bus, apply_brake, brk_idx))
+              Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True)  # cruise.py에 브레이크 ON신호 전달
+              self.activateCruise_after_brake = True  # 브레이크신호 초기화
+              friction_sent_this_tick = True
+
+            # 2nd step: AutoResume (RES 버튼 스팸)
+            # 리쥼윈도 시작(기존윈도 없거나 이전윈도 닫힌=self.resume_activate=True 후 재진입용)
+            if self.resume_frame == 0 or self.resume_activate:
+              self.resume_frame = self.frame
+              self.resume_activate = False
+              self.resume_fault_guard = 0  # fault 방지용 카운터 초기화
+              # 새 리쥼윈도 시작 시, 바로 RES 전송 가능하도록 버튼 간격 초기화
+              self.last_button_frame = self.frame - int(0.12 / DT_CTRL)
+
+            if not self.resume_activate:
+              # Cruise fault 예방: 잦은 버튼송신 제한
+              ready = (self.resume_fault_guard == 0) or CS.out.cruiseState.enabled
+              if ready and (self.resume_fault_guard < 2):
+                # 버튼 주기 0.12초, 리쥼실패율 가장 낮은 값으로 보임.
+                if (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
+                  self.send_btn(CS, can_sends, CruiseButtons.RES_ACCEL)
+                  self.last_button_frame = self.frame
+                  self.resume_fault_guard += 1  # 송신횟수 기록
+
+              # 리쥼버튼 중단까지 지연시간(0.16~0.20)
+              if (self.frame - self.resume_frame) * DT_CTRL >= self.resumeDelay_time:
+                self.resume_activate = True
+
+          else:
+            # starting, auto_engage_enabled이 아니거나, 오토크루즈/오토리쥼 분기 모두 해당 안 될 때: 상태 정리
+            self.activateCruise_after_brake = False
+
+            if auto_engage_enabled:  # 오토리쥼이 진행중이면
+              # 리쥼윈도 재개용 대기시간(resumeDelay_time * 1.5)
+              if self.resume_frame > 0 and (self.frame - self.resume_frame) * DT_CTRL > (self.resumeDelay_time * 1.5):
+                self.resume_frame = 0
+                self.resume_activate = False
+                self.resume_fault_guard = 0
+
+            # 오토크루즈 초기화도 여기서(오토크루즈 분기 진입 안 했을 때)
+            self.autoCruise_try_count = 0
+            self.autoCruise_frame = 0
+            self.autoCruise_activate = False
+
+          # Kans: 실제 가스 송신 (언덕/평지 펄스 + 정상 가스)
+          send_gas = self.apply_gas
+          if resume_active:
+            send_gas = resume_pulse
+            at_full_stop = False
+            acc_engaged = True
+            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, acc_engaged, at_full_stop, resume_pulse=resume_pulse))
+          else:
+            # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
+            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop, resume_pulse=resume_pulse))
+
+          # Kans: 정규 브레이크 로직
+          if not friction_sent_this_tick:
+            self._brk_rc = (self._brk_rc + 1) & 0x3
+            brk_idx_base = self._brk_rc
+            can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
+            friction_sent_this_tick = True
 
           # Send dashboard UI commands (ACC status)
           send_fcw = hud_alert == VisualAlert.fcw
@@ -267,7 +507,7 @@ class CarController(CarControllerBase):
 
       # Radar needs to know current speed and yaw rate (50hz),
       # and that ADAS is alive (10hz)
-      if not self.CP.radarUnavailable:
+      if not self.CP.radarUnavailable and self.CP.networkLocation != NetworkLocation.fwdCamera and self.CP.carFingerprint not in SDGM_CAR:
         tt = self.frame * DT_CTRL
         time_and_headlights_step = 10
         if self.frame % time_and_headlights_step == 0:
@@ -298,15 +538,18 @@ class CarController(CarControllerBase):
       # A delayed cancellation allows camera to cancel and avoids a fault when user depresses brake quickly
       self.cancel_counter = self.cancel_counter + 1 if CC.cruiseControl.cancel else 0
 
+      # 오토크루즈 '진입시도'중엔 CANCEL 송신금지
+      auto_cruise_trying = (CS.out.activateCruise and not CS.out.cruiseState.enabled)
+
       # Stock longitudinal, integrated at camera
-      if (self.frame - self.last_button_frame) * DT_CTRL > 0.04:
-        if self.cancel_counter > CAMERA_CANCEL_DELAY_FRAMES:
+      if (self.frame - self.last_button_frame) * DT_CTRL >= 0.04:
+        if self.cancel_counter > CAMERA_CANCEL_DELAY_FRAMES and (not auto_cruise_trying):
           self.last_button_frame = self.frame
-          can_sends.append(gmcan.create_buttons(self.packer_pt, CanBus.CAMERA, (CS.buttons_counter + 1) % 4, CruiseButtons.CANCEL))
+          self.send_btn(CS, can_sends, CruiseButtons.CANCEL)
 
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
       # Silence "Take Steering" alert sent by camera, forward PSCMStatus with HandsOffSWlDetectionStatus=1
-      if self.frame % 10 == 0:
+      if self.frame % 20 == 0:
         can_sends.append(gmcan.create_pscm_status(self.packer_pt, CanBus.CAMERA, CS.pscm_status))
 
     new_actuators = actuators.as_builder()
@@ -330,3 +573,32 @@ class CarController(CarControllerBase):
 
     scaled_brake = max(0, min(MAX_BRAKE, int(brake_force * -100)))  # -를 +로 변환
     return -scaled_brake
+
+  def send_btn(self, CS, can_sends, cruise_btn, bus=None):
+    if bus is None:
+      if self.CP.carFingerprint in SDGM_CAR:
+        bus = CanBus.CAMERA
+      #elif self.CP.networkLocation == NetworkLocation.fwdCamera and self.CP.carFingerprint not in CC_ONLY_CAR:
+      #  bus = CanBus.POWERTRAIN
+      else:
+        bus = CanBus.POWERTRAIN
+
+    if bus == CanBus.CAMERA:
+      if self.btn_rc_cam < 0:
+        self.btn_rc_cam = int(CS.buttons_counter) & 0x3
+      self.btn_rc_cam = (self.btn_rc_cam + 1) & 0x3
+      rc = self.btn_rc_cam
+    elif bus == CanBus.POWERTRAIN:
+      if self.btn_rc_pt < 0:
+        self.btn_rc_pt = int(CS.buttons_counter) & 0x3
+      self.btn_rc_pt = (self.btn_rc_pt + 1) & 0x3
+      rc = self.btn_rc_pt
+    else:
+      raise ValueError(f"Unsupported bus: {bus}")
+    can_sends.append(gmcan.create_buttons(self.packer_pt, bus, rc, cruise_btn))
+
+  def brake_strength(self) -> float:
+    if self.CP.carFingerprint in EV_CAR:
+      return 0.5
+    else:
+      return 0.7

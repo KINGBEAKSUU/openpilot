@@ -276,17 +276,41 @@ class SelfdriveD:
       self.events.add(EventName.laneChange)
 
     for i, pandaState in enumerate(self.sm['pandaStates']):
-      # All pandas must match the list of safetyConfigs, and if outside this list, must be silent or noOutput
+      cfg = self.CP.safetyConfigs[i] if i < len(self.CP.safetyConfigs) else None
+
+      if cfg is not None:
+        raw_safety_mismatch = (
+          pandaState.safetyModel != cfg.safetyModel or
+          pandaState.safetyParam != cfg.safetyParam or
+          pandaState.alternativeExperience != self.CP.alternativeExperience
+        )
+      else:
+        raw_safety_mismatch = pandaState.safetyModel not in IGNORED_SAFETY_MODES
+
       if i < len(self.CP.safetyConfigs):
-        safety_mismatch = pandaState.safetyModel != self.CP.safetyConfigs[i].safetyModel or \
-                          pandaState.safetyParam != self.CP.safetyConfigs[i].safetyParam or \
-                          pandaState.alternativeExperience != self.CP.alternativeExperience
+        safety_mismatch = raw_safety_mismatch
       else:
         safety_mismatch = pandaState.safetyModel not in IGNORED_SAFETY_MODES
-        safety_mismatch  = False #carrot
+        safety_mismatch = False  # carrot
 
-      # safety mismatch allows some time for pandad to set the safety mode and publish it back from panda
-      if (safety_mismatch and self.sm.frame*DT_CTRL > 10.) or pandaState.safetyRxChecksInvalid or self.mismatch_counter >= 200:
+      trigger_controls_mismatch = (
+        (safety_mismatch and self.sm.frame * DT_CTRL > 10.) or
+        pandaState.safetyRxChecksInvalid or
+        self.mismatch_counter >= 200
+      )
+
+      if trigger_controls_mismatch:
+        print(
+          "[PANDA SAFETY] controlsMismatch trigger\n"
+          f"  panda_index={i}, frame={self.sm.frame}, t={self.sm.frame * DT_CTRL:.2f}s\n"
+          f"  raw_safety_mismatch={raw_safety_mismatch}, safety_mismatch={safety_mismatch}\n"
+          f"  safetyModel panda={pandaState.safetyModel}, cfg={getattr(cfg, 'safetyModel', None)}\n"
+          f"  safetyParam panda={pandaState.safetyParam}, cfg={getattr(cfg, 'safetyParam', None)}\n"
+          f"  altExp panda={pandaState.alternativeExperience}, cfg={self.CP.alternativeExperience}\n"
+          f"  safetyRxChecksInvalid={pandaState.safetyRxChecksInvalid}\n"
+          f"  mismatch_counter={self.mismatch_counter}"
+        )
+
         self.events.add(EventName.controlsMismatch)
 
       if log.PandaState.FaultType.relayMalfunction in pandaState.faults:
