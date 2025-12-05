@@ -263,7 +263,7 @@ class CarState(CarStateBase):
     cruise_fault = (pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.FAULTED and not creeping)
     friction_unavailable = pt_cp.vl["EBCMFrictionBrakeStatus"]["FrictionBrakeUnavailable"]
     accFaulted = cruise_fault or (friction_unavailable == 1)
-    if self.CP.carFingerprint == CAR.CHEVROLET_VOLT and (ret.brakePressed or ret.standstill or creeping):
+    if self.CP.carFingerprint == CAR.CHEVROLET_VOLT and ret.brakePressed:
       self.accFaultedCount = 0
       ret.accFaulted = False
     else:
