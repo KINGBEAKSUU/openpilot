@@ -262,11 +262,12 @@ class CarState(CarStateBase):
     # Delay Accfault event & regarding not acc faulted while user's brake pedal
     cruise_fault = (pt_cp.vl["AcceleratorPedal2"]["CruiseState"] == AccState.FAULTED and not creeping)
     friction_unavailable = pt_cp.vl["EBCMFrictionBrakeStatus"]["FrictionBrakeUnavailable"]
-    if ret.brakePressed or ret.standstill or creeping:
-      cruise_fault = False
     if self.CP.carFingerprint in (CAR.CHEVROLET_VOLT, ):
       friction_unavailable = 0
     accFaulted = cruise_fault or (friction_unavailable == 1)
+    if ret.brakePressed or ret.standstill or creeping:
+      accFaulted = False
+      self.accFaultedCount = 0
     self.accFaultedCount = self.accFaultedCount + 1 if accFaulted else 0
     ret.accFaulted = True if self.accFaultedCount > 50 else False
 
