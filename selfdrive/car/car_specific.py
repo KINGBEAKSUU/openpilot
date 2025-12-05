@@ -216,9 +216,8 @@ class CarSpecificEvents:
       events.add(EventName.brakeHold)
     if CS.parkingBrake:
       events.add(EventName.parkBrake)
-    if CS.accFaulted:
-      if not (CS.brakePressed or CS.standstill):
-        events.add(EventName.accFaulted)
+    if CS.accFaulted and not CS.brakePressed:
+      events.add(EventName.accFaulted)
     if CS.steeringPressed:
       events.add(EventName.steerOverride)
     if CS.brakePressed and CS.standstill:
