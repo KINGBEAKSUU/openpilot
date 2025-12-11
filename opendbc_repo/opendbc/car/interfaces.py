@@ -575,13 +575,13 @@ class CarStateBase(ABC):
     self.CP = CP
     self.car_fingerprint = CP.carFingerprint
     self.out = structs.CarState()
-
     self.cruise_buttons = 0
     self.left_blinker_cnt = 0
     self.right_blinker_cnt = 0
     self.steering_pressed_cnt = 0
     self.left_blinker_prev = False
     self.right_blinker_prev = False
+    self.low_speed_alert = False
     self.cluster_speed_hyst_gap = 0.0
     self.cluster_min_speed = 0.0  # min speed before dropping to 0
     self.secoc_key: bytes = b"00" * 16

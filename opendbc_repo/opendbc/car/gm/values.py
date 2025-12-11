@@ -13,8 +13,8 @@ class CarControllerParams:
   STEER_MAX = 300  # GM limit is 3Nm. Used by carcontroller to generate LKA output
   STEER_STEP = 3  # Active control frames per command (~33hz)
   INACTIVE_STEER_STEP = 10  # Inactive control frames per command (10hz)
-  STEER_DELTA_UP = 7  # Delta rates require review due to observed EPS weakness
-  STEER_DELTA_DOWN = 9
+  STEER_DELTA_UP = 10  # Delta rates require review due to observed EPS weakness
+  STEER_DELTA_DOWN = 15
   STEER_DRIVER_ALLOWANCE = 65
   STEER_DRIVER_MULTIPLIER = 4
   STEER_DRIVER_FACTOR = 100
@@ -39,7 +39,7 @@ class CarControllerParams:
     self.ZERO_GAS = 0.0  # Coasting
     self.MAX_BRAKE = 400  # ~ -4.0 m/s^2 with regen
 
-    if CP.carFingerprint in (CAMERA_ACC_CAR | SDGM_CAR) and CP.carFingerprint not in CC_ONLY_CAR:
+    if CP.carFingerprint in (CAMERA_ACC_CAR | SDGM_CAR):
       self.MAX_GAS = 1346.0
       self.MAX_ACC_REGEN = -540.0
       self.INACTIVE_REGEN = -500.0
@@ -75,24 +75,20 @@ class CarControllerParams:
 class GMSafetyFlags(IntFlag):
   HW_CAM = 1
   HW_CAM_LONG = 2
-  CC_LONG = 4
-  NO_CAMERA = 8
-  HW_ASCM_LONG = 16
-  NO_ACC = 32
-  PEDAL_LONG = 64  # TODO: This can be inferred
-  GAS_INTERCEPTOR = 128
-  EV = 256
-  FORCE_BRAKE_C9 = 512
-  HW_SDGM = 1024;
-  ASCM_INT = 2048;
+  HW_ASCM_LONG = 4
+  NO_ACC = 8
+  PEDAL_LONG = 16  # TODO: This can be inferred
+  GAS_INTERCEPTOR = 32
+  EV = 64
+  FORCE_BRAKE_C9 = 128
+  HW_SDGM = 256;
+  ASCM_INT = 512;
 
 class GMFlags(IntFlag):
   PEDAL_LONG = 1
-  CC_LONG = 2
-  NO_CAMERA = 4
-  NO_ACCELERATOR_POS_MSG = 8
-  FORCE_BRAKE_C9 = 16
-  TPMS_MSG = 32
+  NO_ACCELERATOR_POS_MSG = 2
+  FORCE_BRAKE_C9 = 4
+  TPMS_MSG = 8
 
 @dataclass
 class GMCarDocs(CarDocs):
@@ -100,7 +96,10 @@ class GMCarDocs(CarDocs):
 
   def init_make(self, CP: CarParams):
     if CP.networkLocation == CarParams.NetworkLocation.fwdCamera:
-      self.car_parts = CarParts.common([CarHarness.gm])
+      if CP.carFingerprint in SDGM_CAR:
+        self.car_parts = CarParts.common([CarHarness.gmsdgm])
+      else:
+        self.car_parts = CarParts.common([CarHarness.gm])
     else:
       self.car_parts = CarParts.common([CarHarness.obd_ii])
 
@@ -111,7 +110,7 @@ class GMCarSpecs(CarSpecs):
 @dataclass
 class GMPlatformConfig(PlatformConfig):
   dbc_dict: DbcDict = field(default_factory=lambda: {
-    Bus.pt: 'gm_global_a_powertrain_volt',
+    Bus.pt: 'gm_global_a_powertrain_generated',
     Bus.radar: 'gm_global_a_object',
     Bus.chassis: 'gm_global_a_chassis',
   })
@@ -221,50 +220,9 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Traverse 2022-23", "RS, Premier, or High Country Trim")],
     GMCarSpecs(mass=1955, wheelbase=3.07, steerRatio=17.9, centerToFrontRatio=0.4),
   )
-  # Separate car def is required when there is no ASCM
-  # (for now) unless there is a way to detect it when it has been unplugged...
-  CHEVROLET_VOLT_CC = GMPlatformConfig(
-    [GMCarDocs("Chevrolet Volt LT 2017-18")],
-    CHEVROLET_VOLT.specs,
-  )
-  CHEVROLET_BOLT_CC = GMPlatformConfig(
-    [
-      GMCarDocs("Chevrolet Bolt EUV 2022-23 - No-ACC"),
-      GMCarDocs("Chevrolet Bolt EV 2017-23 - No-ACC"),
-    ],
-    CHEVROLET_BOLT_EUV.specs,
-  )
-  CHEVROLET_EQUINOX_CC = GMPlatformConfig(
-    [GMCarDocs("Chevrolet Equinox NO ACC 2019-22")],
-    CHEVROLET_EQUINOX.specs,
-  )
   CHEVROLET_SUBURBAN = GMPlatformConfig(
     [GMCarDocs("Chevrolet Suburban Premier 2016-20")],
     CarSpecs(mass=2731, wheelbase=3.302, steerRatio=17.3, centerToFrontRatio=0.49),
-  )
-  CHEVROLET_SUBURBAN_CC = GMPlatformConfig(
-    [GMCarDocs("Chevrolet Suburban 2016-20")],
-    CHEVROLET_SUBURBAN.specs,
-  )
-  GMC_YUKON_CC = GMPlatformConfig(
-    [GMCarDocs("GMC Yukon No ACC")],
-    CarSpecs(mass=2541, wheelbase=2.95, steerRatio=16.3, centerToFrontRatio=0.4),
-  )
-  CADILLAC_CT6_CC = GMPlatformConfig(
-    [GMCarDocs("Cadillac CT6 No ACC")],
-    CarSpecs(mass=2358, wheelbase=3.11, steerRatio=17.7, centerToFrontRatio=0.4),
-  )
-  CHEVROLET_TRAILBLAZER_CC = GMPlatformConfig(
-    [GMCarDocs("Chevrolet Trailblazer NO ACC 2021-22")],
-    CHEVROLET_TRAILBLAZER.specs,
-  )
-  CHEVROLET_MALIBU_CC = GMPlatformConfig(
-    [GMCarDocs("Chevrolet Malibu No ACC")],
-    CarSpecs(mass=1450, wheelbase=2.8, steerRatio=15.8, centerToFrontRatio=0.4),
-  )
-  CADILLAC_XT5_CC = GMPlatformConfig(
-    [GMCarDocs("Cadillac XT5 No ACC")],
-    CarSpecs(mass=1810, wheelbase=2.86, steerRatio=16.34, centerToFrontRatio=0.5),
   )
   BUICK_BABYENCLAVE = GMPlatformConfig(
     [GMCarDocs("Buick Baby Enclave 2020-23", "Driver Assist Package")],
@@ -359,17 +317,15 @@ FW_QUERY_CONFIG = FwQueryConfig(
 )
 
 EV_CAR = {CAR.CHEVROLET_VOLT, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_VOLT_ASCM}
-CC_ONLY_CAR = {CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_EQUINOX_CC, CAR.CHEVROLET_SUBURBAN_CC, CAR.GMC_YUKON_CC, CAR.CADILLAC_CT6_CC, CAR.CHEVROLET_TRAILBLAZER_CC, CAR.CADILLAC_XT5_CC, CAR.CHEVROLET_MALIBU_CC}
-CC_REGEN_PADDLE_CAR = {CAR.CHEVROLET_BOLT_CC}
+
 # We're integrated at the Safety Data Gateway Module on these cars
 SDGM_CAR = {CAR.CADILLAC_XT4, CAR.CADILLAC_XT6, CAR.CHEVROLET_TRAVERSE, CAR.BUICK_BABYENCLAVE, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_MALIBU_SASCM}
 SASCM_CAR = {}
 ASCM_INT = {CAR.CHEVROLET_VOLT_ASCM, CAR.GMC_ACADIA_ASCM}
 
 # We're integrated at the camera with VOACC on these cars (instead of ASCM w/ OBD-II harness)
-CAMERA_ACC_CAR = {CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_SILVERADO, CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAX, CAR.CADILLAC_CT6_2019}
-CAMERA_ACC_CAR.update({CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_EQUINOX_CC, CAR.GMC_YUKON_CC, CAR.CADILLAC_CT6_CC, CAR.CHEVROLET_TRAILBLAZER_CC, CAR.CADILLAC_XT5_CC, CAR.CHEVROLET_MALIBU_CC})
-# CAMERA_ACC_CAR.update(CC_ONLY_CAR)
+CAMERA_ACC_CAR = {CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_SILVERADO, CAR.CHEVROLET_EQUINOX, CAR.CHEVROLET_TRAILBLAZER, CAR.CHEVROLET_TRAX, CAR.CADILLAC_CT6_2019, CAR.GMC_YUKON}
+
 # Alt ASCMActiveCruiseControlStatus
 ALT_ACCS = {CAR.GMC_YUKON}
 

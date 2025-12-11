@@ -193,10 +193,12 @@ bool longitudinal_speed_checks(int desired_speed, const LongitudinalLimits limit
 bool longitudinal_gas_checks(int desired_gas, const LongitudinalLimits limits);
 bool longitudinal_transmission_rpm_checks(int desired_transmission_rpm, const LongitudinalLimits limits);
 bool longitudinal_brake_checks(int desired_brake, const LongitudinalLimits limits);
-bool longitudinal_interceptor_checks(const CANPacket_t *to_send);
 void pcm_cruise_check(bool cruise_engaged);
 
 void safety_tick(const safety_config *safety_config);
+
+// AOL
+bool longitudinal_interceptor_checks(const CANPacket_t *to_send);
 
 // This can be set by the safety hooks
 extern bool controls_allowed;
@@ -217,6 +219,8 @@ extern int cruise_button_prev;
 extern int cruise_main_prev;
 extern bool safety_rx_checks_invalid;
 
+// AOL
+extern bool aol_allowed;
 // for safety modes with torque steering control
 extern int desired_torque_last;       // last desired steer torque
 extern int rt_torque_last;            // last desired torque for real time check
@@ -255,7 +259,8 @@ extern struct sample_t angle_meas;         // last 6 steer angles/curvatures
 #define ALT_EXP_ALLOW_AEB 16
 
 extern int alternative_experience;
-
+// Always on Lateral
+#define ALT_EXP_ALWAYS_ON_LATERAL 32
 // time since safety mode has been changed
 extern uint32_t safety_mode_cnt;
 
