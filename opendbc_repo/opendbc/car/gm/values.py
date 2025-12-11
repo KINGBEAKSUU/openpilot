@@ -108,7 +108,7 @@ class GMCarSpecs(CarSpecs):
 @dataclass
 class GMPlatformConfig(PlatformConfig):
   dbc_dict: DbcDict = field(default_factory=lambda: {
-    Bus.pt: 'gm_global_a_powertrain_generated',
+    Bus.pt: 'gm_global_a_powertrain_volt',
     Bus.radar: 'gm_global_a_object',
     Bus.chassis: 'gm_global_a_chassis',
   })
@@ -314,7 +314,7 @@ FW_QUERY_CONFIG = FwQueryConfig(
   extra_ecus=[(Ecu.fwdCamera, 0x24b, None)],
 )
 
-EV_CAR = {CAR.CHEVROLET_VOLT, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_VOLT_CC, CAR.CHEVROLET_BOLT_CC, CAR.CHEVROLET_VOLT_ASCM}
+EV_CAR = {CAR.CHEVROLET_VOLT, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_BOLT_EUV, CAR.CHEVROLET_VOLT_ASCM}
 
 # We're integrated at the Safety Data Gateway Module on these cars
 SDGM_CAR = {CAR.CADILLAC_XT4, CAR.CADILLAC_XT6, CAR.CHEVROLET_TRAVERSE, CAR.BUICK_BABYENCLAVE, CAR.CHEVROLET_VOLT_2019, CAR.CHEVROLET_MALIBU_SASCM}

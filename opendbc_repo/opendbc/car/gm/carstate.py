@@ -144,6 +144,7 @@ class CarState(CarStateBase):
     # Regen braking is braking
     if self.CP.transmissionType == TransmissionType.direct:
       ret.regenBraking = pt_cp.vl["EBCMRegenPaddle"]["RegenPaddle"] != 0
+      self.single_pedal_mode = ret.gearShifter == GearShifter.low or pt_cp.vl["EVDriveMode"]["SinglePedalModeActive"] == 1 or (ret.regenBraking and GearShifter.manumatic) or (self.CP.carFingerprint in [CAR.CHEVROLET_BOLT_EUV, ] and self.CP.enableGasInterceptorDEPRECATED)
 
     # kans: TPMS
     if self.CP.flags & GMFlags.TPMS_MSG.value:
@@ -189,7 +190,14 @@ class CarState(CarStateBase):
       ret.tpms.rl = psi_rl
       ret.tpms.rr = psi_rr
 
-    ret.gasPressed = pt_cp.vl["AcceleratorPedal2"]["AcceleratorPedal2"] / 254. > 1e-5
+    if self.CP.enableGasInterceptorDEPRECATED:
+      ret.gas = (pt_cp.vl["GAS_SENSOR"]["INTERCEPTOR_GAS"] + pt_cp.vl["GAS_SENSOR"]["INTERCEPTOR_GAS2"]) / 2.
+      # Panda 515 threshold = 10.88. Set lower to avoid panda blocking messages and GasInterceptor faulting.
+      threshold = 23 if self.CP.carFingerprint in CAMERA_ACC_CAR else 4
+      ret.gasPressed = ret.gas > threshold
+    else:
+      ret.gas = pt_cp.vl["AcceleratorPedal2"]["AcceleratorPedal2"] / 254
+      ret.gasPressed = ret.gas > 0  # 1e-5
 
     ret.steeringAngleDeg = pt_cp.vl["PSCMSteeringAngle"]["SteeringWheelAngle"]
     ret.steeringRateDeg = pt_cp.vl["PSCMSteeringAngle"]["SteeringWheelRate"]
@@ -276,7 +284,11 @@ class CarState(CarStateBase):
       pt_messages += [
         ("ASCMLKASteeringCmd", float('nan')),
       ]
-
+    if CP.transmissionType == TransmissionType.direct:
+      pt_messages += [
+        ("EBCMRegenPaddle", 50),
+        ("EVDriveMode", float('nan')),
+      ]
     loopback_messages = [
       ("ASCMLKASteeringCmd", float('nan')),
     ]

@@ -25,6 +25,8 @@ NON_LINEAR_TORQUE_PARAMS = {
   CAR.CHEVROLET_SILVERADO: [3.29974374, 1.0, 0.25571356, 0.0465122]
 }
 
+NEURAL_PARAMS_PATH = os.path.join(BASEDIR, 'torque_data/neural_ff_weights.json')
+
 PEDAL_MSG = 0x201
 
 class CarInterface(CarInterfaceBase):
@@ -120,7 +122,6 @@ class CarInterface(CarInterfaceBase):
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = 0x460 not in fingerprint[CanBus.OBSTACLE]
       ret.pcmCruise = True
-      ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM.value
       ret.minEnableSpeed = -1 if candidate in SDGM_CAR else 5 * CV.KPH_TO_MS
       ret.minSteerSpeed = 10 * CV.KPH_TO_MS
       if candidate in SDGM_CAR:

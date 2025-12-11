@@ -7,7 +7,7 @@ from opendbc.can.packer import CANPacker
 from opendbc.car import Bus, DT_CTRL, apply_driver_steer_torque_limits, structs, create_gas_interceptor_command
 from opendbc.car.gm import gmcan
 from opendbc.car.common.conversions import Conversions as CV
-from opendbc.car.gm.values import DBC, CanBus, CarControllerParams, CruiseButtons, GMFlags, EV_CAR, AccState, CC_REGEN_PADDLE_CAR, CAR, CAMERA_ACC_CAR, SDGM_CAR, SASCM_CAR, ALT_ACCS
+from opendbc.car.gm.values import DBC, CanBus, CarControllerParams, CruiseButtons, GMFlags, EV_CAR, AccState, CAR, CAMERA_ACC_CAR, SDGM_CAR, SASCM_CAR, ALT_ACCS
 from opendbc.car.interfaces import CarControllerBase
 from openpilot.selfdrive.controls.lib.drive_helpers import apply_deadzone
 from opendbc.car.vehicle_model import ACCELERATION_DUE_TO_GRAVITY
@@ -76,26 +76,6 @@ class CarController(CarControllerBase):
     self.resume_fault_guard = 0
     self.autoCruise_try_count = 0  # 오토크루즈 버튼 재시도 횟수
     self.last_pulse_reset_frame = 0  # 리쥼펄스 최소유지"보장"용
-
-  @staticmethod
-  def calc_pedal_command(accel: float, long_active: bool, car_velocity) -> tuple[float, bool]:
-    if not long_active: return 0., False
-    press_regen_paddle = False
-
-    if accel < -0.3: #-0.15:
-      press_regen_paddle = True
-      pedal_gas = 0
-    else:
-      # pedaloffset = 0.24
-      pedaloffset = np.interp(car_velocity, [0., 3, 6, 30], [0.08, 0.175, 0.240, 0.240])
-      pedal_gas = np.clip((pedaloffset + accel * 0.6), 0.0, 1.0)
-
-      ####for safety.
-      pedal_gas_max = np.interp(car_velocity, [0.0, 5, 30], [0.21, 0.3175, 0.3525])
-      pedal_gas = np.clip(pedal_gas, 0.0, pedal_gas_max)
-      ####for safety. end.
-
-    return pedal_gas, press_regen_paddle
 
   def update(self, CC, CS, now_nanos):
     params = Params()
@@ -181,7 +161,6 @@ class CarController(CarControllerBase):
         at_full_stop = CC.longActive and CS.out.standstill
         near_stop = CC.longActive and (abs(CS.out.vEgo) < self.params.NEAR_STOP_BRAKE_PHASE)
         interceptor_gas_cmd = 0
-        press_regen_paddle = False
 
         # 언덕감지(accel_g가 클수록 높은 경사)
         if self.accel_g > 0.25:
@@ -196,7 +175,7 @@ class CarController(CarControllerBase):
         elif near_stop and stopping and not CC.cruiseControl.resume:
           self.apply_gas = self.params.INACTIVE_REGEN
           self.apply_brake = int(min(-100 * self.CP.stopAccel, self.params.MAX_BRAKE))
-          press_regen_paddle = False
+
         else:
           # Normal operation
           if self.CP.carFingerprint in EV_CAR:
@@ -216,7 +195,6 @@ class CarController(CarControllerBase):
           # "Tap" the accelerator pedal to re-engage ACC
           interceptor_gas_cmd = self.params.SNG_INTERCEPTOR_GAS
           self.apply_brake = 0
-          press_regen_paddle = False
           self.apply_gas = self.params.INACTIVE_REGEN
 
         idx = (self.frame // 4) % 4
@@ -560,6 +538,8 @@ class CarController(CarControllerBase):
     if bus is None:
       if self.CP.carFingerprint in SDGM_CAR:
         bus = CanBus.CAMERA
+      #elif self.CP.networkLocation == NetworkLocation.fwdCamera and self.CP.carFingerprint not in CC_ONLY_CAR:
+      #  bus = CanBus.POWERTRAIN
       else:
         bus = CanBus.POWERTRAIN
 
