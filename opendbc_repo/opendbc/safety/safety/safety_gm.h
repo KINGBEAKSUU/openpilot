@@ -83,8 +83,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    // Force to 0xC9(201;ECMEngineStatus) when gm_force_brake_c9 is set, otherwise keep legacy behavior.
-    // This allows SDGM/Traverse variants without 0xBE(190;ECMAcceleratorPos) to report brake correctly.
     if (addr == 0xC9) {
       if (gm_hw == GM_CAM) {
         brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
@@ -248,9 +246,8 @@ static safety_config gm_init(uint16_t param) {
   const uint16_t GM_PARAM_PEDAL_LONG = 16;
   const uint16_t GM_PARAM_PEDAL_INTERCEPTOR = 32;  // TODO: this can be inferred
   const uint16_t GM_PARAM_EV = 64;
-  const uint16_t GM_PARAM_FORCE_BRAKE_C9 = 128;
-  const uint16_t GM_PARAM_HW_SDGM = 256;
-  const uint16_t GM_PARAM_ASCM_INT = 512;
+  const uint16_t GM_PARAM_HW_SDGM = 128;
+  const uint16_t GM_PARAM_ASCM_INT = 256;
 
   // common safety checks assume unscaled integer values
   static const int GM_GAS_TO_CAN = 8;  // 1 / 0.125

@@ -80,15 +80,13 @@ class GMSafetyFlags(IntFlag):
   PEDAL_LONG = 16  # TODO: This can be inferred
   GAS_INTERCEPTOR = 32
   EV = 64
-  FORCE_BRAKE_C9 = 128
-  HW_SDGM = 256;
-  ASCM_INT = 512;
+  HW_SDGM = 128;
+  ASCM_INT = 256;
 
 class GMFlags(IntFlag):
   PEDAL_LONG = 1
   NO_ACCELERATOR_POS_MSG = 2
-  FORCE_BRAKE_C9 = 4
-  TPMS_MSG = 8
+  TPMS_MSG = 4
 
 @dataclass
 class GMCarDocs(CarDocs):
