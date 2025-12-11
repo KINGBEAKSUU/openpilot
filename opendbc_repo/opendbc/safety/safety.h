@@ -745,7 +745,7 @@ bool steer_torque_cmd_checks(int desired_torque, int steer_req, const TorqueStee
 // Safety checks for angle-based steering commands
 bool steer_angle_cmd_checks(int desired_angle, bool steer_control_enabled, const AngleSteeringLimits limits) {
   bool violation = false;
-  bool aol_allowed = (acc_main_on || lkas_on) && (alternative_experience & ALT_EXP_ALWAYS_ON_LATERAL);
+  bool aol_allowed = (acc_main_on) && (alternative_experience & ALT_EXP_ALWAYS_ON_LATERAL);
   if (controls_allowed) {
     // acc main must be on if controls are allowed
     acc_main_on = controls_allowed;
