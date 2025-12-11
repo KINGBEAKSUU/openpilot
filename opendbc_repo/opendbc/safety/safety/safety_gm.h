@@ -86,7 +86,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     // Force to 0xC9(201;ECMEngineStatus) when gm_force_brake_c9 is set, otherwise keep legacy behavior.
     // This allows SDGM/Traverse variants without 0xBE(190;ECMAcceleratorPos) to report brake correctly.
     if (addr == 0xC9) {
-      if (gm_hw == GM_CAM)) {
+      if (gm_hw == GM_CAM) {
         brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
       }
 
