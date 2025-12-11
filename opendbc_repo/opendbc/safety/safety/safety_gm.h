@@ -348,7 +348,6 @@ static safety_config gm_init(uint16_t param) {
   gm_pcm_cruise = (((gm_hw == GM_CAM) || (gm_hw == GM_SDGM)) && !gm_cam_long && !gm_force_ascm && !gm_pedal_long);
   gm_has_acc = !GET_FLAG(param, GM_PARAM_NO_ACC);
   enable_gas_interceptor = GET_FLAG(param, GM_PARAM_PEDAL_INTERCEPTOR);
-  gm_force_brake_c9 = GET_FLAG(param, GM_PARAM_FORCE_BRAKE_C9);
 
   safety_config ret = BUILD_SAFETY_CFG(gm_rx_checks, GM_ASCM_TX_MSGS);
   if (gm_hw == GM_CAM) {
