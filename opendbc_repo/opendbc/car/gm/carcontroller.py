@@ -423,7 +423,7 @@ class CarController(CarControllerBase):
               ready = (self.resume_fault_guard == 0) or CS.out.cruiseState.enabled
               if ready and (self.resume_fault_guard < 2):
                 # 버튼 주기 0.12초, 리쥼실패율 가장 낮은 값으로 보임.
-                if (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
+                if ((CS.lead_speed > 0.5) or (not CS.out.standstill)) and (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
                   self.send_btn(CS, can_sends, CruiseButtons.RES_ACCEL)
                   self.last_button_frame = self.frame
                   self.resume_fault_guard += 1  # 송신횟수 기록
@@ -454,10 +454,10 @@ class CarController(CarControllerBase):
             send_gas = resume_pulse
             at_full_stop = False
             acc_engaged = True
-            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, acc_engaged, at_full_stop, resume_pulse=resume_pulse))
+            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=resume_pulse))
           else:
             # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
-            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop, resume_pulse=resume_pulse))
+            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=resume_pulse))
 
           # Kans: 정규 브레이크 로직
           if not friction_sent_this_tick:

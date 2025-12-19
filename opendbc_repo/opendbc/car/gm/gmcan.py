@@ -1,6 +1,6 @@
 ﻿from opendbc.car import DT_CTRL
 from opendbc.car.can_definitions import CanData
-from opendbc.car.gm.values import CAR, CruiseButtons, CanBus
+from opendbc.car.gm.values import CAR, CruiseButtons, CanBus, CAMERA_ACC_CAR
 from opendbc.car.common.conversions import Conversions as CV
 
 # GM: AutoResume: brake signal to CAN
@@ -70,24 +70,40 @@ def create_adas_keepalive(bus):
   dat = b"\x00\x00\x00\x00\x00\x00\x00"
   return [CanData(0x409, dat, bus), CanData(0x40a, dat, bus)]
 
-def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, resume_pulse: int = 0):
-  # hill_pulse True면 throttle에 작은 펄스를 강제로 줌
-  if resume_pulse > 0:
+def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, CP, resume_pulse: int = 0):
+  enabled = 1 if enabled else 0
+  idx = int(idx) & 0x3  # 2-bit rolling counter
+  # resume_pulse는 활성 상태에서만
+  if enabled and resume_pulse > 0:
     throttle = resume_pulse
+  # Trailblazer만 disable 프레임 정리
+  if CP.carFingerprint == CAR.CHEVROLET_TRAILBLAZER:
+    if not enabled:  # DBC: (0.125, -22534) -> raw=0 중립
+      throttle = -22534
+      at_full_stop = 0
+      acc_type = 0
+    else:
+      acc_type = 1
+  else:
+    acc_type = 1
+
   values = {
     "GasRegenCmdActive": enabled,
     "RollingCounter": idx,
-    "GasRegenCmd": throttle,
-    "GasRegenFullStopActive": at_full_stop,
-    "GasRegenAccType": 1,
+    "GasRegenCmd": float(throttle),
+    "GasRegenFullStopActive": int(bool(at_full_stop)),
+    "GasRegenAccType": acc_type,
+    "GasRegenChecksum": 0,
   }
 
   dat = packer.make_can_msg("ASCMGasRegenCmd", bus, values)[1]
-  values["GasRegenChecksum"] = ((1 - enabled) << 24) | \
-                               (((0xff - dat[1]) & 0xff) << 16) | \
-                               (((0xff - dat[2]) & 0xff) << 8) | \
-                               ((0x100 - dat[3] - idx) & 0xff)
 
+  checks = ((1 - enabled) << 24) | \
+           (((0xff - dat[1]) & 0xff) << 16) | \
+           (((0xff - dat[2]) & 0xff) << 8) | \
+           ((0x100 - dat[3] - idx) & 0xff)
+
+  values["GasRegenChecksum"] = checks & 0x1FFFFFF  # 25-bit mask
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
 
 def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_stop, at_full_stop, CP):

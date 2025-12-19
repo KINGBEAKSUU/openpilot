@@ -267,7 +267,7 @@ class CarrotPlanner:
     self.stopSignCount = self.stopSignCount + 1 if stopSign else 0
     self.startSignCount = self.startSignCount + 1 if startSign and not stopSign else 0
 
-    if self.stopSignCount * DT_MDL > 0.05: # 빨간불: 0.1초 이상 감지될 때
+    if self.stopSignCount * DT_MDL > 0.05: # 빨간불: 0.05초 이상 감지될 때
       self.trafficState = TrafficState.red
     elif self.startSignCount * DT_MDL > 0.3: # 파란불: 0.3초 이상 감지될 때
       self.trafficState = TrafficState.green
@@ -431,7 +431,7 @@ class CarrotPlanner:
           #self.comfort_brake = COMFORT_BRAKE
           self.trafficStopAdjustRatio = np.interp(v_ego_kph, [0, 100], [1.0, 0.7])
           stop_dist = self.xStop * np.interp(self.xStop, [0, 50], [1.0, self.trafficStopAdjustRatio])  ## 남은거리에 따라 정지거리 비율조정
-          if stop_dist > 10.0:
+          if stop_dist > 10.0: ### 10m 이내에서는 마지막 확정된 actual_stop_distance로 유지 .
             self.actual_stop_distance = stop_dist
           stop_model_x = 0
           self.fakeCruiseDistance = 0 if self.actual_stop_distance > 10.0 else 10.0

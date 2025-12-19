@@ -45,8 +45,8 @@ static bool gm_pedal_long = false;
 static bool gm_force_ascm = false;
 
 static void gm_rx_hook(const CANPacket_t *to_push) {
+  int addr = GET_ADDR(to_push);
   if (GET_BUS(to_push) == 0U) {
-    int addr = GET_ADDR(to_push);
 
     if (addr == 0x184) {
       int torque_driver_new = ((GET_BYTE(to_push, 6) & 0x7U) << 8) | GET_BYTE(to_push, 7);
@@ -83,13 +83,12 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if (addr == 0xC9) {
-      if (gm_hw == GM_CAM) {
-        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
-      }
-
-    } else if ((addr == 0xBE) && ((gm_hw == GM_ASCM) || (gm_hw == GM_SDGM))) {
+    if ((addr == 0xBE) && ((gm_hw == GM_ASCM) || (gm_hw == GM_SDGM))) {
       brake_pressed = GET_BYTE(to_push, 1) >= 8U;
+    }
+
+    if ((addr == 0xC9) && (gm_hw == GM_CAM)) {
+      brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
     }
 
     if (addr == 0x1C4) {
@@ -98,7 +97,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       }
 
       // enter controls on rising edge of ACC, exit controls when ACC off
-      if (gm_pcm_cruise) {
+      if (gm_pcm_cruise && gm_has_acc) {
         bool cruise_engaged = (GET_BYTE(to_push, 1) >> 5) != 0U;
         pcm_cruise_check(cruise_engaged);
       }
@@ -110,23 +109,15 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Pedal Interceptor
     if ((addr == 0x201) && enable_gas_interceptor) {
-      int gas_interceptor = GM_GET_INTERCEPTOR(to_push);
+      // Pedal Interceptor: average between 2 tracks
+      int track1 = ((GET_BYTE(to_push, 0) << 8) + GET_BYTE(to_push, 1));
+      int track2 = ((GET_BYTE(to_push, 2) << 8) + GET_BYTE(to_push, 3));
+      int gas_interceptor = (track1 + track2) / 2;
       gas_pressed = gas_interceptor > GM_GAS_INTERCEPTOR_THRESHOLD;
     }
   }
-  // Cruise check for Gen2 Bolt (ASCMActiveCruiseControlStatus on bus 2)
-  int addr = GET_ADDR(to_push);
-  if ((addr == 0x370) && (GET_BUS(to_push) == 2U)) {
-    bool cruise_engaged = (GET_BYTE(to_push, 2) >> 7) != 0U;  // ACCCmdActive
-    // Align SDGM/camera PCM cruise behavior with ASCM path: when using stock PCM cruise,
-    // drive controls_allowed via pcm_cruise_check on ACC engaged edges.
-    if (gm_pcm_cruise && gm_has_acc) {
-      pcm_cruise_check(cruise_engaged);
-    } else {
-      cruise_engaged_prev = cruise_engaged;
-    }
-  }
-  // main_on for AOL 
+
+  // main_on for AOL
   if (addr == 0xC9U) {
     acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
   }
@@ -164,7 +155,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     bool steer_req = GET_BIT(to_send, 3U);
 
     if (steer_torque_cmd_checks(desired_torque, steer_req, GM_STEERING_LIMITS)) {
-      //tx = false;
+      tx = false;
     }
   }
 
@@ -174,13 +165,16 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     if (apply && !controls_allowed) {
       controls_allowed = true;        
     }
-    // convert float CAN signal to an int for gas checks: 22534 / 0.125 = 180272
-    int gas_regen = (((GET_BYTE(to_send, 1) & 0x7U) << 16) | (GET_BYTE(to_send, 2) << 8) | GET_BYTE(to_send, 3)) - 180272U;
-
     bool violation = false;
     // Allow apply bit in pre-enabled and overriding states
     violation |= !controls_allowed && apply;
-    violation |= longitudinal_gas_checks(gas_regen, *gm_long_limits);
+    if (apply) {
+      //convert float CAN signal to an int for gas checks: 22534 / 0.125 = 180272
+      int gas_regen = (((GET_BYTE(to_send, 1) & 0x7U) << 16) | (GET_BYTE(to_send, 2) << 8) | GET_BYTE(to_send, 3)) - 180272;  // - 180272는 물리값=0Nm 기준값
+      violation |= longitudinal_gas_checks(gas_regen, *gm_long_limits);
+    } else {
+      //apply==0일 때는 "명령 비활성" 프레임이므로 gas/regen 한계 체크를 하지 않음(중립 raw=0 허용)
+    }
 
     if (violation) {
       tx = false;
@@ -314,7 +308,7 @@ static safety_config gm_init(uint16_t param) {
   static RxCheck gm_sdgm_rx_checks[] = {
     GM_COMMON_RX_CHECKS
     GM_ACC_RX_CHECKS
-    {.msg = {{0x370, 0, 6, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
+    {.msg = {{0x2FF, 0, 4, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
   };
 
   static const CanMsg GM_CAM_TX_MSGS[] = {{0x180, 0, 4}, {0x200, 0, 6}, {0x1E1, 0, 7},  // pt bus

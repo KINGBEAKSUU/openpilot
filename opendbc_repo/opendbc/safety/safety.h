@@ -618,7 +618,8 @@ bool longitudinal_accel_checks(int desired_accel, const LongitudinalLimits limit
     if(!controls_allowed) print("@@@@@@@@ longitudinal_accel_checks... auto controls_allowed enabled...\n");
     controls_allowed = true;
   }
-  bool accel_valid = get_longitudinal_allowed() && !max_limit_check(desired_accel, limits.max_accel, limits.min_accel);
+  //bool accel_valid = get_longitudinal_allowed() && !max_limit_check(desired_accel, limits.max_accel, limits.min_accel);
+  bool accel_valid = !max_limit_check(desired_accel, limits.max_accel, limits.min_accel);
   bool accel_inactive = desired_accel == limits.inactive_accel;
   return !(accel_valid || accel_inactive);
 }
@@ -655,11 +656,8 @@ bool steer_torque_cmd_checks(int desired_torque, int steer_req, const TorqueStee
   bool violation = false;
   uint32_t ts = microsecond_timer_get();
 
-  bool aol_allowed = (acc_main_on) && (alternative_experience & ALT_EXP_ALWAYS_ON_LATERAL);
-  if (controls_allowed) {
-    // acc main must be on if controls are allowed
-    acc_main_on = controls_allowed;
-  }
+  bool aol_allowed = true;
+  if (controls_allowed) acc_main_on = controls_allowed;
 
   if (controls_allowed || aol_allowed) {
     // *** global torque limit check ***
@@ -745,12 +743,9 @@ bool steer_torque_cmd_checks(int desired_torque, int steer_req, const TorqueStee
 // Safety checks for angle-based steering commands
 bool steer_angle_cmd_checks(int desired_angle, bool steer_control_enabled, const AngleSteeringLimits limits) {
   bool violation = false;
-  bool aol_allowed = (acc_main_on) && (alternative_experience & ALT_EXP_ALWAYS_ON_LATERAL);
-  if (controls_allowed) {
-    // acc main must be on if controls are allowed
-    acc_main_on = controls_allowed;
-  }
 
+  bool aol_allowed = true;
+  if (controls_allowed) acc_main_on = controls_allowed;
   if ((controls_allowed || aol_allowed) && steer_control_enabled) {
     // convert floating point angle rate limits to integers in the scale of the desired angle on CAN,
     // add 1 to not false trigger the violation. also fudge the speed by 1 m/s so rate limits are
