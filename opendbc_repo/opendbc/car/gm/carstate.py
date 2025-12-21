@@ -45,6 +45,8 @@ class CarState(CarStateBase):
     self.sm = messaging.SubMaster(['radarState', 'deviceState'])
 
     self.cruiseMain_on = False
+    # Kans:
+    self.driverBrake = False
 
     # Kans: TPMS
     self.KPA_TO_PSI = 0.1450377377
@@ -135,11 +137,10 @@ class CarState(CarStateBase):
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
       ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
     else:
-      # Some Volt 2016-17 have loose brake pedal push rod retainers which causes the ECM to believe
-      # that the brake is being intermittently pressed without user interaction.
-      # To avoid a cruise fault we need to use a conservative brake position threshold
-      # https://static.nhtsa.gov/odi/tsbs/2017/MC-10137629-9999.pdf
       ret.brakePressed = ret.brake >= 8
+    # Kans: carController용 brake(self.driverBrake)
+    # 제어용 브레이크는 항상 BE 기준만 사용
+    self.driverBrake = ret.brake >= 8
 
     # Regen braking is braking
     if self.CP.transmissionType == TransmissionType.direct:

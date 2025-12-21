@@ -399,7 +399,12 @@ class CarController(CarControllerBase):
           elif auto_engage_enabled and actuators.longControlState == LongCtrlState.starting:
             # Kans: SNG AutoResume: 1st step: 브레이크 펄스 (ActivateCruiseAfterBrake 플래그 세팅)
             ready_brake = (self.resume_fault_guard == 0) or CS.out.cruiseState.enabled
-            if CC.longActive and not CS.out.brakePressed and not self.activateCruise_after_brake and not resume_active and ready_brake:
+            # Kans: SDGM제어용 브레이크는 CS.driverBrake 사용
+            if self.CP.carFingerprint in SDGM_CAR:
+              driver_brake = CS.driverBrake
+            else:
+              driver_brake = CS.out.brakePressed
+            if CC.longActive and not driver_brake and not CS.out.brakePressed and not self.activateCruise_after_brake and not resume_active and ready_brake:
               self._brk_rc = (self._brk_rc + 1) & 0x3
               brk_idx = self._brk_rc
               apply_brake = self.brake_input(-self.brake_strength())
@@ -464,10 +469,16 @@ class CarController(CarControllerBase):
 
           # Kans: 정규 브레이크 로직
           if not friction_sent_this_tick:
-            self._brk_rc = (self._brk_rc + 1) & 0x3
-            brk_idx_base = self._brk_rc
-            can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
-            friction_sent_this_tick = True
+            if self.CP.carFingerprint in SDGM_CAR:
+              driver_brake = CS.driverBrake
+            else:
+              driver_brake = CS.out.brakePressed
+
+            if not driver_brake:
+              self._brk_rc = (self._brk_rc + 1) & 0x3
+              brk_idx_base = self._brk_rc
+              can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
+              friction_sent_this_tick = True
 
           # Send dashboard UI commands (ACC status)
           send_fcw = hud_alert == VisualAlert.fcw
