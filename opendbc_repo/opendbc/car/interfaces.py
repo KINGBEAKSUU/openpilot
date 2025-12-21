@@ -575,6 +575,7 @@ class CarStateBase(ABC):
     self.CP = CP
     self.car_fingerprint = CP.carFingerprint
     self.out = structs.CarState()
+
     self.cruise_buttons = 0
     self.left_blinker_cnt = 0
     self.right_blinker_cnt = 0

@@ -43,6 +43,7 @@ static bool gm_pcm_cruise = false;
 static bool gm_has_acc = true;
 static bool gm_pedal_long = false;
 static bool gm_force_ascm = false;
+static bool gm_force_brake_c9 = false;
 
 static void gm_rx_hook(const CANPacket_t *to_push) {
   int addr = GET_ADDR(to_push);
@@ -83,12 +84,16 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if ((addr == 0xBE) && ((gm_hw == GM_ASCM) || (gm_hw == GM_SDGM))) {
+    if ((addr == 0xC9) && gm_force_brake_c9) {
+      brake_pressed = GET_BIT(to_push, 40U) != 0U;
+    } else if ((addr == 0xBE) && ((gm_hw == GM_ASCM) || (gm_hw == GM_SDGM))) {
       brake_pressed = GET_BYTE(to_push, 1) >= 8U;
+    } else if ((addr == 0xC9) && (gm_hw == GM_CAM)) {
+      brake_pressed = GET_BIT(to_push, 40U) != 0U;
     }
 
-    if ((addr == 0xC9) && (gm_hw == GM_CAM)) {
-      brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
+    if (addr == 0xC9) {
+      acc_main_on = GET_BIT(to_push, 29U) != 0U;
     }
 
     if (addr == 0x1C4) {
@@ -117,10 +122,6 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
   }
 
-  // main_on for AOL
-  if (addr == 0xC9U) {
-    acc_main_on = (GET_BYTE(to_push, 3) & 0x20U) != 0U;
-  }
 }
 
 static bool gm_tx_hook(const CANPacket_t *to_send) {
@@ -242,6 +243,7 @@ static safety_config gm_init(uint16_t param) {
   const uint16_t GM_PARAM_EV = 64;
   const uint16_t GM_PARAM_HW_SDGM = 128;
   const uint16_t GM_PARAM_ASCM_INT = 256;
+  const uint16_t GM_PARAM_FORCE_BRAKE_C9 = 512;
 
   // common safety checks assume unscaled integer values
   static const int GM_GAS_TO_CAN = 8;  // 1 / 0.125
@@ -339,6 +341,7 @@ static safety_config gm_init(uint16_t param) {
   gm_pcm_cruise = (((gm_hw == GM_CAM) || (gm_hw == GM_SDGM)) && !gm_cam_long && !gm_force_ascm && !gm_pedal_long);
   gm_has_acc = !GET_FLAG(param, GM_PARAM_NO_ACC);
   enable_gas_interceptor = GET_FLAG(param, GM_PARAM_PEDAL_INTERCEPTOR);
+  gm_force_brake_c9 = GET_FLAG(param, GM_PARAM_FORCE_BRAKE_C9);
 
   safety_config ret = BUILD_SAFETY_CFG(gm_rx_checks, GM_ASCM_TX_MSGS);
   if (gm_hw == GM_CAM) {

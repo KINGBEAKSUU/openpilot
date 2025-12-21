@@ -211,7 +211,7 @@ class CarController(CarControllerBase):
             at_full_stop = at_full_stop and stopping
             friction_brake_bus = CanBus.POWERTRAIN
             if self.CP.carFingerprint in SDGM_CAR:
-              friction_brake_bus = CanBus.CHASSIS
+              friction_brake_bus = CanBus.CAMERA
 
           if self.CP.autoResumeSng:
             resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
@@ -558,7 +558,7 @@ class CarController(CarControllerBase):
     can_sends.append(gmcan.create_buttons(self.packer_pt, bus, rc, cruise_btn))
 
   def brake_strength(self) -> float:
-    if self.CP.carFingerprint in EV_CAR:
-      return 0.5
+    if self.CP.carFingerprint in EV_CAR or self.CP.carFingerprint in SDGM_CAR:
+      return 0.4
     else:
       return 0.7

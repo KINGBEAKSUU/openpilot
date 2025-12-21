@@ -124,6 +124,8 @@ def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_s
     #  mode = 0xb
 
   apply_brake = max(0, min(0x7FF, apply_brake))
+  if CP.carFingerprint in SDGM_CAR:
+    apply_brake = min(apply_brake, 400)
   brake = (0x1000 - apply_brake) & 0xfff
   rc = int(idx) & 0x3  # 2비트 롤링카운터
   checksum = (0x10000 - (mode << 12) - brake - rc) & 0xffff

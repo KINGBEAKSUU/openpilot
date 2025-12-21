@@ -82,11 +82,13 @@ class GMSafetyFlags(IntFlag):
   EV = 64
   HW_SDGM = 128;
   ASCM_INT = 256;
+  FORCE_BRAKE_C9 = 512
 
 class GMFlags(IntFlag):
   PEDAL_LONG = 1
   NO_ACCELERATOR_POS_MSG = 2
   TPMS_MSG = 4
+  FORCE_BRAKE_C9 = 16
 
 @dataclass
 class GMCarDocs(CarDocs):
