@@ -96,7 +96,10 @@ class GMCarDocs(CarDocs):
 
   def init_make(self, CP: CarParams):
     if CP.networkLocation == CarParams.NetworkLocation.fwdCamera:
-      self.car_parts = CarParts.common([CarHarness.gm])
+      if CP.carFingerprint in SDGM_CAR:
+        self.car_parts = CarParts.common([CarHarness.gmsdgm])
+      else:
+        self.car_parts = CarParts.common([CarHarness.gm])
     else:
       self.car_parts = CarParts.common([CarHarness.obd_ii])
 

@@ -95,7 +95,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       if (addr == 0xBE) {
         brake |= GET_BYTE(to_push, 1) >= 8U;
       }
-      if (addr == 0xC9) {
+      if ((addr == 0xC9) && gm_force_brake_c9) {
         brake |= GET_BIT(to_push, 40U) != 0U;
       }
       brake_pressed = brake;
