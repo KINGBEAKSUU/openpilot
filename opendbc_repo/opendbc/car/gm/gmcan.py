@@ -1,6 +1,6 @@
 ﻿from opendbc.car import DT_CTRL
 from opendbc.car.can_definitions import CanData
-from opendbc.car.gm.values import CAR, CruiseButtons, CanBus, CAMERA_ACC_CAR
+from opendbc.car.gm.values import CAR, CruiseButtons, CanBus, CAMERA_ACC_CAR, SDGM_CAR
 from opendbc.car.common.conversions import Conversions as CV
 
 # GM: AutoResume: brake signal to CAN
