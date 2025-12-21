@@ -76,8 +76,8 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, 
   # resume_pulse는 활성 상태에서만
   if enabled and resume_pulse > 0:
     throttle = resume_pulse
-  # Trailblazer만 disable 프레임 정리
-  if CP.carFingerprint == CAR.CHEVROLET_TRAILBLAZER:
+  # Trailblazer & SDGM_CAR만 disable 프레임 정리
+  if CP.carFingerprint in SDGM_CAR or CP.carFingerprint == CAR.CHEVROLET_TRAILBLAZER:
     if not enabled:  # DBC: (0.125, -22534) -> raw=0 중립
       throttle = -22534
       at_full_stop = 0

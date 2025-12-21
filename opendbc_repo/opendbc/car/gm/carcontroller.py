@@ -449,15 +449,18 @@ class CarController(CarControllerBase):
             self.autoCruise_activate = False
 
           # Kans: 실제 가스 송신 (언덕/평지 펄스 + 정상 가스)
+          sdgm = self.CP.carFingerprint in SDGM_CAR
+          # SDGM: cruiseState.enabled 전에는 절대 apply=1로 보내지 않음
+          gas_enabled = acc_engaged and (not sdgm or CS.out.cruiseState.enabled)
           send_gas = self.apply_gas
           if resume_active:
             send_gas = resume_pulse
             at_full_stop = False
             acc_engaged = True
-            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=resume_pulse))
+            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, gas_enabled, at_full_stop, self.CP, resume_pulse=resume_pulse))
           else:
             # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
-            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=resume_pulse))
+            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, gas_enabled, at_full_stop, self.CP, resume_pulse=resume_pulse))
 
           # Kans: 정규 브레이크 로직
           if not friction_sent_this_tick:
