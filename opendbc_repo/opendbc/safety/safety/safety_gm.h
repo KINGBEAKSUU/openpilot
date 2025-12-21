@@ -135,6 +135,11 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
     }
   }
 
+  // main_on for AOL
+  if (addr == 0xC9U) {
+    acc_main_on = GET_BIT(to_push, 29U) != 0U;
+  }
+
 }
 
 static bool gm_tx_hook(const CANPacket_t *to_send) {
