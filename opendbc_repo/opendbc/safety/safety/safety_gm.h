@@ -84,12 +84,25 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if ((addr == 0xC9) && gm_force_brake_c9) {
-      brake_pressed = GET_BIT(to_push, 40U) != 0U;
-    } else if ((addr == 0xBE) && ((gm_hw == GM_ASCM) || (gm_hw == GM_SDGM))) {
-      brake_pressed = GET_BYTE(to_push, 1) >= 8U;
-    } else if ((addr == 0xC9) && (gm_hw == GM_CAM)) {
-      brake_pressed = GET_BIT(to_push, 40U) != 0U;
+    if (gm_hw == GM_ASCM) {
+      // VOLT
+      if (addr == 0xBE) {
+        brake_pressed = GET_BYTE(to_push, 1) >= 8U;
+      }
+    } else if (gm_hw == GM_SDGM) {
+      // New MALIBU
+      bool brake = false;
+      if (addr == 0xBE) {
+        brake |= GET_BYTE(to_push, 1) >= 8U;
+      }
+      if (addr == 0xC9) {
+        brake |= GET_BIT(to_push, 40U) != 0U;
+      }
+      brake_pressed = brake;
+    } else if (gm_hw == GM_CAM) {
+      if (addr == 0xC9) {
+        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
+      }
     }
 
     if (addr == 0xC9) {
