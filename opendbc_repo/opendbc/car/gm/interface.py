@@ -118,7 +118,7 @@ class CarInterface(CarInterfaceBase):
 
     if candidate in (CAMERA_ACC_CAR | SDGM_CAR | ASCM_INT):
       ret.alphaLongitudinalAvailable = candidate not in (ASCM_INT | SDGM_CAR) \
-             or 0x2FF in fingerprint[CanBus.POWERTRAIN]
+             or 0x2FF in fingerprint[CanBus.CAMERA]
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = 0x460 not in fingerprint[CanBus.OBSTACLE]
       ret.pcmCruise = True

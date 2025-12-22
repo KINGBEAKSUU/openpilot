@@ -323,7 +323,7 @@ static safety_config gm_init(uint16_t param) {
   static RxCheck gm_sdgm_rx_checks[] = {
     GM_COMMON_RX_CHECKS
     GM_ACC_RX_CHECKS
-    {.msg = {{0x2FF, 0, 4, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
+    {.msg = {{0x2FF, 2, 4, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},
   };
 
   static const CanMsg GM_CAM_TX_MSGS[] = {{0x180, 0, 4}, {0x200, 0, 6}, {0x1E1, 0, 7},  // pt bus
