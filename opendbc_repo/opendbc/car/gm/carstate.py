@@ -262,9 +262,12 @@ class CarState(CarStateBase):
 
     ret.vCluRatio = 1.0 if self.CP.carFingerprint in EV_CAR else 0.96
 
-    # Kans: alpha long
-    alpha_long_avail = cam_cp.vl["SDGM_ALPHA_LONG"]["AlphaLongAvailable"] == 1
-    self.use_alpha_long = bool(alpha_long_avail)
+    # Kans: alpha long(SDGM)
+    if self.CP.carFingerprint in SDGM_CAR:
+      alpha_long_avail = cam_cp.vl["SDGM_ALPHA_LONG"]["AlphaLongAvailable"] == 1
+      self.use_alpha_long = bool(alpha_long_avail)
+    else:
+      self.use_alpha_long = False
 
     # Don't add event if transitioning from INIT, unless it's to an actual button
     if self.cruise_buttons != CruiseButtons.UNPRESS or prev_cruise_buttons != CruiseButtons.INIT:
@@ -295,13 +298,18 @@ class CarState(CarStateBase):
         ("EBCMRegenPaddle", 50),
         ("EVDriveMode", float('nan')),
       ]
+    cam_messages = []
+    if CP.carFingerprint in SDGM_CAR:
+      cam_messages += [
+        ("SDGM_ALPHA_LONG", 52),
+      ]
     loopback_messages = [
       ("ASCMLKASteeringCmd", float('nan')),
     ]
 
     return {
       Bus.pt: CANParser(DBC[CP.carFingerprint][Bus.pt], pt_messages, 0),
-      Bus.cam: CANParser(DBC[CP.carFingerprint][Bus.pt], [], 2),
+      Bus.cam: CANParser(DBC[CP.carFingerprint][Bus.pt], cam_messages, 2),
       Bus.loopback: CANParser(DBC[CP.carFingerprint][Bus.pt], loopback_messages, 128),
     }
 
