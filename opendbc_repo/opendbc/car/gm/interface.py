@@ -128,11 +128,11 @@ class CarInterface(CarInterfaceBase):
         ret.alphaLongitudinalAvailable = 0x2FF in fingerprint[CanBus.CAMERA]
         # SDGM은 항상 오파롱 사용
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_SDGM.value
-        ret.alphaLongitudinalAvailable = True
-        ret.pcmCruise = False
-        ret.openpilotLongitudinalControl = True
-        # SDGM + CAM_LONG 경로
-        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
+        if ret.alphaLongitudinalAvailable and alpha_long:
+          ret.pcmCruise = False
+          ret.openpilotLongitudinalControl = True
+          # SDGM + CAM_LONG 경로
+          ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
         ret.minEnableSpeed = 0.
         ret.minSteerSpeed = 7 * CV.MPH_TO_MS
         # BE(0xBE)가 없는 SDGM에서만 C9 브레이크 강제

@@ -124,10 +124,12 @@ class GMASCMPlatformConfig(GMPlatformConfig):
 
 @dataclass
 class GMSDGMPlatformConfig(GMPlatformConfig):
-  def init(self):
-    # SDGM is supported, but due to a janky install and hardware configuration, we are not showing in the car docs
-    #self.car_docs = []
-    pass
+  dbc_dict: DbcDict = field(default_factory=lambda: {
+    Bus.pt: 'gm_global_a_powertrain_malibu',
+    Bus.radar: 'gm_global_a_object',
+    Bus.chassis: 'gm_global_a_chassis',
+  })
+
 
 class CAR(Platforms):
   HOLDEN_ASTRA = GMASCMPlatformConfig(
@@ -150,7 +152,7 @@ class CAR(Platforms):
     [GMCarDocs("Chevrolet Malibu Premier 2017")],
     GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
-  CHEVROLET_MALIBU_SASCM = GMPlatformConfig(
+  CHEVROLET_MALIBU_SASCM = GMSDGMPlatformConfig(
     [GMCarDocs("Chevrolet Malibu 2019 SAscm")],
     GMCarSpecs(mass=1496, wheelbase=2.83, steerRatio=15.8, centerToFrontRatio=0.4),
   )
