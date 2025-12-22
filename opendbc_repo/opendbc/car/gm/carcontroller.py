@@ -573,7 +573,14 @@ class CarController(CarControllerBase):
       rc = self.btn_rc_pt
     else:
       raise ValueError(f"Unsupported bus: {bus}")
-    can_sends.append(gmcan.create_buttons(self.packer_pt, bus, rc, cruise_btn))
+
+    # 차종별 버튼 패킹
+    if self.CP.carFingerprint == CAR.CHEVROLET_MALIBU_SASCM:
+      msg = gmcan.create_buttons_sdgm_malibu(self.packer, bus, rc, cruise_btn)
+    else:
+      msg = gmcan.create_buttons(self.packer, bus, rc, cruise_btn)
+
+    can_sends.append(msg)
 
   def brake_strength(self) -> float:
     if self.CP.carFingerprint in EV_CAR or self.CP.carFingerprint in SDGM_CAR:
