@@ -555,9 +555,9 @@ class CarController(CarControllerBase):
   def send_btn(self, CS, can_sends, cruise_btn, bus=None):
     if bus is None:
       if self.CP.carFingerprint in SDGM_CAR:
+        bus = CanBus.CAMERA
+      elif self.CP.networkLocation == NetworkLocation.fwdCamera:
         bus = CanBus.POWERTRAIN
-      #elif self.CP.networkLocation == NetworkLocation.fwdCamera and self.CP.carFingerprint not in CC_ONLY_CAR:
-      #  bus = CanBus.POWERTRAIN
       else:
         bus = CanBus.POWERTRAIN
 
