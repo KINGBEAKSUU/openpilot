@@ -117,14 +117,15 @@ class CarInterface(CarInterfaceBase):
     ret.longitudinalTuning.kiBP = [0.]
 
     if candidate in (CAMERA_ACC_CAR | SDGM_CAR | ASCM_INT):
-      ret.alphaLongitudinalAvailable = candidate not in (ASCM_INT | SDGM_CAR) \
-             or 0x2FF in fingerprint[CanBus.CAMERA]
+      ret.alphaLongitudinalAvailable = candidate not in (ASCM_INT | SDGM_CAR)
       ret.networkLocation = NetworkLocation.fwdCamera
       ret.radarUnavailable = 0x460 not in fingerprint[CanBus.OBSTACLE]
       ret.pcmCruise = True
       ret.minEnableSpeed = -1 if candidate in SDGM_CAR else 5 * CV.KPH_TO_MS
       ret.minSteerSpeed = 10 * CV.KPH_TO_MS
       if candidate in SDGM_CAR:
+        # Kans: SDGM은 0x2FF로 알파롱컨 사용
+        ret.alphaLongitudinalAvailable = 0x2FF in fingerprint[CanBus.CAMERA]
         # SDGM은 항상 오파롱 사용
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_SDGM.value
         ret.alphaLongitudinalAvailable = True

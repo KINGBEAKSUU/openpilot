@@ -47,6 +47,7 @@ class CarState(CarStateBase):
     self.cruiseMain_on = False
     # Kans:
     self.driverBrake = False
+    self.use_alpha_long = False
 
     # Kans: TPMS
     self.KPA_TO_PSI = 0.1450377377
@@ -260,6 +261,10 @@ class CarState(CarStateBase):
     ret.accStatus = int(acc_status)
 
     ret.vCluRatio = 1.0 if self.CP.carFingerprint in EV_CAR else 0.96
+
+    # Kans: alpha long
+    alpha_long_avail = cam_cp.vl["SDGM_ALPHA_LONG"]["AlphaLongAvailable"] == 1
+    self.use_alpha_long = bool(alpha_long_avail)
 
     # Don't add event if transitioning from INIT, unless it's to an actual button
     if self.cruise_buttons != CruiseButtons.UNPRESS or prev_cruise_buttons != CruiseButtons.INIT:

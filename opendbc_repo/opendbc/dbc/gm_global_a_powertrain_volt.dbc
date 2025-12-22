@@ -208,6 +208,9 @@ BO_ 717 ASCM_2CD: 5 K124_ASCM
 BO_ 761 BRAKE_RELATED_2: 7 XXX
  SG_ UserBrakePressure2 : 47|9@0+ (1,0) [0|511] "" XXX
 
+BO_ 767 SDGM_ALPHA_LONG: 4 XXX
+ SG_ AlphaLongAvailable : 0|1@0+ (1,0) [0|1] "" XXX
+
 BO_ 789 EBCMFrictionBrakeCmd: 5 K124_ASCM
  SG_ RollingCounter : 33|2@0+ (1,0) [0|0] ""  NEO
  SG_ FrictionBrakeMode : 7|4@0+ (1,0) [0|0] ""  NEO
