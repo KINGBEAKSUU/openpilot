@@ -144,14 +144,13 @@ BO_ 452 AcceleratorPedal2: 8 XXX
  SG_ AcceleratorPedal2 : 47|8@0+ (1,0) [0|0] ""  NEO
 
 BO_ 481 ASCMSteeringButton: 7 K124_ASCM
- SG_ DistanceButton : 22|1@0+ (1,0) [0|0] ""  NEO
- SG_ LKAButton : 23|1@0+ (1,0) [0|0] ""  NEO
- SG_ ACCAlwaysOne : 24|1@0+ (1,0) [0|1] "" XXX
- SG_ DriveModeButton : 39|1@0+ (1,0) [0|1] "" XXX
- SG_ RollingCounter : 40|2@0+ (1,0) [0|3] "" NEO
- SG_ RollingCounterDup : 42|2@0+ (1,0) [0|3] "" NEO
- SG_ ACCButtons : 44|4@0+ (1,0) [0|15] "" NEO
- SG_ SteeringButtonChecksum : 48|8@0+ (1,0) [0|255] "" NEO
+ SG_ DistanceButton : 22|1@0+ (1,0) [0|1] ""  NEO
+ SG_ LKAButton : 23|1@0+ (1,0) [0|1] ""  NEO
+ SG_ ACCAlwaysOne : 24|1@0+ (1,0) [0|1] ""  XXX
+ SG_ ACCButtons : 46|3@0+ (1,0) [0|7] ""  NEO
+ SG_ DriveModeButton : 39|1@0+ (1,0) [0|1] ""  XXX
+ SG_ RollingCounter : 49|2@0+ (1,0) [0|3] ""  NEO
+ SG_ SteeringButtonChecksum : 55|6@0+ (1,0) [0|63] ""  NEO
 
 BO_ 485 PSCMSteeringAngle: 8 K43_PSCM
  SG_ SteeringWheelAngle : 15|16@0- (0.0625,0) [-2047|2047] "deg"  NEO
@@ -198,11 +197,11 @@ BO_ 711 BECMBatteryVoltageCurrent: 6 K17_EBCM
 
 BO_ 715 ASCMGasRegenCmd: 8 K124_ASCM
  SG_ GasRegenAccType : 15|2@0+ (1,0) [0|3] ""  NEO
- SG_ GasRegenChecksum : 56|8@0+ (1,0) [0|255] ""  NEO
- SG_ GasRegenFullStopActive : 13|1@0+ (1,0) [0|0] ""  NEO
- SG_ GasRegenCmdActive : 0|1@0+ (1,0) [0|0] ""  NEO
- SG_ RollingCounter : 6|2@0+ (1,0) [0|3] ""  NEO
+ SG_ GasRegenFullStopActive : 13|1@0+ (1,0) [0|1] ""  NEO
+ SG_ GasRegenCmdActive : 0|1@0+ (1,0) [0|1] ""  NEO
+ SG_ RollingCounter : 7|2@0+ (1,0) [0|3] ""  NEO
  SG_ GasRegenCmd : 10|19@0+ (0.125,-22534) [-22534|43001.875] "Nm"  NEO
+ SG_ GasRegenChecksum : 63|8@0+ (1,0) [0|255] ""  NEO
 
 BO_ 717 ASCM_2CD: 5 K124_ASCM
 
@@ -214,7 +213,7 @@ BO_ 767 SDGM_ALPHA_LONG: 4 XXX
  SG_ SDGM_LongAvail_Byte0 : 0|8@0+ (1,0) [0|255] "" XXX
 
 BO_ 789 EBCMFrictionBrakeCmd: 5 K124_ASCM
- SG_ RollingCounter : 32|2@0+ (1,0) [0|3] ""  NEO
+ SG_ RollingCounter : 33|2@0+ (1,0) [0|3] ""  NEO
  SG_ FrictionBrakeMode : 7|4@0+ (1,0) [0|15] ""  NEO
  SG_ FrictionBrakeChecksum : 23|16@0+ (1,0) [0|65535] ""  NEO
  SG_ FrictionBrakeCmd : 3|12@0- (1,0) [0|4095] ""  NEO
