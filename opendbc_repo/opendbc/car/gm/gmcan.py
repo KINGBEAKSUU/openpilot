@@ -118,24 +118,16 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, 
     "GasRegenChecksum": 0,
   }
 
-  # checksum 계산을 위해 0으로 한 번 패킹 (공용 방식 유지)
-  msg = packer.make_can_msg("ASCMGasRegenCmd", bus, values)
-  dat = msg[1]
+  dat = packer.make_can_msg("ASCMGasRegenCmd", bus, values)[1]
 
-  checksum8 = (0x100 - dat[3] - rc) & 0xFF
-
-  # Malibu(SDGM): 체크섬 필드는 8-bit 하나만 사용 (공용과 다른 부분 = 여기뿐)
   if CP.carFingerprint == CAR.CHEVROLET_MALIBU_SASCM:
-    values["GasRegenChecksum"] = checksum8
-    return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
+    values["GasRegenChecksum"] = (0x100 - dat[3] - rc) & 0xFF
+  else:
+    values["GasRegenChecksum"] = (((1 - enabled) << 24) | \
+                                 (((0xFF - dat[1]) & 0xFF) << 16) | \
+                                 (((0xFF - dat[2]) & 0xFF) << 8) | \
+                                 ((0x100 - dat[3] - rc) & 0xFF)) & 0x1FFFFFF
 
-  # Others (existing 25-bit scheme 유지)
-  checks = ((1 - enabled) << 24) | \
-           (((0xFF - dat[1]) & 0xFF) << 16) | \
-           (((0xFF - dat[2]) & 0xFF) << 8) | \
-           checksum8
-
-  values["GasRegenChecksum"] = checks & 0x1FFFFFF
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
 
 def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_stop, at_full_stop, CP):
