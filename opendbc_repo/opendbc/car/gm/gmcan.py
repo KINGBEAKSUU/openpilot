@@ -92,10 +92,12 @@ def create_adas_keepalive(bus):
 
 def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, CP, resume_pulse: int = 0):
   enabled = 1 if enabled else 0
-  idx = int(idx) & 0x3  # 2-bit rolling counter
+  rc = int(idx) & 0x3  # 2-bit rolling counter
+
   # resume_pulse는 활성 상태에서만
   if enabled and resume_pulse > 0:
     throttle = resume_pulse
+
   # Trailblazer & SDGM_CAR만 disable 프레임 정리
   if CP.carFingerprint in SDGM_CAR or CP.carFingerprint == CAR.CHEVROLET_TRAILBLAZER:
     if not enabled:  # DBC: (0.125, -22534) -> raw=0 중립
@@ -109,25 +111,29 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, 
 
   values = {
     "GasRegenCmdActive": enabled,
-    "RollingCounter": idx,
+    "RollingCounter": rc,
     "GasRegenCmd": float(throttle),
     "GasRegenFullStopActive": int(bool(at_full_stop)),
     "GasRegenAccType": acc_type,
     "GasRegenChecksum": 0,
   }
 
-  dat = packer.make_can_msg("ASCMGasRegenCmd", bus, values)[1]
+  # checksum 계산을 위해 0으로 한 번 패킹 (공용 방식 유지)
+  msg = packer.make_can_msg("ASCMGasRegenCmd", bus, values)
+  dat = msg[1]
 
-  # Malibu(SDGM): checksum = last byte only (8-bit): (0x100 - byte3 - rc) & 0xFF
+  checksum8 = (0x100 - dat[3] - rc) & 0xFF
+
+  # Malibu(SDGM): 체크섬 필드는 8-bit 하나만 사용 (공용과 다른 부분 = 여기뿐)
   if CP.carFingerprint == CAR.CHEVROLET_MALIBU_SASCM:
-    values["GasRegenChecksum"] = (0x100 - dat[3] - idx) & 0xFF
+    values["GasRegenChecksum"] = checksum8
     return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
 
   # Others (existing 25-bit scheme 유지)
   checks = ((1 - enabled) << 24) | \
-           (((0xff - dat[1]) & 0xff) << 16) | \
-           (((0xff - dat[2]) & 0xff) << 8) | \
-           ((0x100 - dat[3] - idx) & 0xff)
+           (((0xFF - dat[1]) & 0xFF) << 16) | \
+           (((0xFF - dat[2]) & 0xFF) << 8) | \
+           checksum8
 
   values["GasRegenChecksum"] = checks & 0x1FFFFFF
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
