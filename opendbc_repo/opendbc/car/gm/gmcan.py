@@ -41,7 +41,7 @@ def create_buttons_sdgm_malibu(packer, bus, idx, button):
   rc = int(idx) & 0x3
 
   if button <= 0:
-    button = 1
+    button = 1  # "None"
 
   values = {
     "ACCButtons": int(button),
@@ -52,11 +52,10 @@ def create_buttons_sdgm_malibu(packer, bus, idx, button):
     "DriveModeButton": 0,
   }
 
-  checksum8 = (0xFF - (rc * 0x11) - ((int(button) - 1) << 4)) & 0xFF
-  checksum6 = (checksum8 >> 2) & 0x3F
-  values["SteeringButtonChecksum"] = checksum6
+  values["SteeringButtonChecksum"] = (((0xDC - (int(button) << 4) + (rc * 0x11)) & 0xFF) >> 2) & 0x3F
 
   return packer.make_can_msg("ASCMSteeringButton", bus, values)
+
 
 def create_pscm_status(packer, bus, pscm_status):
   values = {s: pscm_status[s] for s in [
