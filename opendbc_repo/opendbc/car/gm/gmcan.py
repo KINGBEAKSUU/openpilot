@@ -118,12 +118,18 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, 
 
   dat = packer.make_can_msg("ASCMGasRegenCmd", bus, values)[1]
 
+  # Malibu(SDGM): checksum = last byte only (8-bit): (0x100 - byte3 - rc) & 0xFF
+  if CP.carFingerprint == CAR.CHEVROLET_MALIBU_SASCM:
+    values["GasRegenChecksum"] = (0x100 - dat[3] - idx) & 0xFF
+    return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
+
+  # Others (existing 25-bit scheme 유지)
   checks = ((1 - enabled) << 24) | \
            (((0xff - dat[1]) & 0xff) << 16) | \
            (((0xff - dat[2]) & 0xff) << 8) | \
            ((0x100 - dat[3] - idx) & 0xff)
 
-  values["GasRegenChecksum"] = checks & 0x1FFFFFF  # 25-bit mask
+  values["GasRegenChecksum"] = checks & 0x1FFFFFF
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
 
 def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_stop, at_full_stop, CP):
