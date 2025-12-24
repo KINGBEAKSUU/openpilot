@@ -4,10 +4,14 @@ from opendbc.car.gm.values import CAR, CruiseButtons, CanBus, CAMERA_ACC_CAR, SD
 from opendbc.car.common.conversions import Conversions as CV
 
 # GM: AutoResume: brake signal to CAN
-def create_brake_command(packer, bus, apply_brake, idx):
+def create_brake_command(packer, bus, apply_brake, idx, gas_regen_active: bool = False):
   rc = int(idx) & 0x3  # 2비트 롤링카운터
-  mode = 0xA if apply_brake > 0 else 0x1
-  apply_brake = max(0, min(0xFFF, apply_brake))
+  if apply_brake > 0 and not gas_regen_active:
+    mode = 0xA
+  else:
+    mode = 0x1
+
+  apply_brake = max(0, min(0x7FF, int(apply_brake)))
   brake = (0x1000 - apply_brake) & 0xFFF
   checksum = (0x10000 - (mode << 12) - brake - rc) & 0xFFFF
 
@@ -15,7 +19,7 @@ def create_brake_command(packer, bus, apply_brake, idx):
     "RollingCounter": rc,
     "FrictionBrakeMode": mode,
     "FrictionBrakeChecksum": checksum,
-    "FrictionBrakeCmd": brake,
+    "FrictionBrakeCmd": brake,   # unsigned/raw DBC
   }
 
   return packer.make_can_msg("EBCMFrictionBrakeCmd", bus, values)
@@ -129,7 +133,8 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, 
 
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
 
-def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_stop, at_full_stop, CP):
+def create_friction_brake_command(packer, bus, apply_brake, idx, enabled,
+                                  near_stop, at_full_stop, CP, gas_regen_active: bool = False):
   mode = 0x1
 
   # TODO: Understand this better. Volts and ICE Camera ACC cars are 0x1 when enabled with no brake
@@ -137,25 +142,30 @@ def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_s
     mode = 0x9
 
   if apply_brake > 0:
-    mode = 0xa
+    mode = 0xA
     if at_full_stop:
-      mode = 0xd
+      mode = 0xD
 
     # TODO: this is to have GM bringing the car to complete stop,
     # but currently it conflicts with OP controls, so turned off. Not set by all cars
     #elif near_stop:
-    #  mode = 0xb
+    #  mode = 0xB
 
-  apply_brake = max(0, min(0x7FF, apply_brake))
-  brake = (0x1000 - apply_brake) & 0xfff
+    # Kans: 가스리젠(2CB)이 살아있으면 0xA를 강등(급제동 완화)
+    # full stop(0xD)는 예외로 유지
+    if gas_regen_active and not at_full_stop:
+      mode = 0x1
+
+  apply_brake = max(0, min(0x7FF, int(apply_brake)))
+  brake = (0x1000 - apply_brake) & 0xFFF
   rc = int(idx) & 0x3  # 2비트 롤링카운터
-  checksum = (0x10000 - (mode << 12) - brake - rc) & 0xffff
+  checksum = (0x10000 - (mode << 12) - brake - rc) & 0xFFFF
 
   values = {
     "RollingCounter": rc,
     "FrictionBrakeMode": mode,
     "FrictionBrakeChecksum": checksum,
-    "FrictionBrakeCmd": -apply_brake
+    "FrictionBrakeCmd": brake,   # unsigned/raw DBC
   }
 
   return packer.make_can_msg("EBCMFrictionBrakeCmd", bus, values)

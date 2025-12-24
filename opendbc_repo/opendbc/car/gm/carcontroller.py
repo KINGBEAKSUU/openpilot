@@ -409,7 +409,7 @@ class CarController(CarControllerBase):
               brk_idx = self._brk_rc
               apply_brake = self.brake_input(-self.brake_strength())
               # 브레이크신호 전송(롱컨 임시해제)
-              can_sends.append(gmcan.create_brake_command(self.packer_ch, friction_brake_bus, apply_brake, brk_idx))
+              can_sends.append(gmcan.create_brake_command(self.packer_ch, friction_brake_bus, apply_brake, brk_idx, gas_regen_active=bool(acc_engaged)))
               Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True)  # cruise.py에 브레이크 ON신호 전달
               self.activateCruise_after_brake = True  # 브레이크신호 초기화
               friction_sent_this_tick = True
@@ -481,7 +481,7 @@ class CarController(CarControllerBase):
             if not driver_brake:
               self._brk_rc = (self._brk_rc + 1) & 0x3
               brk_idx_base = self._brk_rc
-              can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
+              can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP, gas_regen_active=bool(acc_engaged)))
               friction_sent_this_tick = True
 
           # Send dashboard UI commands (ACC status)
@@ -544,13 +544,12 @@ class CarController(CarControllerBase):
   # GM: AutoResume
   def brake_input(self, brake_force):
     MAX_BRAKE = 400
-    ZERO_GAS = 0.0
 
     if brake_force > 0.0:
       raise ValueError("brake_force는 0.0이하라야 됨.")
 
-    scaled_brake = max(0, min(MAX_BRAKE, int(brake_force * -100)))  # -를 +로 변환
-    return -scaled_brake
+    scaled = int(-brake_force * 100)
+    return max(0, min(MAX_BRAKE, scaled))
 
   def send_btn(self, CS, can_sends, cruise_btn, bus=None):
     if bus is None:

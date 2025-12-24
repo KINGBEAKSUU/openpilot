@@ -134,7 +134,10 @@ class CarState(CarStateBase):
     else:
       ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL2"]["PRNDL2"], None))
 
-    ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
+    if self.CP.flags & GMFlags.NO_ACCELERATOR_POS_MSG.value:
+      ret.brake = pt_cp.vl["EBCMBrakePedalPosition"]["BrakePedalPosition"] / 0xd0
+    else:
+      ret.brake = pt_cp.vl["ECMAcceleratorPos"]["BrakePedalPos"]
     if self.CP.networkLocation == NetworkLocation.fwdCamera:
       ret.brakePressed = pt_cp.vl["ECMEngineStatus"]["BrakePressed"] != 0
     else:
@@ -195,7 +198,7 @@ class CarState(CarStateBase):
     if self.CP.enableGasInterceptorDEPRECATED:
       ret.gas = (pt_cp.vl["GAS_SENSOR"]["INTERCEPTOR_GAS"] + pt_cp.vl["GAS_SENSOR"]["INTERCEPTOR_GAS2"]) / 2.
       # Panda 515 threshold = 10.88. Set lower to avoid panda blocking messages and GasInterceptor faulting.
-      threshold = 23 if self.CP.carFingerprint in CAMERA_ACC_CAR else 4
+      threshold = 20 if self.CP.carFingerprint in CAMERA_ACC_CAR else 4
       ret.gasPressed = ret.gas > threshold
     else:
       ret.gas = pt_cp.vl["AcceleratorPedal2"]["AcceleratorPedal2"] / 254
