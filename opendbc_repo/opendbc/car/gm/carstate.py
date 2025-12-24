@@ -1,4 +1,5 @@
 ﻿import copy
+import time
 from opendbc.can import CANDefine, CANParser
 from cereal import car
 from openpilot.common.params import Params #kans
@@ -48,6 +49,8 @@ class CarState(CarStateBase):
     # Kans:
     self.driverBrake = False
     self.use_alpha_long = False
+    self._dbg_op_enable_time = None
+    self._dbg_op_printed = False
 
     # Kans: TPMS
     self.KPA_TO_PSI = 0.1450377377
@@ -271,6 +274,27 @@ class CarState(CarStateBase):
       self.use_alpha_long = bool(alpha_long_avail)
     else:
       self.use_alpha_long = False
+    # Kans: alpha long checker
+    enabled = bool(ret.cruiseState.enabled)
+    if enabled and self._dbg_op_enable_time is None:
+      self._dbg_op_enable_time = time.monotonic()
+
+    if (self._dbg_op_enable_time is not None and
+        not self._dbg_op_printed and
+        (time.monotonic() - self._dbg_op_enable_time) >= 60.0):
+
+      sp = self.CP.safetyConfigs[0].safetyParam
+      print(f"[GM IFACE @60s] fp={self.CP.carFingerprint} "
+            f"cruiseEnabled={int(ret.cruiseState.enabled)} "
+            f"pcmCruise={int(self.CP.pcmCruise)} "
+            f"opLong={int(self.CP.openpilotLongitudinalControl)} "
+            f"safetyParam=0x{sp:x}")
+
+      self._dbg_op_printed = True
+
+    if not enabled:
+      self._dbg_op_enable_time = None
+      self._dbg_op_printed = False
 
     # Don't add event if transitioning from INIT, unless it's to an actual button
     if self.cruise_buttons != CruiseButtons.UNPRESS or prev_cruise_buttons != CruiseButtons.INIT:
