@@ -223,7 +223,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 static int gm_fwd_hook(int bus_num, int addr) {
   int bus_fwd = -1;
 
-  if ((gm_hw == GM_CAM) || (gm_hw == GM_SDGM)) {
+  if (gm_hw == GM_CAM) {
     if (bus_num == 0) {
       // block PSCMStatus; forwarded through openpilot to hide an alert from the camera
       bool is_pscm_msg = (addr == 0x184);
@@ -342,7 +342,7 @@ static safety_config gm_init(uint16_t param) {
 
   gm_force_ascm = GET_FLAG(param, GM_PARAM_HW_ASCM_LONG);
 
-  if ((gm_hw == GM_ASCM) || gm_force_ascm || gm_ascm_int) {
+  if (gm_hw == GM_ASCM || gm_force_ascm || gm_ascm_int) {
     gm_long_limits = &GM_ASCM_LONG_LIMITS;
   } else if ((gm_hw == GM_CAM) || (gm_hw == GM_SDGM)) {
     gm_long_limits = &GM_CAM_LONG_LIMITS;
