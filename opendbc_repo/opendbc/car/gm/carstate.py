@@ -275,8 +275,8 @@ class CarState(CarStateBase):
     else:
       self.use_alpha_long = False
     # Kans: alpha long checker
-    enabled = bool(ret.cruiseState.enabled)
-    if enabled and self._dbg_op_enable_time is None:
+    _enabled = bool(ret.cruiseState.enabled)
+    if _enabled and self._dbg_op_enable_time is None:
       self._dbg_op_enable_time = time.monotonic()
 
     if (self._dbg_op_enable_time is not None and
