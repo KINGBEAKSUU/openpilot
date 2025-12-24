@@ -292,7 +292,7 @@ class CarState(CarStateBase):
 
       self._dbg_op_printed = True
 
-    if not enabled:
+    if not _enabled:
       self._dbg_op_enable_time = None
       self._dbg_op_printed = False
 
