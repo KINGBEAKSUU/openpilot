@@ -196,8 +196,8 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
   if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long)) {
-    // 기존VOLT(ASCM)에서 3-bit(0x7U)로 읽던 것을 Malibu(SDGM)와 동일하게 4-bit(0xFU)로 확장
-    int button = (GET_BYTE(to_send, 5) >> 4) & 0xFU;
+    // ACCButtons는 byte5의 하위 4bit(니블)에 존재 (VOLT/SDGM 공통)
+    int button = GET_BYTE(to_send, 5) & 0x0F;
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
     // For CC_LONG or PCM cruise vehicles, allow SET/RESUME when cruise is engaged
