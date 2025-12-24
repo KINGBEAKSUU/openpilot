@@ -328,7 +328,7 @@ class CarState(CarStateBase):
     cam_messages = []
     if CP.carFingerprint in SDGM_CAR:
       cam_messages += [
-        ("SDGM_ALPHA_LONG", 52),
+        ("SDGM_ALPHA_LONG", float('nan')),
       ]
     loopback_messages = [
       ("ASCMLKASteeringCmd", float('nan')),
