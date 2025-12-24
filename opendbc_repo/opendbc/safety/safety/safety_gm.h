@@ -206,7 +206,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     }
 
     if (!allowed_btn) {
-      tx = false;
+      //tx = false;
     }
   }
 
