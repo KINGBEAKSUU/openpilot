@@ -210,7 +210,7 @@ class CarController(CarControllerBase):
             at_full_stop = at_full_stop and stopping
             friction_brake_bus = CanBus.POWERTRAIN
             if self.CP.carFingerprint in SDGM_CAR:
-              friction_brake_bus = CanBus.CAMERA
+              friction_brake_bus = CanBus.CHASSIS
 
           if self.CP.autoResumeSng:
             resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
@@ -462,7 +462,7 @@ class CarController(CarControllerBase):
           if not friction_sent_this_tick:
             self._brk_rc = (self._brk_rc + 1) & 0x3
             brk_idx_base = self._brk_rc
-            can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
+            can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP, gas_regen_active=bool(acc_engaged)))
             friction_sent_this_tick = True
 
           # Send dashboard UI commands (ACC status)

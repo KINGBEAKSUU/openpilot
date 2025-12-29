@@ -27,8 +27,7 @@ def create_radar_can_parser(car_fingerprint):
                      ['TrkWidth'] * NUM_SLOTS + ['TrkObjectID'] * NUM_SLOTS,
                      [RADAR_HEADER_MSG] * 7 + radar_targets * 6, strict=True))
 
-  messages = list({(addr, 14) for (_, addr) in signals})
-
+  messages = list({(addr, 10) for (_, addr) in signals})  # 레이더 체크주기 14 -> 10으로 완화
   return CANParser(DBC[car_fingerprint][Bus.radar], messages, CanBus.OBSTACLE)
 
 
@@ -40,7 +39,7 @@ class RadarInterface(RadarInterfaceBase):
     self.rcp = None if CP.radarUnavailable else create_radar_can_parser(CP.carFingerprint)
 
     # 한 프레임이 완성되었다고 보는 트리거 메시지
-    self.trigger_msg = LAST_RADAR_MSG
+    self.trigger_msg = RADAR_HEADER_MSG  #LAST_RADAR_MSG
     self.updated_messages = set()
 
     # Kans

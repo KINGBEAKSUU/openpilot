@@ -99,6 +99,7 @@ class CarInterface(CarInterfaceBase):
     ret.autoResumeSng = False
     ret.enableBsm = 0x142 in fingerprint[CanBus.POWERTRAIN] or 0x142 in fingerprint[CanBus.CAMERA]
     ret.startAccel = 1.0
+    ret.radarTimeStep = 0.067
     ret.alternativeExperience = 0
 
     if PEDAL_MSG in fingerprint[0]:
@@ -133,7 +134,7 @@ class CarInterface(CarInterfaceBase):
           ret.openpilotLongitudinalControl = True
           # SDGM + CAM_LONG 경로
           ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
-        ret.minEnableSpeed = 0.
+        ret.minEnableSpeed = -1.
         ret.minSteerSpeed = 7 * CV.MPH_TO_MS
         # BE(0xBE)가 없는 SDGM에서만 C9 브레이크 강제
         if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
@@ -162,8 +163,7 @@ class CarInterface(CarInterfaceBase):
           ret.minSteerSpeed = 7 * CV.MPH_TO_MS
 
       # Tuning for alpha long
-      ret.longitudinalTuning.kiV = [1.0]
-
+      ret.longitudinalTuning.kiV = [0.0]
       ret.stoppingDecelRate = 1.0  # reach brake quickly after enabling
       ret.vEgoStopping = 0.25
       ret.vEgoStarting = 0.25
@@ -199,7 +199,6 @@ class CarInterface(CarInterfaceBase):
     ret.steerActuatorDelay = 0.1  # Default delay, not measured yet
 
     ret.steerLimitTimer = 0.4
-    ret.radarTimeStep = 0.0667  # GM radar runs at 15Hz instead of standard 20Hz
     ret.longitudinalActuatorDelay = 0.5  # large delay to initially start braking
 
     if candidate == CAR.CHEVROLET_VOLT:
