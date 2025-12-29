@@ -2,12 +2,11 @@ from openpilot.common.params import Params
 from openpilot.common.filter_simple import FirstOrderFilter
 
 import numpy as np
-import math
 from opendbc.can.packer import CANPacker
 from opendbc.car import Bus, DT_CTRL, apply_driver_steer_torque_limits, structs, create_gas_interceptor_command
 from opendbc.car.gm import gmcan
 from opendbc.car.common.conversions import Conversions as CV
-from opendbc.car.gm.values import DBC, CanBus, CarControllerParams, CruiseButtons, GMFlags, EV_CAR, AccState, CAR, CAMERA_ACC_CAR, SDGM_CAR, SASCM_CAR, ALT_ACCS
+from opendbc.car.gm.values import DBC, CanBus, CarControllerParams, CruiseButtons, GMFlags, EV_CAR, AccState, CAR, SDGM_CAR, ALT_ACCS
 from opendbc.car.interfaces import CarControllerBase
 from openpilot.selfdrive.controls.lib.drive_helpers import apply_deadzone
 from opendbc.car.vehicle_model import ACCELERATION_DUE_TO_GRAVITY
@@ -399,12 +398,7 @@ class CarController(CarControllerBase):
           elif auto_engage_enabled and actuators.longControlState == LongCtrlState.starting:
             # Kans: SNG AutoResume: 1st step: 브레이크 펄스 (ActivateCruiseAfterBrake 플래그 세팅)
             ready_brake = (self.resume_fault_guard == 0) or CS.out.cruiseState.enabled
-            # Kans: SDGM제어용 브레이크는 CS.driverBrake 사용
-            if self.CP.carFingerprint in SDGM_CAR:
-              driver_brake = CS.driverBrake
-            else:
-              driver_brake = CS.out.brakePressed
-            if CC.longActive and not driver_brake and not CS.out.brakePressed and not self.activateCruise_after_brake and not resume_active and ready_brake:
+            if CC.longActive and not CS.out.brakePressed and not self.activateCruise_after_brake and not resume_active and ready_brake:
               self._brk_rc = (self._brk_rc + 1) & 0x3
               brk_idx = self._brk_rc
               apply_brake = self.brake_input(-self.brake_strength())
@@ -454,35 +448,22 @@ class CarController(CarControllerBase):
             self.autoCruise_activate = False
 
           # Kans: 실제 가스 송신 (언덕/평지 펄스 + 정상 가스)
-          sdgm = self.CP.carFingerprint in SDGM_CAR
           send_gas = self.apply_gas
-          gas_enabled = acc_engaged  # SDGM에서도 기본은 acc_engaged로만 결정
-          # SDGM: cruiseState.enabled 전에도 Active는 유지하되, 토크는 비가속(중립)으로 고정
-          if sdgm and acc_engaged and not CS.out.cruiseState.enabled:
-            send_gas = -500  # SDGM inactive_gas에 맞춤(필요시 -500.0)
-            resume_active = False  # 이 구간에서는 펄스/리쥼 토크 금지
-            at_full_stop = False
           if resume_active:
             send_gas = resume_pulse
             at_full_stop = False
             acc_engaged = True
-            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, gas_enabled, at_full_stop, self.CP, resume_pulse=resume_pulse))
+            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=resume_pulse))
           else:
             # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
-            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, gas_enabled, at_full_stop, self.CP, resume_pulse=resume_pulse))
+            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=resume_pulse))
 
           # Kans: 정규 브레이크 로직
           if not friction_sent_this_tick:
-            if self.CP.carFingerprint in SDGM_CAR:
-              driver_brake = CS.driverBrake
-            else:
-              driver_brake = CS.out.brakePressed
-
-            if not driver_brake:
-              self._brk_rc = (self._brk_rc + 1) & 0x3
-              brk_idx_base = self._brk_rc
-              can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP, gas_regen_active=bool(acc_engaged)))
-              friction_sent_this_tick = True
+            self._brk_rc = (self._brk_rc + 1) & 0x3
+            brk_idx_base = self._brk_rc
+            can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
+            friction_sent_this_tick = True
 
           # Send dashboard UI commands (ACC status)
           send_fcw = hud_alert == VisualAlert.fcw
