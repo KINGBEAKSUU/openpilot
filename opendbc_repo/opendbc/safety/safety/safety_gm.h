@@ -195,15 +195,15 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   }
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
-  if ((addr == 0x1E1) && gm_pcm_cruise) {
-    // ACCButtons: byte5 low nibble (VOLT/SDGM 공통, payload로 확인됨)
+  if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long)) {
+    // ACCButtons는 byte5의 하위 4bit(니블)에 존재 (VOLT/SDGM 공통)
     int button = GET_BYTE(to_send, 5) & 0x0F;
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
-
-    // PCM cruise vehicles: allow SET/RESUME/UNPRESS only when cruise is engaged
-    allowed_btn |= cruise_engaged_prev &&
-                   (button == GM_BTN_SET || button == GM_BTN_RESUME || button == GM_BTN_UNPRESS);
+    // For CC_LONG or PCM cruise vehicles, allow SET/RESUME when cruise is engaged
+    if (gm_pcm_cruise) {
+      allowed_btn |= cruise_engaged_prev && (button == GM_BTN_SET || button == GM_BTN_RESUME || button == GM_BTN_UNPRESS);
+    }
 
     if (!allowed_btn) {
       tx = false;
