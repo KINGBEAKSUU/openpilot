@@ -100,7 +100,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
       brake_pressed = brake;
     } else if (gm_hw == GM_CAM) {
       if (addr == 0xC9) {
-        brake_pressed = (GET_BYTE(to_push, 5) & 0x01U) != 0U;
+        brake_pressed = GET_BIT(to_push, 40U) != 0U;
       }
     }
 
@@ -206,7 +206,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     }
 
     if (!allowed_btn) {
-      //tx = false;
+      tx = false;
     }
   }
 
@@ -223,7 +223,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 static int gm_fwd_hook(int bus_num, int addr) {
   int bus_fwd = -1;
 
-  if (gm_hw == GM_CAM) {
+  if ((gm_hw == GM_CAM) || (gm_hw == GM_SDGM)) {
     if (bus_num == 0) {
       // block PSCMStatus; forwarded through openpilot to hide an alert from the camera
       bool is_pscm_msg = (addr == 0x184);
