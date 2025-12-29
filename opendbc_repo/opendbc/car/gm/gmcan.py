@@ -26,19 +26,25 @@ def create_brake_command(packer, bus, apply_brake, idx, gas_regen_active: bool =
 
 def create_buttons(packer, bus, idx, button):
   rc = int(idx) & 0x3
+  btn = int(button) & 0xF  # 4-bit
+
   values = {
-    "ACCButtons": button,
+    "ACCButtons": btn,
     "RollingCounter": rc,
     "ACCAlwaysOne": 1,
     "DistanceButton": 0,
   }
 
-  checksum = 240 + int(values["ACCAlwaysOne"] * 0xf)
-  checksum += values["RollingCounter"] * (0x4ef if values["ACCAlwaysOne"] != 0 else 0x3f0)
-  checksum -= int(values["ACCButtons"] - 1) << 4  # 값이 0일 경우 문제 발생 가능성 있음
+  checksum = 240 + int(values["ACCAlwaysOne"] * 0xF)
+  checksum += values["RollingCounter"] * (0x4EF if values["ACCAlwaysOne"] != 0 else 0x3F0)
+
+  # button==0(UNPRESS)일 때 (-1<<4) 같은 부호 시프트가 나오지 않도록 4-bit wrap
+  checksum -= (((values["ACCButtons"] - 1) & 0xF) << 4)
+
   checksum -= 2 * values["DistanceButton"]
 
-  values["SteeringButtonChecksum"] = checksum
+  # DBC: SteeringButtonChecksum : 48|8  -> 8-bit로 확정
+  values["SteeringButtonChecksum"] = checksum & 0xFF
   return packer.make_can_msg("ASCMSteeringButton", bus, values)
 
 def create_buttons_sdgm_malibu(packer, bus, idx, button):
