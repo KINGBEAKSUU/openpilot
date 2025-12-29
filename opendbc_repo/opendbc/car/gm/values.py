@@ -124,11 +124,11 @@ class GMASCMPlatformConfig(GMPlatformConfig):
 
 @dataclass
 class GMSDGMPlatformConfig(GMPlatformConfig):
-  dbc_dict: DbcDict = field(default_factory=lambda: {
-    Bus.pt: 'gm_global_a_powertrain_malibu',
-    Bus.radar: 'gm_global_a_object',
-    Bus.chassis: 'gm_global_a_chassis',
-  })
+  def init(self):
+    # SDGM is supported, but due to a janky install and hardware configuration, we are not showing in the car docs
+    #self.car_docs = []
+    pass
+
 
 
 class CAR(Platforms):
