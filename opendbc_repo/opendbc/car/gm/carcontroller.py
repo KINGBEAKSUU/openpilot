@@ -397,8 +397,11 @@ class CarController(CarControllerBase):
 
           elif auto_engage_enabled and actuators.longControlState == LongCtrlState.starting:
             # Kans: SNG AutoResume: 1st step: 브레이크 펄스 (ActivateCruiseAfterBrake 플래그 세팅)
-            ready_brake = (self.resume_fault_guard == 0) or CS.out.cruiseState.enabled
-            if CC.longActive and not CS.out.brakePressed and not self.activateCruise_after_brake and not resume_active and ready_brake:
+            ready_brake = (self.resume_fault_guard == 0) # or CS.out.cruiseState.enabled
+            if (CC.longActive and not CS.out.brakePressed and \
+               not self.activateCruise_after_brake and \
+               not resume_active and ready_brake and \
+               not CS.out.cruiseState.enabled): # engage상황에서는 펄스 안보내기.
               self._brk_rc = (self._brk_rc + 1) & 0x3
               brk_idx = self._brk_rc
               apply_brake = self.brake_input(-self.brake_strength())
