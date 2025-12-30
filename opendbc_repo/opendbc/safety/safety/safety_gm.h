@@ -64,9 +64,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
     if ((addr == 0x1E1) && (!gm_pcm_cruise)) {
-      // 상위에서 하위비트로 이동
-      //int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
-      int button = GET_BYTE(to_push, 5) & 0x0FU;
+      int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
 
       // enter controls on falling edge of set or rising edge of resume (avoids fault)
       bool set = (button != GM_BTN_SET) && (cruise_button_prev == GM_BTN_SET);
@@ -198,8 +196,8 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
 
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
   if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long)) {
-    // ACCButtons는 byte5의 하위 4bit(니블)에 존재 (VOLT/SDGM 공통)
-    int button = GET_BYTE(to_send, 5) & 0x0F;
+
+    int button = (GET_BYTE(to_send, 5) & 0x70U) >> 4;
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
     // For CC_LONG or PCM cruise vehicles, allow SET/RESUME when cruise is engaged
