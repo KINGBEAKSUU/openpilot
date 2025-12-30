@@ -242,9 +242,7 @@ class CarrotPlanner:
     v_ego_kph = v_ego * CV.MS_TO_KPH
     model_v = self.vFilter.process(v[-1])
 
-    # 출발(파란불) 후보
-    # 너무 작은 속도에서도 출발로 오감지되는 것 방지: 약간 완화
-    startSign = model_v > 5.5 and model_v > (v[0]  + 2.5)
+    startSign = model_v > 5.0 or model_v > (v[0] + 2)
     # 정지(빨간불) 후보
     if v_ego_kph < 1.0:
       # 거의 정지 상태: 교차로 부근에서 신호가 30m 안에 있고
@@ -269,7 +267,7 @@ class CarrotPlanner:
 
     if self.stopSignCount * DT_MDL > 0.05: # 빨간불: 0.05초 이상 감지될 때
       self.trafficState = TrafficState.red
-    elif self.startSignCount * DT_MDL > 0.3: # 파란불: 0.3초 이상 감지될 때
+    elif self.startSignCount * DT_MDL > 0.2:
       self.trafficState = TrafficState.green
     else:
       self.trafficState = TrafficState.off
@@ -430,7 +428,7 @@ class CarrotPlanner:
           self.comfort_brake = self.comfortBrake * 0.9
           #self.comfort_brake = COMFORT_BRAKE
           self.trafficStopAdjustRatio = np.interp(v_ego_kph, [0, 100], [1.0, 0.7])
-          stop_dist = self.xStop * np.interp(self.xStop, [0, 50], [1.0, self.trafficStopAdjustRatio])  ## 남은거리에 따라 정지거리 비율조정
+          stop_dist = self.xStop * np.interp(self.xStop, [0, 100], [1.0, self.trafficStopAdjustRatio])  ## 남은거리에 따라 정지거리 비율조정
           if stop_dist > 10.0: ### 10m 이내에서는 마지막 확정된 actual_stop_distance로 유지 .
             self.actual_stop_distance = stop_dist
           stop_model_x = 0

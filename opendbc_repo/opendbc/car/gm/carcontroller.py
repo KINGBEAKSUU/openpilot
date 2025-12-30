@@ -422,7 +422,7 @@ class CarController(CarControllerBase):
               ready = (self.resume_fault_guard == 0) or CS.out.cruiseState.enabled
               if ready and (self.resume_fault_guard < 2):
                 # 버튼 주기 0.12초, 리쥼실패율 가장 낮은 값으로 보임.
-                if ((CS.lead_speed > 0.5) or (not CS.out.standstill)) and (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
+                if (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
                   self.send_btn(CS, can_sends, CruiseButtons.RES_ACCEL)
                   self.last_button_frame = self.frame
                   self.resume_fault_guard += 1  # 송신횟수 기록
