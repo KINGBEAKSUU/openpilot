@@ -228,148 +228,6 @@ class CarController(CarControllerBase):
           if CS.out.activateCruise > 0:
             self._pending_activateCruise = True
 
-          # Kans: 리쥼용 가속펄스 로직
-          has_lead = (CS.lead_distance is not None) and np.isfinite(CS.lead_distance)
-          d_rel = CS.lead_distance if has_lead else float('inf')
-          lead_follow_ok = has_lead and (2.0 < CS.lead_distance < 10.0) and (CS.lead_speed > 0.1)
-          # 신호 대기 상황: 앞차 없고, 스탠드스틸일 때
-          no_lead_signal_ok = (not has_lead) and CS.out.standstill
-          lead_ok = lead_follow_ok or no_lead_signal_ok
-
-          # pid로그용 상태 문자열
-          state_map = {LongCtrlState.off: "off", LongCtrlState.stopping: "stopping",
-                       LongCtrlState.starting: "starting", LongCtrlState.pid: "pid"}
-          state_name = state_map.get(actuators.longControlState, str(actuators.longControlState))
-
-          resume_pulse = 0
-          auto_longcontrol = auto_cruise_enabled or auto_engage_enabled
-          acc_state = CS.out.accStatus  # = AcceleratorPedal2.CruiseState raw 값 (0~4)
-          acc_not_engaged = acc_state in (AccState.OFF, AccState.STANDBY)
-
-          # 펄스 관련 상수(언덕/평지 최소 유지시간 + 쿨다운)
-          MIN_HILL_PULSE = 0.30   # 언덕에서 최소 0.30s는 밀어주기
-          MIN_FLAT_PULSE = 0.20   # 평지에서 최소 0.20s는 밀어주기
-          PULSE_COOLDOWN = 0.50   # 펄스 끊고 난 뒤 재시작까지 최소 0.50s 대기
-
-          if self._hill_detected and auto_longcontrol:
-            if actuators.longControlState == LongCtrlState.stopping:
-              # 언덕 펄스 도중 정지 상태로 돌아가면 펄스 취소
-              if self.pulse_frame != 0:
-                dt = (self.frame - self.pulse_frame) * DT_CTRL
-                print(f"[언덕펄스취소] 시간={dt:.2f}s 이유=stopping 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f}")
-              self.pulse_frame = 0
-              self.last_pulse_reset_frame = self.frame
-              resume_pulse = 0
-            elif actuators.longControlState == LongCtrlState.starting:
-              # 언덕 펄스 시작: 마지막 리셋 후 쿨다운이 지난 경우에만 시작
-              if self.pulse_frame == 0 and lead_ok:
-                cooldown_ok = (self.frame - self.last_pulse_reset_frame) * DT_CTRL > PULSE_COOLDOWN
-                if cooldown_ok:
-                  self.pulse_frame = self.frame
-                  print(f"[언덕펄스시작] 차속도={CS.out.vEgo:.2f}m/s 액셀={actuators.accel:.1f} 각도={self.accel_g:.1f} 거리={d_rel:.1f}")
-              # 펄스가 활성 상태이면 유지/종료 판단
-              if self.pulse_frame != 0:
-                dt = (self.frame - self.pulse_frame) * DT_CTRL
-                if dt < 1.0:  # 언덕 펄스 유지시간 (최대 1.0s)
-                  resume_pulse = int(self.accel_force)
-                  at_full_stop = False
-                else:
-                  if 1.0 <= dt < 1.0 + DT_CTRL:  # 1.0s를 막 넘긴 시점에 한 번만 로그
-                    print(f"[언덕펄스종료] 시간={dt:.2f}s 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f}")
-                  resume_pulse = 0
-                  self.pulse_frame = 0
-                  self.last_pulse_reset_frame = self.frame
-
-            else:
-              # 언덕인데 starting/lead_ok 조건을 벗어나면 펄스 취소
-              if self.pulse_frame != 0:
-                dt = (self.frame - self.pulse_frame) * DT_CTRL
-                # 언덕에서는 최소 MIN_HILL_PULSE 만큼은 유지하려고 시도
-                if dt < MIN_HILL_PULSE and CC.longActive and not CS.out.brakePressed:
-                  # 너무 짧게 끊으려는 상황이면 한 번은 더 밀어줌
-                  resume_pulse = int(self.accel_force)
-                  at_full_stop = False
-                  # 필요시 디버그용:
-                  # print(f"[언덕펄스 유지] 시간={dt:.2f}s pid={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f}")
-                else:
-                  print(f"[언덕펄스취소] 시간={dt:.2f}s pid={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f}")
-                  resume_pulse = 0
-                  self.pulse_frame = 0
-                  self.last_pulse_reset_frame = self.frame
-              else:
-                resume_pulse = 0
-
-          elif not self._hill_detected and at_full_stop and auto_longcontrol:
-            if actuators.longControlState == LongCtrlState.stopping:
-              # 평지 펄스 도중 다시 stopping으로 가면 취소
-              if self.pulse_frame != 0:
-                dt = (self.frame - self.pulse_frame) * DT_CTRL
-                print(f"[평지펄스취소] 시간={dt:.2f}s 원인={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f}")
-              self.pulse_frame = 0
-              self.last_pulse_reset_frame = self.frame
-              resume_pulse = 0
-
-            elif actuators.longControlState == LongCtrlState.starting:
-              # 평지 펄스 시작: 마지막 리셋 후 쿨다운이 지난 경우에만 시작
-              if self.pulse_frame == 0 and lead_ok:
-                cooldown_ok = (self.frame - self.last_pulse_reset_frame) * DT_CTRL > PULSE_COOLDOWN
-                if cooldown_ok:
-                  self.pulse_frame = self.frame
-                  print(f"[평지펄스시작] 차속도={CS.out.vEgo:.1f}m/s 액셀={actuators.accel:.1f} 각도={self.accel_g:.1f} 거리={d_rel:.1f} 리드속도={CS.lead_speed:.1f}")
-
-              # 펄스가 활성 상태이면 유지/종료 판단
-              if self.pulse_frame != 0:
-                dt = (self.frame - self.pulse_frame) * DT_CTRL
-                if dt < 1.0:  # 평지 펄스 유지시간 (최대 1.0s)
-                  resume_pulse = int(self.accel_force)
-                  at_full_stop = False
-                else:
-                  # 1.0s를 막 넘긴 시점에 한 번만 로그
-                  if 1.0 <= dt < 1.0 + DT_CTRL:
-                    print(f"[평지펄스종료] 시간={dt:.2f}s 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f} 리드속도={CS.lead_speed:.1f}")
-                  resume_pulse = 0
-                  self.pulse_frame = 0
-                  self.last_pulse_reset_frame = self.frame
-
-            else:
-              # 평지인데 starting/lead_ok 조건을 벗어나면 펄스 취소
-              if self.pulse_frame != 0:
-                dt = (self.frame - self.pulse_frame) * DT_CTRL
-                # 평지에서도 최소 MIN_FLAT_PULSE 만큼은 유지
-                if dt < MIN_FLAT_PULSE and CC.longActive and not CS.out.brakePressed:
-                  resume_pulse = int(self.accel_force)
-                  at_full_stop = False
-                  # print(f"[평지펄스 유지] 시간={dt:.2f}s pid={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 리드속도={CS.lead_speed:.1f}")
-                else:
-                  print(f"[평지펄스취소] 시간={dt:.2f}s pid={state_name} 차속도={CS.out.vEgo:.1f}m/s 각도={self.accel_g:.1f} 거리={d_rel:.1f} 리드속도={CS.lead_speed:.1f}")
-                  resume_pulse = 0
-                  self.pulse_frame = 0
-                  self.last_pulse_reset_frame = self.frame
-              else:
-                resume_pulse = 0
-
-          else:
-            # 언덕도 아니고(at_full_stop 조건 밖) 또는 기타 상황:
-            # -> 펄스/타이머 초기화
-            if self.pulse_frame != 0:
-              dt = (self.frame - self.pulse_frame) * DT_CTRL
-              # 너무 짧게 끊으려는 경우에는 한 번 더 유지 (언덕/평지 공통 최소 시간 적용)
-              min_pulse = MIN_HILL_PULSE if self._hill_detected else MIN_FLAT_PULSE
-              if dt < min_pulse and CC.longActive and not CS.out.brakePressed:
-                resume_pulse = int(self.accel_force)
-                at_full_stop = False
-                # print(f"[펄스 유지] 시간={dt:.2f}s 이유=언덕모드={self._hill_detected} 상태={at_full_stop} 각도={self.accel_g:.1f}")
-              else:
-                print(f"[펄스초기화] 시간={dt:.2f}s 이유=언덕모드={self._hill_detected} 상태={at_full_stop} 각도={self.accel_g:.1f}")
-                self.pulse_frame = 0
-                self.last_pulse_reset_frame = self.frame
-                resume_pulse = 0
-            else:
-              resume_pulse = 0
-
-          # 리쥼 펄스 활성 상태 (저속에서만 유지)
-          resume_active = auto_longcontrol and (resume_pulse > 0 and CS.out.vEgo < 3.5) and lead_ok  # 내차 3.5m/s(≈12.6km/h)까지 펄스 유지
-
           # Kans: 오토크루즈 / 오토리쥼 메인 분기
           if auto_cruise_enabled and self._pending_activateCruise and not CS.out.cruiseState.enabled:
             # Kans: AutoCruise (0.25초 윈도 안에 최대 2회 버튼 시도)
@@ -400,7 +258,7 @@ class CarController(CarControllerBase):
             ready_brake = (self.resume_fault_guard == 0) # or CS.out.cruiseState.enabled
             if (CC.longActive and not CS.out.brakePressed and \
                not self.activateCruise_after_brake and \
-               not resume_active and ready_brake and \
+               ready_brake and \
                not CS.out.cruiseState.enabled): # engage상황에서는 펄스 안보내기.
               self._brk_rc = (self._brk_rc + 1) & 0x3
               brk_idx = self._brk_rc
@@ -451,18 +309,14 @@ class CarController(CarControllerBase):
             self.autoCruise_activate = False
 
           # Kans: 실제 가스 송신 (언덕/평지 펄스 + 정상 가스)
-          send_gas = self.apply_gas
-          if resume_active:
-            send_gas = resume_pulse
-            at_full_stop = False
-            acc_engaged = True
-            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, send_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=resume_pulse))
-          else:
-            # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
-            can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=resume_pulse))
+          can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=self.apply_gas))
 
           # Kans: 정규 브레이크 로직
-          if not friction_sent_this_tick:
+          sdgm = self.CP.carFingerprint in SDGM_CAR
+          sdgm_send_ok = (not sdgm) or CC.longActive or (auto_engage_enabled and actuators.longControlState == LongCtrlState.starting) \
+                         or (auto_cruise_enabled and self._pending_activateCruise)
+
+          if sdgm_send_ok and not friction_sent_this_tick:
             self._brk_rc = (self._brk_rc + 1) & 0x3
             brk_idx_base = self._brk_rc
             can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
