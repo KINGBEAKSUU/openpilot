@@ -34,7 +34,8 @@ class CarState(CarStateBase):
     self.pt_lka_steering_cmd_counter = 0
     self.cam_lka_steering_cmd_counter = 0
     self.buttons_counter = 0
-
+    self.single_pedal_mode = False
+    self.cruise_buttons = 0
     # GAP_DIST
     self.distance_button = 0
     # Kans: ambient temperature (°C)

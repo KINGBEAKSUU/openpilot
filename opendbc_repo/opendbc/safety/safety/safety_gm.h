@@ -64,7 +64,9 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // ACC steering wheel buttons (GM_CAM is tied to the PCM)
     if ((addr == 0x1E1) && (!gm_pcm_cruise)) {
-      int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
+      // 상위에서 하위비트로 이동
+      //int button = (GET_BYTE(to_push, 5) & 0x70U) >> 4;
+      int button = GET_BYTE(to_push, 5) & 0x0FU;
 
       // enter controls on falling edge of set or rising edge of resume (avoids fault)
       bool set = (button != GM_BTN_SET) && (cruise_button_prev == GM_BTN_SET);
