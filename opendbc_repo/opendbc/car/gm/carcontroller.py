@@ -403,7 +403,7 @@ class CarController(CarControllerBase):
               brk_idx = self._brk_rc
               apply_brake = self.brake_input(-self.brake_strength())
               # 브레이크신호 전송(롱컨 임시해제)
-              can_sends.append(gmcan.create_brake_command(self.packer_ch, friction_brake_bus, apply_brake, brk_idx, gas_regen_active=bool(acc_engaged)))
+              can_sends.append(gmcan.create_brake_command(self.packer_ch, friction_brake_bus, apply_brake, brk_idx))
               Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True)  # cruise.py에 브레이크 ON신호 전달
               self.activateCruise_after_brake = True  # 브레이크신호 초기화
               friction_sent_this_tick = True
@@ -462,7 +462,7 @@ class CarController(CarControllerBase):
           if not friction_sent_this_tick:
             self._brk_rc = (self._brk_rc + 1) & 0x3
             brk_idx_base = self._brk_rc
-            can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP, gas_regen_active=bool(acc_engaged)))
+            can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
             friction_sent_this_tick = True
 
           # Send dashboard UI commands (ACC status)

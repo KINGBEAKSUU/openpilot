@@ -4,13 +4,9 @@ from opendbc.car.gm.values import CAR, CruiseButtons, CanBus, CAMERA_ACC_CAR, SD
 from opendbc.car.common.conversions import Conversions as CV
 
 # GM: AutoResume: brake signal to CAN
-def create_brake_command(packer, bus, apply_brake, idx, gas_regen_active: bool = False):
+def create_brake_command(packer, bus, apply_brake, idx):
   rc = int(idx) & 0x3  # 2비트 롤링카운터
-  if apply_brake > 0 and not gas_regen_active:
-    mode = 0xA
-  else:
-    mode = 0x1
-
+  mode = 0xA if apply_brake > 0 else 0x1
   apply_brake = max(0, min(0x7FF, int(apply_brake)))
   brake = (0x1000 - apply_brake) & 0xFFF
   checksum = (0x10000 - (mode << 12) - brake - rc) & 0xFFFF
@@ -111,9 +107,7 @@ def create_gas_regen_command(packer, bus, throttle, idx, enabled, at_full_stop, 
   values["GasRegenChecksum"] = checks & 0x1FFFFFF  # 25-bit mask
   return packer.make_can_msg("ASCMGasRegenCmd", bus, values)
 
-
-def create_friction_brake_command(packer, bus, apply_brake, idx, enabled,
-                                  near_stop, at_full_stop, CP, gas_regen_active: bool = False):
+def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_stop, at_full_stop, CP):
   mode = 0x1
 
   # TODO: Understand this better. Volts and ICE Camera ACC cars are 0x1 when enabled with no brake
@@ -130,10 +124,6 @@ def create_friction_brake_command(packer, bus, apply_brake, idx, enabled,
     #elif near_stop:
     #  mode = 0xB
 
-    # Kans: 가스리젠(2CB)이 살아있으면 0xA를 강등(급제동 완화)
-    # full stop(0xD)는 예외로 유지
-    if gas_regen_active and not at_full_stop:
-      mode = 0x1
 
   apply_brake = max(0, min(0x7FF, int(apply_brake)))
   brake = (0x1000 - apply_brake) & 0xFFF
