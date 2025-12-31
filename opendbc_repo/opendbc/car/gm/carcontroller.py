@@ -196,8 +196,8 @@ class CarController(CarControllerBase):
           if self.CP.networkLocation == NetworkLocation.fwdCamera:
             at_full_stop = at_full_stop and stopping
             friction_brake_bus = CanBus.POWERTRAIN
-            #if self.CP.carFingerprint in SDGM_CAR:
-            #  friction_brake_bus = CanBus.CHASSIS
+            if self.CP.carFingerprint in SDGM_CAR:
+              friction_brake_bus = CanBus.CHASSIS
 
           if self.CP.autoResumeSng:
             resume = actuators.longControlState != LongCtrlState.starting or CC.cruiseControl.resume
@@ -211,7 +211,7 @@ class CarController(CarControllerBase):
           else:
             acc_engaged = CC.enabled
 
-          if actuators.longControlState == == LongCtrlState.starting:
+          if actuators.longControlState == LongCtrlState.starting:
             if (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
               self.last_button_frame = self.frame
               self.send_btn(CS, can_sends, CruiseButtons.RES_ACCEL)

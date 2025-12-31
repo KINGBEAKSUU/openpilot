@@ -227,7 +227,9 @@ static int gm_fwd_hook(int bus_num, int addr) {
     if (bus_num == 0) {
       // block PSCMStatus; forwarded through openpilot to hide an alert from the camera
       bool is_pscm_msg = (addr == 0x184);
-      if (!is_pscm_msg) {
+      bool is_accel_pedal2 = (addr == 0x1C4);
+
+      if (!(is_pscm_msg || is_accel_pedal2)) {
         bus_fwd = 2;
       }
     }
@@ -283,7 +285,7 @@ static safety_config gm_init(uint16_t param) {
   static const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7}, {0xBD, 0, 7}, {0x1F5, 0, 8},   // pt bus
                                                {0x184, 2, 8}, {0x315, 2, 5}};  // camera bus
 
-  static const CanMsg GM_SDGM_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x1E1, 0, 7},  // pt bus
+  static const CanMsg GM_SDGM_TX_MSGS[] = {{0x180, 0, 4}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x1E1, 0, 7},  // pt bus
                                           {0x184, 2, 8}, {0x315, 2, 5}, {0x1E1, 2, 7}};  // camera bus
   // TODO: do checksum and counter checks. Add correct timestep, 0.1s for now.
   static RxCheck gm_rx_checks[] = {
