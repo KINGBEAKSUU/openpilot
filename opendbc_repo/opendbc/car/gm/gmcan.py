@@ -21,9 +21,10 @@ def create_brake_command(packer, bus, apply_brake, idx):
   return packer.make_can_msg("EBCMFrictionBrakeCmd", bus, values)
 
 def create_buttons(packer, bus, idx, button):
+  rc = int(idx) & 0x3
   values = {
     "ACCButtons": button,
-    "RollingCounter": idx,
+    "RollingCounter": rc,
     "ACCAlwaysOne": 1,
     "DistanceButton": 0,
   }
@@ -107,8 +108,7 @@ def create_friction_brake_command(packer, bus, apply_brake, idx, enabled, near_s
     #  mode = 0xB
 
 
-  #apply_brake = max(0, min(0x7FF, int(apply_brake)))
-  apply_brake = max(0, min(400, int(apply_brake)))
+  apply_brake = max(0, min(0x7FF, int(apply_brake)))
   brake = (0x1000 - apply_brake) & 0xFFF
   rc = int(idx) & 0x3  # 2비트 롤링카운터
   checksum = (0x10000 - (mode << 12) - brake - rc) & 0xFFFF
