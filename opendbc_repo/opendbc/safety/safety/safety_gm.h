@@ -98,7 +98,7 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
         brake |= GET_BIT(to_push, 40U) != 0U;
       }
       brake_pressed = brake;
-    } else if (gm_hw == GM_CAM) {
+    } else if ((gm_hw == GM_CAM) && !gm_force_brake_c9) {
       if (addr == 0xC9) {
         brake_pressed = GET_BIT(to_push, 40U) != 0U;
       }
@@ -283,8 +283,8 @@ static safety_config gm_init(uint16_t param) {
   static const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7}, {0xBD, 0, 7}, {0x1F5, 0, 8},   // pt bus
                                                {0x184, 2, 8}, {0x315, 2, 5}};  // camera bus
 
-  static const CanMsg GM_SDGM_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8}, {0x200, 0, 6},  // pt bus
-                                          {0x184, 2, 8}, {0x1E1, 2, 7}};  // camera bus
+  static const CanMsg GM_SDGM_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8},  // pt bus
+                                          {0x184, 2, 8}, {0x315, 2, 5}, {0x1E1, 2, 7}};  // camera bus
   // TODO: do checksum and counter checks. Add correct timestep, 0.1s for now.
   static RxCheck gm_rx_checks[] = {
     GM_COMMON_RX_CHECKS
@@ -326,7 +326,7 @@ static safety_config gm_init(uint16_t param) {
     {.msg = {{0x2FF, 2, 4, .ignore_checksum = true, .ignore_counter = true, .frequency = 50U}, { 0 }, { 0 }}},
   };
 
-  static const CanMsg GM_CAM_TX_MSGS[] = {{0x180, 0, 4}, {0x200, 0, 6}, {0x1E1, 0, 7},  // pt bus
+  static const CanMsg GM_CAM_TX_MSGS[] = {{0x180, 0, 4}, {0x200, 0, 6},  // pt bus
                                           {0x184, 2, 8}, {0x1E1, 2, 7}};  // camera bus
 
 

@@ -267,7 +267,7 @@ class CanBus:
   CHASSIS = 2
   LOOPBACK = 128
   DROPPED = 192
-  
+
 
 # In a Data Module, an identifier is a string used to recognize an object,
 # either by itself or together with the identifiers of parent objects.
