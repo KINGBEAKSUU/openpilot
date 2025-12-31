@@ -21,10 +21,9 @@ def create_brake_command(packer, bus, apply_brake, idx):
   return packer.make_can_msg("EBCMFrictionBrakeCmd", bus, values)
 
 def create_buttons(packer, bus, idx, button):
-  rc = int(idx) & 0x3
   values = {
     "ACCButtons": button,
-    "RollingCounter": rc,
+    "RollingCounter": idx,
     "ACCAlwaysOne": 1,
     "DistanceButton": 0,
   }
