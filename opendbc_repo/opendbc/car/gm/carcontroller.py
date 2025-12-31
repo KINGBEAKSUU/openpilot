@@ -139,13 +139,7 @@ class CarController(CarControllerBase):
     if self.CP.openpilotLongitudinalControl:
       # Gas/regen, brakes, and UI commands - all at 25Hz
       if self.frame % 4 == 0:
-        friction_sent_this_tick = False
-        self.cruiseDelay_time = params.get_float("CruiseDelay") * 0.01
-        self.resumeDelay_time = params.get_float("ResumeDelay") * 0.01
-        auto_cruise_enabled = params.get_int("AutoCruiseControl") > 0
-        auto_engage_enabled = params.get_int("AutoEngage") == 2
-
-        # GM: softHold
+      # GM: softHold
         stopping = actuators.longControlState == LongCtrlState.stopping or CS.out.softHoldActive > 0
 
         # Pitch compensated acceleration;
@@ -217,103 +211,14 @@ class CarController(CarControllerBase):
           else:
             acc_engaged = CC.enabled
 
-          # Kans: 오토크루즈 대기 플래그
-          if CS.out.activateCruise > 0:
-            self._pending_activateCruise = True
-
-          # Kans: 오토크루즈 / 오토리쥼 메인 분기
-          if auto_cruise_enabled and self._pending_activateCruise and not CS.out.cruiseState.enabled:
-            # Kans: AutoCruise (0.25초 윈도 안에 최대 2회 버튼 시도)
-            if not self.autoCruise_activate:
-              self.autoCruise_activate = True
-              self.autoCruise_frame = self.frame
-              self.autoCruise_try_count = 0
-
-            if self.autoCruise_activate:
-              within_window = (self.frame - self.autoCruise_frame) * DT_CTRL <= self.cruiseDelay_time  # 예: 0.25초
-
-              if within_window and self.autoCruise_try_count < 2:
-                if (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
-                  btn = CruiseButtons.RES_ACCEL if CS.out.activateCruise == 1 else CruiseButtons.DECEL_SET
-                  self.send_btn(CS, can_sends, btn)
-                  self.last_button_frame = self.frame
-                  self.autoCruise_try_count += 1
-
-              # 종료 조건: 시간 초과 / 2회 시도 완료 / 크루즈 실제 ON
-              if (not within_window) or (self.autoCruise_try_count >= 2) or CS.out.cruiseState.enabled:
-                self.autoCruise_activate = False
-                self.autoCruise_frame = 0
-                self.autoCruise_try_count = 0
-                self._pending_activateCruise = False
-
-          elif auto_engage_enabled and actuators.longControlState == LongCtrlState.starting:
-            # Kans: SNG AutoResume: 1st step: 브레이크 펄스 (ActivateCruiseAfterBrake 플래그 세팅)
-            ready_brake = (self.resume_fault_guard == 0) # or CS.out.cruiseState.enabled
-            if (CC.longActive and not CS.out.brakePressed and \
-               not self.activateCruise_after_brake and \
-               ready_brake and \
-               not CS.out.cruiseState.enabled): # engage상황에서는 펄스 안보내기.
-              self._brk_rc = (self._brk_rc + 1) & 0x3
-              brk_idx = self._brk_rc
-              apply_brake = self.brake_input(-self.brake_strength())
-              # 브레이크신호 전송(롱컨 임시해제)
-              can_sends.append(gmcan.create_brake_command(self.packer_ch, friction_brake_bus, apply_brake, brk_idx))
-              Params().put_bool_nonblocking("ActivateCruiseAfterBrake", True)  # cruise.py에 브레이크 ON신호 전달
-              self.activateCruise_after_brake = True  # 브레이크신호 초기화
-              friction_sent_this_tick = True
-
-            # 2nd step: AutoResume (RES 버튼 스팸)
-            # 리쥼윈도 시작(기존윈도 없거나 이전윈도 닫힌=self.resume_activate=True 후 재진입용)
-            if self.resume_frame == 0 or self.resume_activate:
-              self.resume_frame = self.frame
-              self.resume_activate = False
-              self.resume_fault_guard = 0  # fault 방지용 카운터 초기화
-              # 새 리쥼윈도 시작 시, 바로 RES 전송 가능하도록 버튼 간격 초기화
-              self.last_button_frame = self.frame - int(0.12 / DT_CTRL)
-
-            if not self.resume_activate:
-              # Cruise fault 예방: 잦은 버튼송신 제한
-              ready = (self.resume_fault_guard == 0) or CS.out.cruiseState.enabled
-              if ready and (self.resume_fault_guard < 2):
-                # 버튼 주기 0.12초, 리쥼실패율 가장 낮은 값으로 보임.
-                if (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
-                  self.send_btn(CS, can_sends, CruiseButtons.RES_ACCEL)
-                  self.last_button_frame = self.frame
-                  self.resume_fault_guard += 1  # 송신횟수 기록
-
-              # 리쥼버튼 중단까지 지연시간(0.16~0.20)
-              if (self.frame - self.resume_frame) * DT_CTRL >= self.resumeDelay_time:
-                self.resume_activate = True
-
-          else:
-            # starting, auto_engage_enabled이 아니거나, 오토크루즈/오토리쥼 분기 모두 해당 안 될 때: 상태 정리
-            self.activateCruise_after_brake = False
-
-            if auto_engage_enabled:  # 오토리쥼이 진행중이면
-              # 리쥼윈도 재개용 대기시간(resumeDelay_time * 1.5)
-              if self.resume_frame > 0 and (self.frame - self.resume_frame) * DT_CTRL > (self.resumeDelay_time * 1.5):
-                self.resume_frame = 0
-                self.resume_activate = False
-                self.resume_fault_guard = 0
-
-            # 오토크루즈 초기화도 여기서(오토크루즈 분기 진입 안 했을 때)
-            self.autoCruise_try_count = 0
-            self.autoCruise_frame = 0
-            self.autoCruise_activate = False
-
-          # Kans: 실제 가스 송신 (언덕/평지 펄스 + 정상 가스)
+          if actuators.longControlState == == LongCtrlState.starting:
+            if (self.frame - self.last_button_frame) * DT_CTRL >= 0.12:
+              self.last_button_frame = self.frame
+              self.send_btn(CS, can_sends, CruiseButtons.RES_ACCEL)
+          # GasRegenCmdActive needs to be 1 to avoid cruise faults. It describes the ACC state, not actuation
           can_sends.append(gmcan.create_gas_regen_command(self.packer_pt, CanBus.POWERTRAIN, self.apply_gas, idx, acc_engaged, at_full_stop, self.CP, resume_pulse=self.apply_gas))
-
-          # Kans: 정규 브레이크 로직
-          sdgm = self.CP.carFingerprint in SDGM_CAR
-          sdgm_send_ok = (not sdgm) or CC.longActive or (auto_engage_enabled and actuators.longControlState == LongCtrlState.starting) \
-                         or (auto_cruise_enabled and self._pending_activateCruise)
-
-          if sdgm_send_ok and not friction_sent_this_tick:
-            self._brk_rc = (self._brk_rc + 1) & 0x3
-            brk_idx_base = self._brk_rc
-            can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake, brk_idx_base, CC.enabled, near_stop, at_full_stop, self.CP))
-            friction_sent_this_tick = True
+          can_sends.append(gmcan.create_friction_brake_command(self.packer_ch, friction_brake_bus, self.apply_brake,
+                                                               idx, CC.enabled, near_stop, at_full_stop, self.CP))
 
           # Send dashboard UI commands (ACC status)
           send_fcw = hud_alert == VisualAlert.fcw
