@@ -120,48 +120,28 @@ class CarInterface(CarInterfaceBase):
     if candidate in (CAMERA_ACC_CAR | SDGM_CAR | ASCM_INT):
       ret.alphaLongitudinalAvailable = candidate not in (ASCM_INT | SDGM_CAR)
       ret.networkLocation = NetworkLocation.fwdCamera
-      #ret.radarUnavailable = 0x460 not in fingerprint[CanBus.OBSTACLE]
+      ret.radarUnavailable = True  # no radar
       ret.pcmCruise = True
       ret.minEnableSpeed = -1 if candidate in SDGM_CAR else 5 * CV.KPH_TO_MS
       ret.minSteerSpeed = 10 * CV.KPH_TO_MS
       if candidate in SDGM_CAR:
-        ret.radarUnavailable = True
         # Kans: SDGM은 0x2FF로 알파롱컨 사용
         ret.alphaLongitudinalAvailable = 0x2FF in fingerprint[CanBus.CAMERA]
         # SDGM은 항상 오파롱 사용
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_SDGM.value
-        if ret.alphaLongitudinalAvailable and alpha_long:
-          ret.pcmCruise = False
-          ret.openpilotLongitudinalControl = True
-          # SDGM + CAM_LONG 경로
-          ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
-        ret.minEnableSpeed = -1.
-        ret.minSteerSpeed = 7 * CV.MPH_TO_MS
         # BE(0xBE)가 없는 SDGM에서만 C9 브레이크 강제
         if ACCELERATOR_POS_MSG not in fingerprint[CanBus.POWERTRAIN]:
           ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.FORCE_BRAKE_C9.value
           ret.flags |= GMFlags.FORCE_BRAKE_C9.value
+        ret.minEnableSpeed = -1.  # engage speed is decided by pcm
+        ret.minSteerSpeed = 7 * CV.MPH_TO_MS
       elif candidate in ASCM_INT:
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM.value
         ret.minSteerSpeed = 7 * CV.MPH_TO_MS
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.ASCM_INT.value
-        # alpha_long이 켜져 있고, alphaLongitudinalAvailable 할 때만 오파롱 전환
-        if ret.alphaLongitudinalAvailable and alpha_long:
-          ret.pcmCruise = False
-          ret.openpilotLongitudinalControl = True
-          ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
-          ret.minEnableSpeed = -1.
-          ret.minSteerSpeed = 7 * CV.MPH_TO_MS
       else:
         # CAMERA_ACC_CAR
         ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM.value
-
-        if ret.alphaLongitudinalAvailable and alpha_long:
-          ret.pcmCruise = False
-          ret.openpilotLongitudinalControl = True
-          ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
-          ret.minEnableSpeed = -1.
-          ret.minSteerSpeed = 7 * CV.MPH_TO_MS
 
       # Tuning for alpha long
       ret.longitudinalTuning.kiV = [0.0]
@@ -170,6 +150,11 @@ class CarInterface(CarInterfaceBase):
       ret.vEgoStarting = 0.25
       ret.stopAccel = -0.20
 
+
+      if ret.alphaLongitudinalAvailable and alpha_long:
+        ret.pcmCruise = False
+        ret.openpilotLongitudinalControl = True
+        ret.safetyConfigs[0].safetyParam |= GMSafetyFlags.HW_CAM_LONG.value
       if candidate in ALT_ACCS:
         ret.alphaLongitudinalAvailable = False
         ret.openpilotLongitudinalControl = False

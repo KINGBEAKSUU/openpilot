@@ -16,6 +16,7 @@ const int GM_GAS_INTERCEPTOR_THRESHOLD = 595; // (675 + 355) / 2 ratio between o
     {.msg = {{0xF1, 0, 6, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}}, \
     {.msg = {{0x1C4, 0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}}, \
     {.msg = {{0xC9, 0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}}, \
+    {.msg = {{0x2FF, 2, 4, .ignore_checksum = true, .ignore_counter = true, .frequency = 50U}, { 0 }, { 0 }}}, \
 
 #define GM_ACC_RX_CHECKS \
     {.msg = {{0xBE, 0, 6, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U},    /* Volt, Silverado, Acadia Denali */ \
@@ -83,25 +84,18 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Reference for brake pressed signals:
     // https://github.com/commaai/openpilot/blob/master/selfdrive/car/gm/carstate.py
-    if (gm_hw == GM_ASCM) {
-      // VOLT
-      if (addr == 0xBE) {
-        brake_pressed = GET_BYTE(to_push, 1) >= 8U;
-      }
-    } else if (gm_hw == GM_SDGM) {
-      // New MALIBU
-      bool brake = false;
-      if (addr == 0xBE) {
-        brake |= GET_BYTE(to_push, 1) >= 8U;
-      }
-      if ((addr == 0xC9) && gm_force_brake_c9) {
-        brake |= GET_BIT(to_push, 40U) != 0U;
-      }
-      brake_pressed = brake;
-    } else if ((gm_hw == GM_CAM) && !gm_force_brake_c9) {
-      if (addr == 0xC9) {
-        brake_pressed = GET_BIT(to_push, 40U) != 0U;
-      }
+    // Prefer 0xC9 (ECMEngineStatus) when gm_force_brake_c9 is set, otherwise keep legacy behavior.
+    // This allows SDGM/Traverse variants without 0xBE (ECMAcceleratorPos) to report brake correctly.
+    if ((addr == 0xC9) && gm_force_brake_c9) {
+      brake_pressed = GET_BIT(to_push, 40U) != 0U;
+    } else if ((addr == 0xBE) && ((gm_hw == GM_ASCM) || (gm_hw == GM_SDGM))) {
+      brake_pressed = GET_BYTE(to_push, 1) >= 8U;
+    } else if ((addr == 0xC9) && (gm_hw == GM_CAM)) {
+      brake_pressed = GET_BIT(to_push, 40U) != 0U;
+    }
+
+    if (addr == 0xC9) {
+      acc_main_on = GET_BIT(to_push, 29U) != 0U;
     }
 
     if (addr == 0x1C4) {
@@ -122,18 +116,13 @@ static void gm_rx_hook(const CANPacket_t *to_push) {
 
     // Pedal Interceptor
     if ((addr == 0x201) && enable_gas_interceptor) {
-      // Pedal Interceptor: average between 2 tracks
-      int track1 = ((GET_BYTE(to_push, 0) << 8) + GET_BYTE(to_push, 1));
-      int track2 = ((GET_BYTE(to_push, 2) << 8) + GET_BYTE(to_push, 3));
-      int gas_interceptor = (track1 + track2) / 2;
+      int gas_interceptor = GM_GET_INTERCEPTOR(to_push);
       gas_pressed = gas_interceptor > GM_GAS_INTERCEPTOR_THRESHOLD;
+      gas_interceptor_prev = gas_interceptor;
+//      gm_pcm_cruise = false;
     }
   }
 
-  // main_on for AOL
-  if (addr == 0xC9U) {
-    acc_main_on = GET_BIT(to_push, 29U) != 0U;
-  }
 }
 
 static bool gm_tx_hook(const CANPacket_t *to_send) {
@@ -178,16 +167,13 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
     if (apply && !controls_allowed) {
       controls_allowed = true;        
     }
+    // convert float CAN signal to an int for gas checks: 22534 / 0.125 = 180272
+    int gas_regen = (((GET_BYTE(to_send, 1) & 0x7U) << 16) | (GET_BYTE(to_send, 2) << 8) | GET_BYTE(to_send, 3)) - 180272U;
+
     bool violation = false;
     // Allow apply bit in pre-enabled and overriding states
     violation |= !controls_allowed && apply;
-    if (apply) {
-      //convert float CAN signal to an int for gas checks: 22534 / 0.125 = 180272
-      int gas_regen = (((GET_BYTE(to_send, 1) & 0x7U) << 16) | (GET_BYTE(to_send, 2) << 8) | GET_BYTE(to_send, 3)) - 180272;  // - 180272는 물리값=0Nm 기준값
-      violation |= longitudinal_gas_checks(gas_regen, *gm_long_limits);
-    } else {
-      //apply==0일 때는 "명령 비활성" 프레임이므로 gas/regen 한계 체크를 하지 않음(중립 raw=0 허용)
-    }
+    violation |= longitudinal_gas_checks(gas_regen, *gm_long_limits);
 
     if (violation) {
       tx = false;
@@ -197,7 +183,7 @@ static bool gm_tx_hook(const CANPacket_t *to_send) {
   // BUTTONS: used for resume spamming and cruise cancellation with stock longitudinal
   if ((addr == 0x1E1) && (gm_pcm_cruise || gm_pedal_long)) {
 
-    int button = (GET_BYTE(to_send, 5) & 0x70U) >> 4;
+    int button = (GET_BYTE(to_send, 5) >> 4) & 0x7U;
 
     bool allowed_btn = (button == GM_BTN_CANCEL) && cruise_engaged_prev;
     // For CC_LONG or PCM cruise vehicles, allow SET/RESUME when cruise is engaged
@@ -282,11 +268,9 @@ static safety_config gm_init(uint16_t param) {
     .max_brake = 400,
   };
 
-  static const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7}, {0xBD, 0, 7}, {0x1F5, 0, 8},   // pt bus
-                                               {0x184, 2, 8}, {0x315, 2, 5}};  // camera bus
+  static const CanMsg GM_CAM_LONG_TX_MSGS[] = {{0x180, 0, 4}, {0x315, 0, 5}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x200, 0, 6}, {0x1E1, 0, 7},  // pt bus
+                                               {0x184, 2, 8}};  // camera bus
 
-  static const CanMsg GM_SDGM_TX_MSGS[] = {{0x180, 0, 4}, {0x2CB, 0, 8}, {0x370, 0, 6}, {0x1E1, 0, 7},  // pt bus
-                                          {0x184, 2, 8}, {0x315, 2, 5}, {0x1E1, 2, 7}};  // camera bus
   // TODO: do checksum and counter checks. Add correct timestep, 0.1s for now.
   static RxCheck gm_rx_checks[] = {
     GM_COMMON_RX_CHECKS
@@ -320,12 +304,6 @@ static safety_config gm_init(uint16_t param) {
     {.msg = {{0xBD, 0, 7, .ignore_checksum = true, .ignore_counter = true, .frequency = 40U}, { 0 }, { 0 }}},
     {.msg = {{0x3D1, 0, 8, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},  // Non-ACC PCM
     {.msg = {{0x201, 0, 6, .ignore_checksum = true, .ignore_counter = true, .frequency = 10U}, { 0 }, { 0 }}},  // pedal
-  };
-
-  static RxCheck gm_sdgm_rx_checks[] = {
-    GM_COMMON_RX_CHECKS
-    GM_ACC_RX_CHECKS
-    {.msg = {{0x2FF, 2, 4, .ignore_checksum = true, .ignore_counter = true, .frequency = 50U}, { 0 }, { 0 }}},
   };
 
   static const CanMsg GM_CAM_TX_MSGS[] = {{0x180, 0, 4}, {0x200, 0, 6},  // pt bus
@@ -365,8 +343,6 @@ static safety_config gm_init(uint16_t param) {
     } else {
       ret = BUILD_SAFETY_CFG(gm_rx_checks, GM_CAM_TX_MSGS);
     }
-  } else if (gm_hw == GM_SDGM) {
-    ret = BUILD_SAFETY_CFG(gm_sdgm_rx_checks, GM_SDGM_TX_MSGS);
   }
 
   const bool gm_ev = GET_FLAG(param, GM_PARAM_EV);
