@@ -144,7 +144,6 @@ class CarController(CarControllerBase):
         self.resumeDelay_time = params.get_float("ResumeDelay") * 0.01
         auto_cruise_enabled = params.get_int("AutoCruiseControl") > 0
         auto_engage_enabled = params.get_int("AutoEngage") == 2
-        self.accel_force = params.get_int("AccelForce")
 
         # GM: softHold
         stopping = actuators.longControlState == LongCtrlState.stopping or CS.out.softHoldActive > 0
@@ -160,12 +159,6 @@ class CarController(CarControllerBase):
         at_full_stop = CC.longActive and CS.out.standstill
         near_stop = CC.longActive and (abs(CS.out.vEgo) < self.params.NEAR_STOP_BRAKE_PHASE)
         interceptor_gas_cmd = 0
-
-        # 언덕감지(accel_g가 클수록 높은 경사)
-        if self.accel_g > 0.25:
-          self._hill_detected = True
-        else:
-          self._hill_detected = False
 
         if not CC.longActive:
           # ASCM sends max regen when not enabled
@@ -392,7 +385,7 @@ class CarController(CarControllerBase):
   def send_btn(self, CS, can_sends, cruise_btn, bus=None):
     if bus is None:
       if self.CP.carFingerprint in SDGM_CAR:
-        bus = CanBus.POWERTRAIN
+        bus = CanBus.CAMERA
       elif self.CP.networkLocation == NetworkLocation.fwdCamera:
         bus = CanBus.CAMERA
       else:
