@@ -18,9 +18,10 @@ def packer():
   return CANPacker('hyundai_canfd_generated')
 
 
-def make_cc(packer, frame, mode):
+def make_cc(packer, frame, mode, auto=False, kick_side=0, kick_until=0):
   # every attribute stalk_blinkers touches, so the test exercises the real code path
-  return SimpleNamespace(frame=frame, blinker_stalk=mode, CAN=SimpleNamespace(ECAN=0), packer=packer,
+  return SimpleNamespace(frame=frame, blinker_stalk=mode, stalk_auto=auto, stalk_kick_side=kick_side,
+                         stalk_kick_until=kick_until, CAN=SimpleNamespace(ECAN=0), packer=packer,
                          stalk_counter=None, stalk_source_counter=None, stalk_values=None,
                          stalk_press_side=0, stalk_press_frame=0)
 
@@ -72,8 +73,8 @@ def test_tap_clears_after_200ms_and_holds(packer):
 
 
 def test_momentary_matches_the_gv80_lever(packer):
-  # GV80's lever is momentary: BLINKER + TAP for 0.35 s and then nothing. The frame must be byte-identical to the
-  # car's own (5a10304010000000) and only two of them go out, at the stock 5 Hz.
+  # GV80's lever is momentary: BLINKER + TAP for 0.35 s and then one idle release frame at 0.40 s.
+  # Both tap (5a10304010000000) and release (3620300000000000) match the car's own 10-27 rlog 00000333.
   cc, cs = make_cc(packer, 0, 3), make_cs(packer, '5900300000000000')
   sent = []
   for frame in range(60):
@@ -81,7 +82,16 @@ def test_momentary_matches_the_gv80_lever(packer):
     dat = send(packer, cc, cs)
     if dat is not None:
       sent.append((frame, dat.hex()))
-  assert sent == [(0, '5a10304010000000'), (20, '5a10304010000000')]
+  assert sent == [(0, '5a10304010000000'), (20, '5a10304010000000'), (40, '3620300000000000')]
+  # Switching directly to right tap (mode 4) while the physical stalk stays at counter 0 reproduces frames 4 and 5
+  cc.blinker_stalk = 4
+  sent_right = []
+  for frame in range(60, 120):
+    cc.frame = frame
+    dat = send(packer, cc, cs)
+    if dat is not None:
+      sent_right.append((frame, dat.hex()))
+  assert sent_right == [(60, '8630300041000000'), (80, '8630300041000000'), (100, '8740300000000000')]
 
 
 def test_momentary_right_uses_the_right_tap_bits(packer):
@@ -119,3 +129,24 @@ def test_counter_wraps(packer):
   sigs = packer.dbc.name_to_msg['BLINKER_STALKS'].sigs
   cc, cs = make_cc(packer, 0, 1), make_cs(packer, 'f0f0300000000000')   # stock counter 15
   assert get_raw_value(send(packer, cc, cs), sigs['COUNTER_ALT']) == 0
+
+
+def test_stalk_auto_kick_sends_one_gv80_momentary_tap_and_resets(packer):
+  cc, cs = make_cc(packer, 0, 0, auto=True, kick_side=3, kick_until=100), make_cs(packer, '5900300000000000')
+  sent = []
+  for frame in range(110):
+    cc.frame = frame
+    dat = send(packer, cc, cs)
+    if dat is not None:
+      sent.append((frame, dat.hex()))
+  assert sent == [(0, '5a10304010000000'), (20, '5a10304010000000'), (40, '3620300000000000')]
+  assert cc.stalk_kick_side == 0 and cc.stalk_press_side == 0 and cc.stalk_counter is None
+  # a subsequent kick while the physical stalk stays at counter 0 advances to counters 3 (tap) and 4 (release)
+  cc.stalk_kick_side, cc.stalk_kick_until = 4, 210
+  sent2 = []
+  for frame in range(110, 220):
+    cc.frame = frame
+    dat = send(packer, cc, cs)
+    if dat is not None:
+      sent2.append((frame, dat.hex()))
+  assert sent2 == [(110, '8630300041000000'), (130, '8630300041000000'), (150, '8740300000000000')]

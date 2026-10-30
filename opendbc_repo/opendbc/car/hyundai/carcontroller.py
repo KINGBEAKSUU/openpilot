@@ -75,6 +75,7 @@ STALK_TAP_MOMENTARY_FRAMES = int(0.35 / DT_CTRL)
 # The stock column module sends 0x3C1 at 5 Hz (200 ms). Sending the same ID faster raises the chance of a
 # same-ID collision with it, which is what took the Azera bus down, so the momentary mode sticks to 5 Hz.
 STALK_MOMENTARY_HZ_DIV = 20
+STALK_MOMENTARY_RELEASE_FRAME = STALK_MOMENTARY_HZ_DIV * 2
 
 # CanfdBlinkerStalk: when APRK can't be silenced, imitate the steering column lever (BLINKER_STALKS, 0x3C1); the BCM
 # blinks from it (09-18 log: 0x413 ALT lamp at 0.4 s while the lever is on). 10-26 logs: COUNTER_ALT goes +1 on every
@@ -261,6 +262,9 @@ class CarController(CarControllerBase):
     self.blinker_control = False
     self.blinker_test = 0  # CanfdBlinkerMenuTest: 1 left, 2 right (menu test, any speed/gear)
     self.blinker_stalk = 0  # CanfdBlinkerStalk: 1 left, 2 right (0x3C1 replay)
+    self.stalk_auto = False  # CanfdBlinkerStalkAuto: deliver CanfdBlinkerKick kicks as stalk taps (GV80)
+    self.stalk_kick_side = 0  # pending auto kick: 3 left tap, 4 right tap (same numbering as blinker_side)
+    self.stalk_kick_until = 0  # frame at which the pending auto kick expires
     # CanfdBvmView: 0 off, 1 left, 2 right, 3 both. Spoofs the cluster camera view status (0x400 byte4) so the
     # blind-spot camera is shown without the turn signal. Display-only message, nothing else uses it.
     self.bvm_view = 0
@@ -270,12 +274,14 @@ class CarController(CarControllerBase):
     self.palisade_blinker_test = 0
     self.stalk_counter = None
     self.stalk_source_counter = None
+    self.stalk_momentary_counter = None
     self.stalk_values = None
     self.stalk_press_side = 0   # 1/2 while the lever is being held/tapped
     self.stalk_press_frame = 0
     self.aprk_state, self.aprk_frame = 0, 0  # 0 normal, 1 extended session asked, 2 silenced
     self.lane_crossing, self.blinker_side, self.blinker_pulse_end = LaneCrossing(), 0, 0
     self.yellow_until = [0, 0]  # left, right
+    self.auto_turn_side_prev = 0
     self.standstill_frame = -1e6
 
     self.activateCruise = 0
@@ -323,33 +329,51 @@ class CarController(CarControllerBase):
 
   def stalk_blinkers(self, CS):
     # CanfdBlinkerStalk 1/2 hold the lever, 3/4 replay GV80's momentary tap. Both start with the BLINKER_TAP edge.
-    if self.blinker_stalk not in (1, 2, 3, 4):
-      self.stalk_counter = self.stalk_source_counter = self.stalk_values = None
+    # CanfdBlinkerStalkAuto: with the manual test off, a lane-change kick (blinker_side 3/4, same numbering)
+    # is delivered as the same momentary tap. The tap self-limits to STALK_TAP_MOMENTARY_FRAMES + one release
+    # frame at STALK_MOMENTARY_RELEASE_FRAME, reproducing GV80's full tap-and-release edge sequence.
+    mode = self.blinker_stalk
+    if mode not in (1, 2, 3, 4) and getattr(self, "stalk_auto", False) and getattr(self, "stalk_kick_side", 0) in (3, 4) and self.frame < getattr(self, "stalk_kick_until", 0):
+      mode = self.stalk_kick_side
+    if mode not in (1, 2, 3, 4):
+      self.stalk_counter = self.stalk_values = None
+      if getattr(self, "stalk_momentary_counter", None) is None:
+        self.stalk_source_counter = None
       self.stalk_press_side = 0
+      self.stalk_kick_side = 0
       return []
-    momentary = self.blinker_stalk in (3, 4)
-    side = 1 if self.blinker_stalk in (1, 3) else 2
+    momentary = mode in (3, 4)
+    side = 1 if mode in (1, 3) else 2
     if side != self.stalk_press_side:            # rising edge: one press starts here
       self.stalk_press_side, self.stalk_press_frame = side, self.frame
+      if momentary:
+        self.stalk_counter = None
     pressed_for = self.frame - self.stalk_press_frame
-    if momentary and pressed_for >= STALK_TAP_MOMENTARY_FRAMES:
-      return []                                  # GV80's lever springs back, so stop after the tap
+    if momentary and pressed_for > STALK_MOMENTARY_RELEASE_FRAME:
+      return []                                  # GV80's lever springs back after the release frame
     # Match the stock rate: the column module sends 0x3C1 at 5 Hz. Modes 1/2 keep the old 20 Hz.
     if pressed_for % (STALK_MOMENTARY_HZ_DIV if momentary else 5) != 0 or CS.blinker_stalks is None:
       return []
-    # GV80 holds the tap form for the whole press and then releases; the hold cars switch to the steady form after 0.2 s
-    tap = pressed_for < (STALK_TAP_MOMENTARY_FRAMES if momentary else STALK_TAP_FRAMES)
+    # GV80 holds the tap form for 0.35 s and then sends one idle release frame at 0.40 s; hold cars switch to steady after 0.2 s
+    active = not momentary or pressed_for < STALK_TAP_MOMENTARY_FRAMES
+    tap = active and pressed_for < (STALK_TAP_MOMENTARY_FRAMES if momentary else STALK_TAP_FRAMES)
     values = dict(CS.blinker_stalks)
     source_counter = int(values.pop("COUNTER_ALT"))
     values.pop("CHECKSUM_MAYBE", None)
-    values.update(LEFT_BLINKER=int(side == 1), RIGHT_BLINKER=int(side == 2),
+    values.update(LEFT_BLINKER=int(active and side == 1), RIGHT_BLINKER=int(active and side == 2),
                   LEFT_BLINKER_TAP=int(tap and side == 1), RIGHT_BLINKER_TAP=int(tap and side == 2))
-    # Stock captures repeat a counter until the lever state changes; BCM acceptance remains unverified.
+    # Stock captures repeat a counter until the lever state changes; momentary taps keep advancing across kicks while
+    # the physical stalk remains idle at the same source_counter.
     if getattr(self, "stalk_counter", None) is None or source_counter != getattr(self, "stalk_source_counter", None):
-      self.stalk_counter = (source_counter + 1) % 16
+      base = (getattr(self, "stalk_momentary_counter", None)
+              if momentary and source_counter == getattr(self, "stalk_source_counter", None)
+              and getattr(self, "stalk_momentary_counter", None) is not None else source_counter)
+      self.stalk_counter = (base + 1) % 16
     elif values != self.stalk_values:
       self.stalk_counter = (self.stalk_counter + 1) % 16
     self.stalk_source_counter, self.stalk_values = source_counter, values.copy()
+    if momentary:
+      self.stalk_momentary_counter = self.stalk_counter
     values.update(COUNTER_ALT=self.stalk_counter, CHECKSUM_MAYBE=0)
     addr, dat, bus = self.packer.make_can_msg("BLINKER_STALKS", self.CAN.ECAN, values)
     return [CanData(addr, bytes([stalk_checksum(dat[1:])]) + bytes(dat[1:]), bus)]
@@ -379,26 +403,48 @@ class CarController(CarControllerBase):
     lamp = CS.out.leftBlinker or CS.out.rightBlinker
     # lane changes are banned in a tunnel announced as no-lane-change, and for 20 s after a roundabout sign (carstate)
     tunnel = getattr(CS.out, "naviTunnel", False) or getattr(CS.out, "naviRoundabout", False)
-    side = self.lane_crossing.update(getattr(CS, "modelV2", None), self.frame * DT_CTRL,
-                                     self.blinker_control and drive and not lamp and not tunnel, CS.out.steeringTorque)
+    stalk_auto = getattr(self, "stalk_auto", False)
+    active = (self.blinker_control or stalk_auto) and drive and not lamp and not tunnel
+    md = getattr(CS, "modelV2", None)
+    side = self.lane_crossing.update(md, self.frame * DT_CTRL, active, getattr(CS.out, "steeringTorque", None))
     for i, line in enumerate((CS.out.leftLaneLine, CS.out.rightLaneLine)):
       if line // 10 == 2:  # camera color: 0 none, 1 white, 2 yellow, 3 blue
         self.yellow_until[i] = self.frame + YELLOW_HOLD_FRAMES
     if side and self.frame < self.yellow_until[side - 3]:
       side = 0
+    auto_sig = str(getattr(getattr(md, "meta", None), "autoTurnSignal", "none"))
+    auto_side = 3 if auto_sig == "left" else 4 if auto_sig == "right" else 0
+    if active and auto_side in (3, 4) and auto_side != getattr(self, "auto_turn_side_prev", 0):
+      side = side or auto_side
+    self.auto_turn_side_prev = auto_side
     if side:
       self.blinker_side, self.blinker_pulse_end = side, self.frame + BLINKER_PULSE_FRAMES
+      if stalk_auto:
+        self.stalk_press_side = 0
     pulse = self.frame < self.blinker_pulse_end
-    # the parking ECU is paused only around a kick and restored right after it (menu test: any speed or gear)
     # SpasSteerTest: parked, stopped, hands off. APRK is asked on both buses - bus 0 ignored it 10-26, and a second SPAS1
     # stream with its own counter runs on bus 1 (10-30)
     spas = (self.spas_steer_test != 0 and CS.out.gearShifter == structs.CarState.GearShifter.park and
             CS.out.standstill and not CS.out.steeringPressed)
+    # CanfdBlinkerStalkAuto: hand the kick to stalk_blinkers() as a GV80 momentary tap and skip the
+    # APRK/SPAS exchange entirely (the menu test keeps the SPAS path). If an earlier SPAS kick left
+    # the parking ECU silenced, restore it once here.
+    if stalk_auto and self.blinker_test not in (1, 2) and not spas:
+      if pulse and self.blinker_side in (3, 4):
+        self.stalk_kick_side, self.stalk_kick_until = self.blinker_side, self.blinker_pulse_end
+      if self.aprk_state:
+        for bus in self.aprk_buses:
+          ret.append(CanData(APRK_ADDR, APRK_DEFAULT_SESSION, bus))
+        self.aprk_state, self.aprk_buses = 0, ()
+      return ret
+    # the parking ECU is paused only around a kick and restored right after it (menu test: any speed or gear)
     want = self.blinker_test in (1, 2) or (self.blinker_control and drive and pulse) or spas
     if not want:
       for bus in self.aprk_buses:
         ret.append(CanData(APRK_ADDR, APRK_DEFAULT_SESSION, bus))
       self.aprk_state, self.aprk_buses = 0, ()
+      self.packer.counters.pop(0x165, None)
+      self.packer.counters.pop(0x16A, None)
     elif self.aprk_state == 0:
       self.aprk_buses = (self.CAN.ECAN, self.CAN.ACAN) if spas else (self.CAN.ECAN,)
       ret += [CanData(APRK_ADDR, APRK_EXT_SESSION, bus) for bus in self.aprk_buses]
@@ -478,6 +524,7 @@ class CarController(CarControllerBase):
       self.blinker_control = params.get_bool("CanfdBlinkerKick")
       self.blinker_test = params.get_int("CanfdBlinkerMenuTest")
       self.blinker_stalk = params.get_int("CanfdBlinkerStalk")
+      self.stalk_auto = params.get_bool("CanfdBlinkerStalkAuto")
       self.bvm_view = params.get_int("CanfdBvmView")
       self.bvm_raw = params.get_int("CanfdBvmRaw")
       self.bvm_alt_time = params.get_int("CanfdBvmAltTime")
@@ -776,15 +823,15 @@ class CarController(CarControllerBase):
         can_sends.extend(self.bvm_view_msg())
 
       # blinkers
-      if self.blinker_stalk in (1, 2, 3, 4) or self.stalk_counter is not None:
-        can_sends.extend(self.stalk_blinkers(CS))
       if hda2 and self.CP.flags & HyundaiFlags.ENABLE_BLINKERS:
         can_sends.extend(hyundaicanfd.create_spas_messages(self.packer, self.CAN, self.frame, CC.leftBlinker, CC.rightBlinker,
                                                            getattr(CS, "spas2", None)))
       # carrot-wip's own SPAS path (CanfdBlinkerControl -> CANFD_SPAS_BLINKERS, card.py) owns APRK/SPAS when it is on
-      elif not self.CP.flags & HyundaiFlags.CANFD_SPAS_BLINKERS and (self.blinker_control or self.blinker_test or self.aprk_state or
+      elif not self.CP.flags & HyundaiFlags.CANFD_SPAS_BLINKERS and (self.blinker_control or self.stalk_auto or self.blinker_test or self.aprk_state or
                                                                     self.spas_steer_test):
         can_sends.extend(self.aprk_blinkers(CC, CS))
+      if self.blinker_stalk in (1, 2, 3, 4) or self.stalk_counter is not None or self.stalk_kick_side in (3, 4):
+        can_sends.extend(self.stalk_blinkers(CS))
 
       if self.camera_scc_params in [2, 3]:
         self.canfd_toggle_adas(CC, CS)

@@ -28,13 +28,14 @@ def test_actual_enabled_interface_assigns_serializable_flags(bus, enabled, valid
 
 
 @pytest.mark.parametrize('kick', [False, True])
+@pytest.mark.parametrize('stalk_auto', [False, True])
 @pytest.mark.parametrize('control', [False, True])
-def test_blinker_kick_switches_spas_control_off(kick, control):
-  # joongyu01: CanfdBlinkerKick on -> CanfdBlinkerControl cleared at boot, so the two never pause APRK together
+def test_blinker_kick_switches_spas_control_off(kick, stalk_auto, control):
+  # joongyu01: CanfdBlinkerKick or CanfdBlinkerStalkAuto on -> CanfdBlinkerControl cleared at boot
   source = Path('opendbc_repo/opendbc/car/hyundai/interface.py')
   tree = ast.parse(source.read_text(encoding='utf-8'))
   node = next(n for n in ast.walk(tree) if isinstance(n, ast.If) and 'CanfdBlinkerKick' in ast.unparse(n.test))
-  store = {'CanfdBlinkerKick': kick, 'CanfdBlinkerControl': control}
+  store = {'CanfdBlinkerKick': kick, 'CanfdBlinkerStalkAuto': stalk_auto, 'CanfdBlinkerControl': control}
   params = NS(get_bool=store.get, put_bool=store.__setitem__)
   exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), 'exec'), {'params': params, 'docs': False})
-  assert store['CanfdBlinkerControl'] == (control and not kick)
+  assert store['CanfdBlinkerControl'] == (control and not (kick or stalk_auto))

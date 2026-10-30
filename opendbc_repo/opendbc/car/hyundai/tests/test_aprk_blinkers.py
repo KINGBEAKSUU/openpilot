@@ -19,8 +19,9 @@ class Crossing:
     return side
 
 
-def make_cc(control=True, test=0, spas=0):
-  return SimpleNamespace(blinker_control=control, blinker_test=test, aprk_state=0, aprk_frame=0, lane_crossing=Crossing(),
+def make_cc(control=True, test=0, spas=0, stalk_auto=False):
+  return SimpleNamespace(blinker_control=control, blinker_test=test, stalk_auto=stalk_auto, stalk_kick_side=0,
+                         stalk_kick_until=0, aprk_state=0, aprk_frame=0, lane_crossing=Crossing(),
                          blinker_side=0, blinker_pulse_end=0, frame=0, yellow_until=[0, 0], CAN=SimpleNamespace(ECAN=0, ACAN=1),
                          packer=CANPacker('hyundai_canfd_generated'), spas_steer_test=spas, spas_angle=0., aprk_buses=())
 
@@ -129,3 +130,29 @@ def test_spas_steer_test_parked_only():
   assert [(m[1], m[2]) for m in sent] == [(carcontroller.APRK_DEFAULT_SESSION, 0), (carcontroller.APRK_DEFAULT_SESSION, 1)]
   cc.frame += 1
   assert CarController.aprk_blinkers(cc, None, CS(D)) == []
+
+
+def test_stalk_auto_hands_kick_to_stalk_and_skips_aprk():
+  cc = make_cc(control=False, stalk_auto=True)
+  assert step(cc, 10, D, 60, cross=3) == [] and cc.aprk_state == 0
+  assert cc.stalk_kick_side == 3 and cc.stalk_kick_until == carcontroller.BLINKER_PULSE_FRAMES
+  # if an earlier SPAS kick left APRK paused, stalk_auto restores it once
+  cc.aprk_state = 2
+  cc.aprk_buses = (cc.CAN.ECAN,)
+  assert [m[1] for m in step(cc, 1, D, 60)] == [carcontroller.APRK_DEFAULT_SESSION] and cc.aprk_state == 0
+
+
+def test_auto_turn_signal_rising_edge_triggers_kick():
+  cc = make_cc(control=False, stalk_auto=True)
+  CS = SimpleNamespace(
+    out=SimpleNamespace(gearShifter=D, vEgo=60 / 3.6, leftBlinker=False, rightBlinker=False, steeringTorque=0,
+                         naviTunnel=False, naviRoundabout=False, leftLaneLine=10, rightLaneLine=10),
+    modelV2=SimpleNamespace(meta=SimpleNamespace(autoTurnSignal='right')),
+  )
+  assert CarController.aprk_blinkers(cc, None, CS) == []
+  assert cc.stalk_kick_side == 4 and cc.stalk_kick_until == carcontroller.BLINKER_PULSE_FRAMES
+  # Holding the same autoTurnSignal does not re-trigger after pulse expires
+  cc.frame = carcontroller.BLINKER_PULSE_FRAMES + 10
+  cc.stalk_kick_side = 0
+  assert CarController.aprk_blinkers(cc, None, CS) == []
+  assert cc.stalk_kick_side == 0

@@ -453,7 +453,8 @@
             "ScreenOn",
             "StopGoAssist",
             "AutoRoadSpeedOnEngage",
-            "CanfdBlinkerKick"
+            "CanfdBlinkerKick",
+            "CanfdBlinkerStalkAuto"
           ]
         },
         {
@@ -3107,6 +3108,24 @@
       "cgroup": "Joongyu Lab",
       "ctitle": "变道自动转向灯",
       "cdescr": "驾驶员未打转向灯开始越过车道线时, 向该方向打开转向灯约1秒(约闪2次)。\n- 判断: 按模型车道线, 仅在两侧车道线可见且确实向车道线靠近时。与是否接管无关, D挡任何车速均有效。\n- 方式: 暂停泊车ECU约1秒, 通过SPAS2(0x16A)发送转向灯指令后立即恢复。会更改panda固件。\n- 已确认: IONIQ 5 PE 可点亮转向灯。泊车ECU不停止的车型(如 Grandeur GN7)同ID报文会冲突并可能导致CAN错误, 不建议使用。\n- 与「CAN-FD SPAS 转向灯」(CanfdBlinkerControl, openpilot变道/转弯时点亮)和蓝牙遥控转向灯(AutoBlinkerControl, 需要Jetson和PEAK USB-CAN)不同。\n- 开启后下次启动时会自动关闭 CanfdBlinkerControl(两者使用同一报文)。默认关闭。",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "unit": 1,
+      "control": "toggle",
+      "risk": "high"
+    },
+    {
+      "group": "Joongyu Lab",
+      "name": "CanfdBlinkerStalkAuto",
+      "title": "차로변경 깜빡이 자동(레버 방식)",
+      "descr": "「차로변경 깜빡이 자동」(CanfdBlinkerKick)의 신호를 SPAS 대신 조향칼럼 레버 메시지(0x3C1) 탭으로 보냅니다. GV80처럼 SPAS1을 상시 보내지 않아 CAN-FD SPAS 깜박이를 쓸 수 없는 차량용입니다. 킥이 발생하면 그 방향 탭을 순정과 같은 5Hz로 0.35초 한 번만 보내고, 자동주차 ECU는 건드리지 않습니다. 단독으로 켜거나 CanfdBlinkerKick과 함께 켜도 동작합니다. 메뉴 테스트(CanfdBlinkerMenuTest)는 기존대로 SPAS 방식을 씁니다. 기본 꺼짐.",
+      "egroup": "Joongyu Lab",
+      "etitle": "Lane Change Auto Blinker (Lever)",
+      "edescr": "Send the Lane Change Auto Blinker (CanfdBlinkerKick) signal as a steering column lever tap (0x3C1) instead of SPAS. For vehicles like the GV80 that do not broadcast SPAS1 and cannot use CAN-FD SPAS blinkers. On a kick, sends one 0.35 s tap at the stock 5 Hz for that side and never pauses the parking ECU. Works on its own or with CanfdBlinkerKick on. The menu test (CanfdBlinkerMenuTest) keeps using SPAS. Off by default.",
+      "cgroup": "Joongyu Lab",
+      "ctitle": "变道自动转向灯(拨杆方式)",
+      "cdescr": "将「变道自动转向灯」(CanfdBlinkerKick) 的信号以转向柱拨杆消息(0x3C1)轻点方式发送，而不是 SPAS。适用于 GV80 这类不常发 SPAS1、无法使用 CAN-FD SPAS 转向灯的车辆。触发时只以原厂 5Hz 发送一次 0.35 秒轻点，不暂停泊车 ECU。单独开启或与 CanfdBlinkerKick 同时开启均可工作。菜单测试(CanfdBlinkerMenuTest)仍使用 SPAS 方式。默认关闭。",
       "min": 0,
       "max": 1,
       "default": 0,

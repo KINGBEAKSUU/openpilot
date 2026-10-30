@@ -147,7 +147,7 @@ class CarInterface(CarInterfaceBase):
       from opendbc.car.hyundai.spas import compatible
       # joongyu01: our CanfdBlinkerKick (carcontroller) and this path both pause APRK and send 0x16A; Kick wins and
       # switches this one off at boot so the menu shows what is actually running
-      if not docs and params.get_bool("CanfdBlinkerKick") and params.get_bool("CanfdBlinkerControl"):
+      if not docs and (params.get_bool("CanfdBlinkerKick") or params.get_bool("CanfdBlinkerStalkAuto")) and params.get_bool("CanfdBlinkerControl"):
         params.put_bool("CanfdBlinkerControl", False)
       if params.get_bool("CanfdBlinkerControl") and compatible(fingerprint, CAN.ECAN) and not ret.flags & HyundaiFlags.ENABLE_BLINKERS:
         ret.flags |= HyundaiFlags.CANFD_SPAS_BLINKERS.value

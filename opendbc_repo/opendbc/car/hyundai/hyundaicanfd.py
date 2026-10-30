@@ -643,9 +643,10 @@ def create_spas_messages(packer, CAN, frame, left_blink, right_blink, spas2_temp
     blink = 4
   # GV80: the car's own SPAS2 (bytes 3/4=01, 10..13=80, 15=03, 20=10 via the BYTEn signals, 10-26 rlog 00000331);
   # other cars keep the zero-filled frame that lit the lamp on the Ioniq 5 and EV4
+  rx_counter = int(spas2_template["COUNTER"]) if spas2_template and "COUNTER" in spas2_template else None
   values = {k: v for k, v in (spas2_template or {}).items() if k not in ("CHECKSUM", "COUNTER")}
   values["BLINKER_CONTROL"] = blink
-  ret.append(packer.make_can_msg("SPAS2", CAN.ECAN, values))
+  ret.append(packer.make_can_msg("SPAS2", CAN.ECAN, values, rx_counter=rx_counter))
 
   return ret
 
