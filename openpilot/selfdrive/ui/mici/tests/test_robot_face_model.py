@@ -242,15 +242,12 @@ def test_steering_limit_cut_in_and_gas_override():
   inp.steer_sat = True
   run(m, inp, 0.1)
   assert m.last_event == 'strain' and m.squeeze and m.P['ex'].t < 0
-  inp.cutin = True                                        # less important than the strain still playing
+  inp.cutin = True                                        # less important than the strain still playing: it waits
   run(m, inp, 0.5)
-  assert m.last_event == 'strain'
+  assert m.last_event == 'strain' and 'cutin' in m.pending
   inp.steer_sat = inp.cutin = False
-  run(m, inp, 2.5)
-  assert not m.squeeze
-  inp.cutin = True
-  run(m, inp, 0.1)
-  assert m.last_event == 'cutin'
+  run(m, inp, 2.0)
+  assert m.last_event == 'cutin' and not m.squeeze         # and plays right after
   run(m, inp, 2.0)
   inp.gas = True
   run(m, inp, 0.1)
@@ -259,6 +256,44 @@ def test_steering_limit_cut_in_and_gas_override():
   inp.steer_sat = inp.gas = True
   run(m, inp, 0.5)
   assert m.last_event is None
+
+
+def test_gas_glance_never_hides_a_lane_change_or_a_bend():
+  # replayed drives: a gas press just before a lane change and a fast bend took both reactions away
+  m, inp = ready(engaged=True)
+  inp.gas = True
+  run(m, inp, 0.3)
+  assert m.last_event == 'gas'
+  inp.right_blinker = True
+  run(m, inp, 0.3)
+  inp.lane_phase, inp.lane_dir = 1, 1
+  run(m, inp, 0.1)
+  assert m.last_event == 'lane_go'
+  m, inp = ready(engaged=True)
+  inp.gas = True
+  run(m, inp, 0.2)
+  inp.right_blinker = True                                # gas while signalling is just the lane change: no glance
+  m.last_event = None
+  inp.gas = False
+  run(m, inp, 0.2)
+  inp.gas = True
+  run(m, inp, 0.3)
+  assert m.last_event is None
+  m, inp = ready(engaged=True)
+  inp.cutin = True
+  run(m, inp, 0.1)
+  inp.lat_accel = 3.0                                     # the bend starts during the cut-in flinch
+  run(m, inp, 1.0)
+  assert m.last_event == 'cutin'
+  run(m, inp, 0.6)
+  assert m.last_event == 'curve'                          # queued, then played
+
+
+def test_cut_in_at_crawling_speed():
+  m, inp = ready(engaged=True, v_ego=2.8)                 # 10 km/h, as in the replayed drive
+  inp.cutin = True
+  run(m, inp, 0.1)
+  assert m.last_event == 'cutin'
 
 
 def test_driver_alert_and_hard_braking_outrank_driving_events():
