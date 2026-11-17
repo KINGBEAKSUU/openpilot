@@ -21,6 +21,20 @@ IS_MICI = HARDWARE.get_device_type() == "mici"
 BACKLIGHT_OFFROAD = 65 if IS_MICI else 50
 SCREEN_OFF_TOUCH_WAKE_S = 5.0
 
+# NewUi: 0 = Carrot UI, 1 = Wayon/sunnypilot-style UI, 2 = clock face.
+NEW_UI_CARROT = 0
+NEW_UI_WAYON = 1
+NEW_UI_CLOCK = 2
+
+
+def new_ui_mode(value) -> int:
+  """Map a stored NewUi value to a mode. Older BOOL builds return True/False."""
+  if isinstance(value, bool):
+    return int(value)
+  if isinstance(value, int) and NEW_UI_CARROT <= value <= NEW_UI_CLOCK:
+    return value
+  return NEW_UI_CARROT
+
 
 class UIStatus(Enum):
   DISENGAGED = "disengaged"
@@ -94,6 +108,12 @@ class UIState:
     self.is_metric: bool = realtime_params.is_metric
     self.is_release = self.params.get_bool("IsReleaseBranch")
     self.always_on_dm: bool = realtime_params.always_on_dm
+    # A stale native Params build must not block metric/DM setting refreshes.
+    self._new_ui_param = TimedSnapshotCache(0, lambda: new_ui_mode(self.params.get("NewUi")))
+    self.new_ui_mode: int = 0
+    self.new_ui: bool = False
+    self.clock_ui: bool = False
+    self._apply_new_ui_mode(self._new_ui_param.refresh(time.monotonic()))
     self._record_audio_param: bool = realtime_params.record_audio
     self.started: bool = False
     self.ignition: bool = False
@@ -183,6 +203,13 @@ class UIState:
     self.recording_audio = self._record_audio_param and self.started
     self.is_metric = realtime_params.is_metric
     self.always_on_dm = realtime_params.always_on_dm
+    self._apply_new_ui_mode(self._new_ui_param.refresh(time.monotonic()))
+
+  def _apply_new_ui_mode(self, mode: int) -> None:
+    # 1 and 2 share the full-width NewUi layout; 2 replaces the onroad view with a clock.
+    self.new_ui_mode = mode
+    self.new_ui = mode >= NEW_UI_WAYON
+    self.clock_ui = mode == NEW_UI_CLOCK
 
   def _update_status(self) -> None:
     if self.started and self.sm.updated["selfdriveState"]:
