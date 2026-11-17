@@ -14,12 +14,14 @@ class SM(dict):
   def __init__(self):
     super().__init__(
       carState=NS(leftBlinker=False, rightBlinker=False, steeringAngleDeg=0.0, vEgo=10.0, aEgo=0.0, standstill=False,
-                  leftBlindspot=False, rightBlindspot=False, gasPressed=False),
+                  leftBlindspot=False, rightBlindspot=False, gasPressed=False, gearShifter='drive', seatbeltUnlatched=False,
+                  steeringPressed=False, vCruiseCluster=0.0, vCruise=0.0),
       selfdriveState=NS(enabled=False, alertType='', alertSound='none'), carControl=NS(latActive=False, actuators=NS(torque=0.0)),
       carOutput=NS(actuatorsOutput=NS(torque=0.0)),
       modelV2=NS(meta=NS(laneChangeState='off', laneChangeDirection='none')),
       radarState=NS(leadOne=NS(status=False, dRel=0.0, vLead=0.0)),
-      controlsState=NS(curvature=0.0), carrotMan=NS(xSpdDist=0, xSpdLimit=0, nGoPosDist=0), onroadEvents=[])
+      controlsState=NS(curvature=0.0), carrotMan=NS(xSpdDist=0, xSpdLimit=0, nGoPosDist=0, xSpdType=-1, xTurnInfo=-1, xDistToTurn=0),
+      onroadEvents=[])
     names = ('carState', 'selfdriveState', 'carControl', 'carOutput', 'modelV2', 'radarState', 'controlsState',
              'carrotMan', 'onroadEvents')
     self.alive = dict.fromkeys(names, True)
@@ -39,7 +41,8 @@ def face(monkeypatch):
                'rl_color4ub', 'rl_vertex2f', 'rl_end', 'draw_line_ex', 'draw_circle_v', 'draw_ellipse',
                'rl_disable_backface_culling', 'rl_enable_backface_culling', 'rl_push_matrix', 'rl_pop_matrix',
                'rl_translatef', 'rl_rotatef', 'rl_scalef', 'draw_rectangle_rounded', 'draw_rectangle_rounded_lines_ex',
-               'draw_text_ex', 'draw_triangle_strip'):
+               'draw_text_ex', 'draw_triangle_strip', 'draw_ring', 'draw_rectangle_pro', 'draw_circle_sector',
+               'draw_rectangle_lines_ex'):
     setattr(rl, name, lambda *a, name=name: calls.append((name, *a)))
   ui = NS(started_frame=10, sm=SM())
   monkeypatch.setitem(sys.modules, 'pyray', rl)
@@ -85,7 +88,7 @@ def test_inputs_read_driving_events(face):
   sm['modelV2'].meta = NS(laneChangeState='laneChangeStarting', laneChangeDirection='right')
   sm['radarState'].leadOne = NS(status=True, dRel=9.5, vLead=1.2)
   sm['controlsState'].curvature = 0.02
-  sm['carrotMan'] = NS(xSpdDist=280, xSpdLimit=80, nGoPosDist=1500)
+  sm['carrotMan'] = NS(xSpdDist=280, xSpdLimit=80, nGoPosDist=1500, xSpdType=1, xTurnInfo=2, xDistToTurn=180)
   sm['onroadEvents'] = [NS(name='steerSaturated')]
   sm['carState'].rightBlindspot = sm['carState'].gasPressed = True
   inp = face.f._inputs()
@@ -93,6 +96,17 @@ def test_inputs_read_driving_events(face):
   assert (inp.lead_d, inp.lead_v, inp.cam_dist, inp.cam_limit, inp.route_left) == (9.5, 1.2, 280.0, 80.0, 1500.0)
   assert inp.lat_accel == pytest.approx(-0.02 * 10 * 10)        # curvature + is a right bend: lateral + is left
   assert not inp.cutin and inp.blindspot_right and inp.gas
+  assert (inp.turn_type, inp.turn_dist, inp.bump_dist) == (2, 180.0, 0.0)
+  sm['carrotMan'].xSpdType = 22                                   # a speed bump comes in the camera fields
+  sm['carState'].leftBlinker = sm['carState'].rightBlinker = True
+  sm['carState'].gearShifter, sm['carState'].seatbeltUnlatched, sm['carState'].steeringPressed = 'reverse', True, True
+  sm['carState'].vCruiseCluster = 82.0
+  inp = face.f._inputs()
+  assert (inp.bump_dist, inp.cam_dist) == (280.0, 0.0) and inp.hazard and inp.gear == 'reverse'
+  assert inp.seatbelt_off and inp.override and inp.set_speed == 82.0
+  sm['carState'].leftBlinker = sm['carState'].rightBlinker = False
+  sm['carState'].gearShifter, sm['carState'].seatbeltUnlatched, sm['carState'].steeringPressed = 'drive', False, False
+  sm['carrotMan'].xSpdType = 1
   sm['modelV2'].meta = NS(laneChangeState='laneChangeFinishing', laneChangeDirection='left')
   sm['onroadEvents'] = []
   sm['selfdriveState'].alertType = 'radarCutin/warning'   # the one-frame event is gone; its alert is still up
@@ -204,7 +218,7 @@ def test_render_draws_both_eyes_and_keeps_the_matrix_balanced(face):
   face.f.render(face.rect)
   n = names(face.calls)
   assert n[0] == 'draw_rectangle_rec'
-  assert n.count('rl_push_matrix') == n.count('rl_pop_matrix') == 1
+  assert n.count('rl_push_matrix') == n.count('rl_pop_matrix') == 2   # the face, then the screen-fixed icons
   strips = [c for c in face.calls if c[0] == 'draw_triangle_strip']
   assert len(strips) >= 8                                 # both eye bodies, filled in gradient bands
   assert len({c[3] for c in strips}) >= 4                 # the bands step through colours
@@ -242,3 +256,37 @@ def test_shut_eyes_draw_a_stroke_and_props_draw(face):
   assert 'draw_rectangle_rounded' in n and 'draw_rectangle_rounded_lines_ex' in n
   texts = [c[2] for c in face.calls if c[0] == 'draw_text_ex']
   assert '?' in texts and 'Z' in texts
+
+
+def test_wheel_shows_while_driving_and_the_mouth_stays_above_it(face):
+  import math
+  sm, m = face.ui.sm, face.f.model
+  sm['selfdriveState'].enabled = True
+  for _ in range(80):                                      # engaged long enough for the wheel to come up
+    m.update(0.05, face.f._inputs())
+  m.P['mO'].v = m.P['mO'].t = 1.0                          # mouth wide open (surprise, a yawn)
+  m.P['hy'].v = 40.0                                       # and the head pushed well down (a crouch)
+  face.calls.clear()
+  face.f.draw(face.rect)
+  rings = [c for c in face.calls if c[0] == 'draw_ring']
+  assert len(rings) >= 5                                   # the rim, its edges and halo
+  g = type(face.f).__init__.__globals__
+  top = face.rect.height + g['WHEEL_DROP'] - g['WHEEL_R'] - g['WHEEL_RIM']
+  ellipses = [c for c in face.calls if c[0] == 'draw_ellipse']
+  mouth = max(ellipses, key=lambda c: c[4])                # the open mouth: the tallest ellipse
+  # draw() runs inside the face's transform; undo it for the mouth's lowest point on screen
+  hx, hy = face.rect.width / 2, face.rect.height / 2 + 40.0
+  assert hy + mouth[2] + mouth[4] <= top + 8               # (the transform's scale and tilt are close to 1 and 0)
+  _ = math, hx
+
+
+def test_icons_draw_in_screen_space(face):
+  m = face.f.model
+  m.spawn(kind='sign', x=236, y=-62, life=2.0, value=80)
+  m.spawn(kind='turn', x=234, y=-62, life=2.0, value=5, text='120m')
+  m.spawn(kind='speed', x=0, y=-100, life=2.0, value=85, direction=1)
+  m.dm = True
+  face.calls.clear()
+  face.f.draw(face.rect)
+  texts = [c[2] for c in face.calls if c[0] == 'draw_text_ex']
+  assert '80' in texts and '120m' in texts and '85' in texts

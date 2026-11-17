@@ -11,7 +11,7 @@ import pyray as rl
 CASES = {
   'idle': 3.0, 'engage-star': 0.35, 'engage-happy': 0.9, 'driving': 4.0, 'signal-right': 4.6, 'brake': 0.3,
   'driver-monitoring': 1.2, 'yawn': 50.2, 'asleep': 55.0, 'love': 1.0, 'cool': 1.2, 'think': 1.6, 'curious': 1.0,
-  'straining': 2.2,
+  'straining': 2.2, 'set-speed': 1.0,
 }
 # driving-event reactions: case: (reaction, arg, engaged, seconds after it starts)
 EVENTS = {
@@ -19,7 +19,12 @@ EVENTS = {
   'blind-spot': ('bsm', 1, True, 0.4),
   'lead-go': ('lead_go', 0, False, 0.4), 'camera': ('camera', 0, True, 0.25), 'camera-fast': ('camera_fast', 0, True, 1.2),
   'slow-steer': ('slow_steer', 0, True, 0.6), 'steer-back': ('steer_back', 0, True, 0.3), 'cut-in': ('cutin', 0, True, 0.25), 'gas': ('gas', 0, True, 0.8),
-  'arrive': ('arrive', 0, False, 0.9), 'curve': ('curve', 1, True, 0.4),
+  'arrive': ('arrive', 0, False, 0.9), 'curve': ('curve', 1, True, 0.4), 'brake-wheel': ('brake', 0, True, 0.3),
+  'camera-sign': ('camera', 50, True, 0.6), 'turn-left': ('turn', 1, True, 0.5), 'turn-right': ('turn', 2, True, 0.5),
+  'u-turn': ('turn', 7, True, 0.5), 'roundabout': ('turn', 5, True, 0.5), 'tollgate': ('turn', 6, True, 0.5),
+  'bump': ('bump', 0, True, 0.5), 'bump-bounce': ('bump', 0, True, 1.2), 'seatbelt': ('seatbelt', 0, True, 0.6),
+  'reverse': ('reverse', 0, False, 0.6), 'park': ('park', 0, False, 0.6), 'hazard': ('hazard', 0, False, 0.6),
+  'override': ('override', 0, True, 0.6), 'dm-clear': ('dm_clear', 0, True, 0.35),
 }
 WARMUP = 2.6
 
@@ -51,6 +56,7 @@ def main():
         while t < WARMUP:
           face.model.update(0.05, inp)
           t = round(t + 0.05, 4)
+        face.model.turn_dist = 180
         face.model.react(reaction, arg)
         t = 0.0
         while t < after:
@@ -69,6 +75,8 @@ def main():
           inp.engaged, inp.right_blinker, inp.steer_deg = True, t > 3.5, 12.0
         elif case == 'straining':
           inp.engaged, inp.steer_torque = True, min(1.0, 0.4 + t * 0.4)
+        elif case == 'set-speed':
+          inp.engaged, inp.set_speed = True, 80.0 if t < 0.5 else 85.0
         elif case == 'brake':
           inp.a_ego = -4.5
         elif case == 'driver-monitoring':

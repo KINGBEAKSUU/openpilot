@@ -77,7 +77,7 @@ class Spring:
 
 # Expression targets. Unlisted keys fall back to BASE.
 BASE = {'w': 96.0, 'h': 112.0, 'up': 0.0, 'tilt': 0.0, 'low': 0.0, 'smile': 0.0, 'sag': 0.0, 'asym': 0.0,
-        'blush': 0.0, 'mO': 0.0, 'green': 0.0, 'amber': 0.0, 'flash': 0.0}
+        'blush': 0.0, 'mO': 0.0, 'green': 0.0, 'amber': 0.0, 'red': 0.0, 'flash': 0.0}
 MOODS: dict[str, dict[str, float]] = {
   'idle': {},
   'happy': {'w': 108, 'h': 96, 'low': 0.46, 'smile': 1, 'blush': 0.9, 'green': 0.7},
@@ -132,6 +132,14 @@ class FaceInputs:
   music_period: float = 0.5   # s per beat
   gas: bool = False
   lat_accel: float = 0.0      # m/s², + turning left
+  hazard: bool = False        # both turn signals (hazard lights)
+  gear: str = ''              # carState.gearShifter: 'park', 'reverse', 'drive', ...
+  seatbelt_off: bool = False
+  override: bool = False      # the driver is turning the wheel (steeringPressed)
+  set_speed: float = 0.0      # cruise set speed, km/h (0 = not set)
+  turn_type: int = -1         # navigation's next maneuver (carrotMan.xTurnInfo): 1 left, 2 right, 5 roundabout, 6 tollgate, 7 U-turn
+  turn_dist: float = 0.0      # and how far it is, m
+  bump_dist: float = 0.0      # a speed bump ahead, m (0 = none)
 
 
 @dataclass
@@ -147,6 +155,8 @@ class Particle:
   phase: float = 0.0
   delay: float = 0.0
   direction: int = 1
+  value: float = 0.0          # what an icon shows: a speed limit, a turn type, ...
+  text: str = ''
 
 
 @dataclass
@@ -227,9 +237,14 @@ class FaceModel:
   CURVE_HOLD_S = 0.8
   # Who may cut in: a reaction runs only when nothing at least as important is still playing.
   PRIO = {'brake': 5, 'dm': 5, 'engage': 3, 'disengage': 3, 'dm_clear': 3, 'go': 2, 'sleepy': 0,
-          'bsm': 4, 'cutin': 3, 'camera_fast': 2, 'lead_go': 2, 'arrive': 2,
-          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'camera': 1, 'curve': 1, 'slow_steer': 1, 'steer_back': 1, 'gas': 0}
-  COOLDOWN = {'bsm': 4.0, 'cutin': 6.0, 'lead_go': 10.0, 'gas': 10.0, 'curve': 40.0, 'slow_steer': 20.0}
+          'bsm': 4, 'seatbelt': 4, 'cutin': 3, 'hazard': 3, 'camera_fast': 2, 'lead_go': 2, 'arrive': 2, 'reverse': 2, 'park': 2,
+          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'camera': 1, 'curve': 1, 'slow_steer': 1, 'steer_back': 1, 'turn': 1,
+          'bump': 1, 'gas': 0, 'override': 0}
+  COOLDOWN = {'bsm': 4.0, 'cutin': 6.0, 'lead_go': 10.0, 'gas': 10.0, 'curve': 40.0, 'slow_steer': 20.0, 'seatbelt': 30.0,
+              'hazard': 10.0, 'reverse': 5.0, 'park': 10.0, 'turn': 8.0, 'bump': 6.0, 'override': 15.0}
+  TURN_NEAR_M = 250.0         # show the navigation's next turn this far out (once per maneuver)
+  BUMP_NEAR_M = 120.0
+  TURN_LOOK = {1: -1, 2: 1, 5: 1, 6: 0, 7: -1}   # where it looks for each maneuver (a Korean U-turn swings left)
   WAKES = ('lead_go',)  # the only event that wakes it from sleep
   SLOW_GREEN = 0.4      # the driving tint while too slow to steer (0.9 when steering)
   # Steering effort: from this much torque it starts to strain and at EFFORT_FULL it is all-out (eyes shut tight).
@@ -245,7 +260,8 @@ class FaceModel:
     for name, v, k, z in (('w', 96, 170, 0.5), ('h', 112, 170, 0.46), ('up', 0, 240, 0.78), ('tilt', 0, 160, 0.72),
                           ('low', 0, 210, 0.76), ('smile', 0, 180, 0.64), ('sag', 0, 110, 0.8), ('asym', 0, 110, 0.68),
                           ('blush', 0, 26, 1), ('mO', 0, 190, 0.58), ('green', 0, 18, 1), ('amber', 0, 24, 1),
-                          ('flash', 0, 80, 1), ('bright', 1, 12, 1),
+                          ('flash', 0, 80, 1), ('bright', 1, 12, 1), ('red', 0, 60, 1),
+                          ('drive', 0, 30, 0.85), ('hands', 0, 70, 0.7),
                           ('gxL', 0, 760, 0.58), ('gyL', 0, 760, 0.6), ('gxR', 0, 690, 0.58), ('gyR', 0, 690, 0.6),
                           ('wL', 0, 320, 0.8), ('wR', 0, 320, 0.8),
                           ('hx', 0, 52, 0.62), ('hy', 0, 72, 0.4), ('rot', 0, 56, 0.55), ('pitch', 0, 90, 0.45),
@@ -263,7 +279,7 @@ class FaceModel:
 
   # ---- state ------------------------------------------------------------------------
   def reset(self) -> None:
-    for name in ('up', 'tilt', 'low', 'smile', 'sag', 'asym', 'blush', 'mO', 'green', 'amber', 'flash',
+    for name in ('up', 'tilt', 'low', 'smile', 'sag', 'asym', 'blush', 'mO', 'green', 'amber', 'red', 'flash', 'drive', 'hands',
                  'ex', 'ey', 'er', 'pitch', 'wL', 'wR', 'p_shades', 'p_quest', 'p_bulb', 'p_nightcap'):
       self.P[name].t = 0.0
     self.mood = 'idle'
@@ -298,6 +314,15 @@ class FaceModel:
     self.gas = False
     self.slow_steer = False
     self.handed_over = False
+    self.hands_off_until = 0.0  # the driver took the wheel: its hands are off until then
+    self.hazard = False
+    self.gear = ''
+    self.override = False
+    self.set_speed = 0.0
+    self.turn_key: int | None = None   # the maneuver already shown
+    self.turn_dist = 0.0
+    self.turn_last = 0.0
+    self.bump_armed = True
     self.beats = 0
     self.sway = 1
     self.music_quiet = 0.0
@@ -408,6 +433,20 @@ class FaceModel:
       return
     self.spawn(kind='sweat', x=-186 + (self.rng.random() - 0.5) * 28, y=-64 + (self.rng.random() - 0.5) * 16, vy=18, life=2.2)
 
+  def _set_speed(self, speed: float) -> None:
+    """A changed cruise set speed pops up as a badge (the robot face hides the speed panel), with a nod up or down."""
+    speed = speed if 0 < speed < 250 else 0.0
+    if speed and self.set_speed and self.engaged and abs(speed - self.set_speed) >= 0.5:
+      up = 1 if speed > self.set_speed else -1
+      badge = next((p for p in self.parts if p.kind == 'speed'), None)
+      if badge is None:
+        self.spawn(kind='speed', x=0, y=-100, life=1.8, value=speed, direction=up)
+      else:
+        badge.value, badge.direction, badge.age = speed, up, min(badge.age, 0.2)
+      if self.clock >= self.event_until and not self.sleep_stage:
+        self.kick('hy', -70 if up > 0 else 70)
+    self.set_speed = speed
+
   # ---- inputs -> events --------------------------------------------------------------------
   def _inputs(self, dt: float, inp: FaceInputs) -> None:
     if inp.session != self.session:
@@ -427,6 +466,18 @@ class FaceModel:
     if hard and self.clock >= self.brake_until:
       self.brake_until = self.clock + self.BRAKE_COOLDOWN_S
       self.react('brake')
+    if inp.hazard and not self.hazard:
+      self.want('hazard', 0, 2.0)
+    self.hazard = inp.hazard
+    if inp.gear != self.gear:
+      if inp.gear == 'reverse':
+        self.want('reverse', 0, 2.0)
+      elif inp.gear == 'park' and self.gear in ('drive', 'reverse', 'sport', 'low', 'manumatic'):
+        self.want('park', 0, 2.0)
+      self.gear = inp.gear
+    if inp.seatbelt_off and (inp.v_ego > 2.0 or self.engaged):
+      self.want('seatbelt', 0, 3.0)          # again every 30 s while it stays off
+    self._set_speed(inp.set_speed)
     stopped = inp.standstill or abs(inp.v_ego) < 0.1
     self.stopped_for = self.stopped_for + dt if stopped else 0.0
     if self.sleep_stage == 0 and self.stopped_for > self.DROWSY_AFTER_S and not self.dm and not self.signal and not inp.music_on:
@@ -462,7 +513,30 @@ class FaceModel:
       self.cam_armed = True
     elif self.cam_armed and inp.cam_dist <= self.CAMERA_NEAR_M and inp.cam_limit > 0 and inp.v_ego > 5:
       self.cam_armed = False
-      self.want('camera_fast' if inp.v_ego * 3.6 > inp.cam_limit + self.CAMERA_OVER_KPH else 'camera', 0, 3.0)
+      self.want('camera_fast' if inp.v_ego * 3.6 > inp.cam_limit + self.CAMERA_OVER_KPH else 'camera', inp.cam_limit, 3.0)
+    # the navigation's next turn (one reaction per maneuver; lane changes have their own reaction)
+    if inp.turn_dist > self.turn_last + 60:      # the distance jumped up: the next maneuver
+      self.turn_key = None
+    self.turn_last = inp.turn_dist
+    if inp.turn_type in self.TURN_LOOK and 0 < inp.turn_dist <= self.TURN_NEAR_M and inp.v_ego > 3:
+      if inp.turn_type != 7 or inp.route_left <= 0 or inp.route_left > self.ARRIVE_M * 10:   # 7 is also "arrived"
+        if inp.turn_type != self.turn_key:
+          self.turn_key = inp.turn_type
+          self.turn_dist = inp.turn_dist
+          self.want('turn', inp.turn_type, 3.0)
+    elif inp.turn_type not in self.TURN_LOOK or inp.turn_dist <= 0 or inp.turn_dist > self.TURN_NEAR_M + 250:
+      self.turn_key = None
+    # a speed bump ahead
+    if 0 < inp.bump_dist <= self.BUMP_NEAR_M and inp.v_ego > 2:
+      if self.bump_armed:
+        self.bump_armed = False
+        self.want('bump', 0, 2.0)
+    elif inp.bump_dist <= 0 or inp.bump_dist > self.BUMP_NEAR_M + 80:
+      self.bump_armed = True
+    # the driver turning the wheel while it steers (not for a lane change)
+    if inp.override and not self.override and self.engaged and inp.v_ego > 3 and not self.signal and not inp.lane_phase:
+      self.want('override', 0, 1.0)
+    self.override = inp.override
     # steering effort grows with the torque it applies (rises fast, eases off slower); no event, a continuous strain
     torque = abs(inp.steer_torque) if self.engaged else 0.0
     target = clamp((torque - self.EFFORT_FROM) / (self.EFFORT_FULL - self.EFFORT_FROM), 0.0, 1.0)
@@ -645,9 +719,11 @@ class FaceModel:
 
       def pop():
         self._apply_mood('surprised')
+        P['red'].t, P['flash'].t = 1.0, 0.25                  # danger: red eyes and a red "!"
         self.kick('hy', -440)
         P['pitch'].t = 0.17
-        self.spawn(kind='bang', x=196, y=-84, life=1.4)
+        self.spawn(kind='bang', x=226, y=-64, life=1.4, value=1)
+        self.spawn(kind='skid', x=0, y=96, life=0.9)
         self.shake = max(self.shake, 9.0)
         self.tremble = 0.6
       self.later(0.08, pop)
@@ -674,6 +750,8 @@ class FaceModel:
       self.event_until = self.clock + 1.0
       self._apply_mood('sigh')
       self.kick('hy', -90)
+      for i in range(3):                                     # "phew": little puffs out of the mouth
+        self.later(0.1 + i * 0.16, lambda i=i: self.spawn(kind='puff', x=26 + i * 6, y=62, vx=46, vy=-16, life=1.0, size=1 - i * 0.2))
       self.later(0.85, lambda: (self._apply_mood(self.rest_mood()), self.start_blink()))
     elif name == 'sleepy':
       self.sleep_stage = 1
@@ -769,6 +847,7 @@ class FaceModel:
       P['up'].v = P['up'].t = 1.0
       L(0.35, lambda: (setattr(P['up'], 't', 0.35), self.kick('hy', -60)))
       L(0.75, lambda: (self._glad(), self.kick('hy', -230), self._sparkle(4)))
+      L(0.8, lambda: self.spawn(kind='wave', x=232, y=-14, life=1.9))   # "hi!"
       L(1.1, lambda: self.kick('hy', 120))
       L(1.6, self._settle)
     elif name == 'lane_go':
@@ -778,6 +857,7 @@ class FaceModel:
       P['ex'].t, P['er'].t = d * 34, d * 8
       self.look(d * 0.95, -0.05, 1.1)
       self.kick('hx', d * 200)
+      self.spawn(kind='arrow', x=d * 234, y=-56, life=1.7, direction=d)
       for i in range(4):
         L(i * 0.09, lambda i=i: self.spawn(kind='streak', x=-d * (150 + i * 14), y=-42 + i * 26, vx=-d * 240, life=0.5,
                                             size=1 + (i % 2) * 0.5, direction=-d))
@@ -789,6 +869,7 @@ class FaceModel:
       self._glad()
       P['blush'].t = 0.4
       self.kick('hy', -150)
+      self.spawn(kind='check', x=234, y=-62, life=1.4)       # done
       L(0.2, lambda: self._sparkle(2))
       L(0.3, lambda: self.kick('hy', 110))
       L(0.48, lambda: self.kick('hy', -90))
@@ -801,7 +882,9 @@ class FaceModel:
       self.look(d * 1.1, -0.05, 0.9)
       self.kick('hx', -d * 260)
       self.kick('hy', 120)
-      self.spawn(kind='bang', x=d * 206, y=-70, life=1.3)
+      P['red'].t = 0.7
+      self.spawn(kind='car', x=d * 234, y=-30, life=2.0, direction=d)            # the car in the blind spot
+      self.spawn(kind='bang', x=d * 234, y=-82, life=1.3, value=1)
       L(0.45, lambda: (self.osc('hx', 12, 5.5, 3.5), self.osc('rot', 4, 5.5, 3.5)))
       L(1.6, lambda: (setattr(P['amber'], 't', 0), self._settle()))
     elif name == 'lead_go':
@@ -810,7 +893,7 @@ class FaceModel:
       P['w'].t, P['h'].t, P['up'].t = 110, 136, 0.0
       self.look(0.0, -0.3, 0.9)
       self.kick('hy', -260)
-      self.spawn(kind='bang', x=196, y=-84, life=1.2)
+      self.spawn(kind='car', x=234, y=-36, life=1.8, value=1)    # the car ahead pulling away (rises and shrinks)
       L(0.55, lambda: (setattr(P['pitch'], 't', 0.06), setattr(P['ey'], 't', -8), self.kick('hy', -120)))
       L(0.9, lambda: self.start_blink(double=True, speed=1.2))
       L(1.5, self._settle)
@@ -818,7 +901,9 @@ class FaceModel:
       # a speed camera: a wary glance up at it, the shutter flash; sweating if over its limit
       fast = name == 'camera_fast'
       self.event_until = self.clock + (2.6 if fast else 2.0)
-      self.spawn(kind='cam', x=178, y=-86, life=1.8)
+      self.spawn(kind='cam', x=178, y=-94, life=1.8)
+      if arg > 0:
+        self.spawn(kind='sign', x=236, y=-62, life=2.2 if fast else 1.8, value=arg, direction=1 if fast else 0)
       self.look(0.7, -0.7, 0.45)
       P['up'].t, P['tilt'].t = 0.2, 0.18
       L(0.35, lambda: (setattr(P['flash'], 't', 0.9), self.start_blink(speed=1.6)))
@@ -826,7 +911,7 @@ class FaceModel:
       L(0.65, lambda: self.look(0.0, 0.0, 0.35))
       L(1.0, lambda: self.look(0.7, -0.7, 0.4))
       if fast:
-        L(0.7, lambda: (self._apply_mood('worried'), self._sweat(), setattr(self, 'tremble', 0.5)))
+        L(0.7, lambda: (self._apply_mood('worried'), setattr(P['red'], 't', 0.45), self._sweat(), setattr(self, 'tremble', 0.5)))
         L(2.3, self._settle)
       else:
         L(1.6, self._settle)
@@ -835,8 +920,10 @@ class FaceModel:
       self.event_until = self.clock + 1.4
       P['w'].t, P['h'].t, P['up'].t, P['pitch'].t = 104, 124, 0.0, -0.07
       self.kick('hy', 220)
-      self.look(0.0, -0.1, 0.8)
+      self.look(0.3, -0.25, 0.8)
       self.start_blink(speed=1.8, double=True)
+      self.spawn(kind='car', x=262, y=-96, vx=-80, vy=30, life=1.4, value=2)    # someone sliding in ahead
+      self.spawn(kind='bang', x=120, y=-88, life=1.0)
       L(0.5, lambda: (setattr(P['pitch'], 't', 0), self.kick('hy', -90)))
       L(1.1, self._settle)
     elif name == 'gas':
@@ -846,6 +933,7 @@ class FaceModel:
       P['green'].t = 0.9 if self.engaged else 0
       P['er'].t, P['ex'].t, P['p_quest'].t = -8, -14, 1
       self.look(-0.65, 0.22, 1.0)
+      self.spawn(kind='gauge', x=-232, y=40, life=1.8)              # speeding up
       L(1.1, lambda: (setattr(P['p_quest'], 't', 0), self.look(0, 0, 0.2), self.kick('hy', -90)))
       L(1.5, self._settle)
     elif name == 'arrive':
@@ -853,6 +941,7 @@ class FaceModel:
       self.event_until = self.clock + 3.1
       self._apply_mood('happy')
       self.stars(1.4)
+      self.spawn(kind='flag', x=232, y=-56, life=3.0)
       for i in range(3):
         L(i * 0.42, lambda: (self.kick('hy', -280), self._sparkle(4)))
       for i in range(4):
@@ -867,6 +956,7 @@ class FaceModel:
       P['green'].t, P['blush'].t = self.SLOW_GREEN, 0.2
       P['er'].t, P['ex'].t = -6, -16
       self.look(-0.62, 0.2, 1.4)
+      self.spawn(kind='turtle', x=226, y=44, life=2.4)             # too slow to steer: its hands come off the wheel
       L(0.25, lambda: (setattr(P['pitch'], 't', 0.07), self.kick('hy', 140)))
       L(0.7, lambda: (setattr(P['pitch'], 't', 0), self.start_blink(speed=0.5)))
       L(1.5, lambda: self.look(0, 0.05, 0.4))
@@ -886,8 +976,88 @@ class FaceModel:
       P['w'].t, P['h'].t, P['mO'].t = 112, 128, 0.45
       P['ex'].t, P['er'].t = d * 30, d * 8
       self.kick('hx', d * 220)
+      for i in range(3):                                          # blown toward the outside
+        L(i * 0.12, lambda i=i: self.spawn(kind='wind', x=-d * (200 - i * 8), y=-40 + i * 34, vx=d * 170, life=0.7, direction=d))
       L(0.6, lambda: (self._glad(), self.kick('hy', -120)))
       L(1.5, self._settle)
+    elif name == 'turn':
+      # the navigation's next turn is close: an attentive look that way, with the turn's arrow and distance
+      kind = int(arg)
+      t = self.TURN_LOOK.get(kind, 0)
+      self.event_until = self.clock + 2.2
+      dist = int(round(self.turn_dist / 10.0)) * 10
+      self.spawn(kind='turn', x=(t or 1) * 234, y=-62, life=2.4, value=kind, text=f'{dist}m' if dist > 0 else '')
+      P['up'].t, P['tilt'].t = 0.08, 0.14
+      P['ex'].t, P['er'].t = t * 22, t * 5
+      self.look(t * 0.9, -0.25, 1.2)
+      self.kick('hx', t * 120)
+      self.kick('hy', -60)
+      L(1.3, lambda: self.start_blink(speed=1.2))
+      L(2.0, self._settle)
+    elif name == 'bump':
+      # a speed bump ahead: brace for it (squint, head down), then a bounce over it
+      self.event_until = self.clock + 2.4
+      self.spawn(kind='bump', x=234, y=-58, life=2.6)
+      P['up'].t, P['low'].t, P['pitch'].t, P['w'].t, P['h'].t = 0.3, 0.12, -0.03, 104, 96
+      self.look(0, -0.2, 1.0)
+      self.kick('hy', 90)
+
+      def bounce():
+        self.kick('hy', -380)
+        self.shake = max(self.shake, 4.0)
+        P['mO'].t, P['pitch'].t, P['up'].t, P['h'].t = 0.45, 0.05, 0.0, 124
+      L(1.1, bounce)
+      L(1.35, lambda: self.kick('hy', 260))
+      L(1.65, lambda: (setattr(P['mO'], 't', 0), self._glad(), self.kick('hy', -80)))
+      L(2.2, self._settle)
+    elif name == 'seatbelt':
+      # the driver's seatbelt is off: a worried "hey" their way, with the belt sign
+      self.event_until = self.clock + 2.6
+      self._apply_mood('worried')
+      self.spawn(kind='belt', x=-234, y=-48, life=2.8)
+      P['ex'].t, P['er'].t = -20, -6
+      self.look(-0.8, 0.1, 1.6)
+      self.kick('hx', -150)
+      L(0.6, lambda: self.kick('hy', -90))
+      L(1.0, lambda: self.kick('hy', -90))
+      L(2.4, self._settle)
+    elif name == 'reverse':
+      # reverse gear: an R badge and a look down and back, beeping
+      self.event_until = self.clock + 2.4
+      self.spawn(kind='badge', x=234, y=-62, life=2.6, text='R')
+      P['up'].t, P['h'].t, P['pitch'].t = 0.12, 102, -0.04
+      self.look(0.0, 0.8, 1.6)
+      for i in range(4):
+        L(0.25 + i * 0.45, lambda: self.spawn(kind='beep', x=0, y=104, life=0.7))
+      L(2.2, self._settle)
+    elif name == 'park':
+      # into Park: a P badge, a wave goodbye and a relaxed sigh
+      self.event_until = self.clock + 2.6
+      self.spawn(kind='badge', x=-234, y=-62, life=2.8, text='P')
+      self.spawn(kind='wave', x=232, y=-14, life=2.2)
+      self._glad()
+      self.kick('hy', -120)
+      L(1.6, lambda: (self._apply_mood('sigh'), self.kick('hy', 80)))
+      L(2.4, self._settle)
+    elif name == 'hazard':
+      # hazard lights: the warning triangle and a nervous look ahead
+      self.event_until = self.clock + 2.4
+      self._apply_mood('worried')
+      P['red'].t = 0.35
+      self.spawn(kind='hazard', x=234, y=-60, life=2.6)
+      self.tremble = 0.3
+      self.look(0, -0.15, 1.2)
+      L(2.2, self._settle)
+    elif name == 'override':
+      # the driver turned the wheel: hands off for a moment, "all yours", with a glance their way
+      self.event_until = self.clock + 1.6
+      self.hands_off_until = self.clock + 1.4
+      self._apply_mood('contact')
+      P['green'].t = 0.9 if self.engaged else 0
+      P['ex'].t, P['er'].t = -12, -4
+      self.look(-0.6, 0.15, 0.9)
+      self.kick('hy', -70)
+      L(1.4, self._settle)
 
   # ---- idle habits -------------------------------------------------------------------------
   def _end_behavior(self) -> None:
@@ -1310,6 +1480,9 @@ class FaceModel:
       P['green'].t = self.SLOW_GREEN                       # not steering right now: a paler driving tint
     P['steer'].t = self.steer
     P['p_nightcap'].t = 1.0 if self.sleep_stage == 2 else 0.0
+    # driving: the wheel rises from the bottom edge and its hands hold it, except while the driver has it
+    P['drive'].t = 1.0 if self.engaged else 0.0
+    P['hands'].t = 1.0 if self.engaged and not self.handed_over and self.clock >= self.hands_off_until else 0.0
     steps = max(1, math.ceil(dt / (1 / 120)))     # 120 Hz is stable for the stiffest spring (k 760) and halves the cost
     for _ in range(steps):
       for s in P.values():

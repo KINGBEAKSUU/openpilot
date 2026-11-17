@@ -430,3 +430,134 @@ def test_every_driving_reaction_settles_back(engaged):
     assert m.mood == m.rest_mood() and not m.squeeze and m.tremble == 0, name
     assert m.P['ex'].t == 0 and m.P['p_quest'].t == 0, name
     assert all(math.isfinite(s.v) for s in m.P.values()), name
+
+
+def icons(m, kind):
+  return [p for p in m.parts if p.kind == kind]
+
+
+def test_navigation_turn_shows_its_sign_once_per_maneuver():
+  m, inp = ready(engaged=True, turn_type=2, turn_dist=600.0)
+  run(m, inp, 0.3)
+  assert m.last_event is None
+  inp.turn_dist = 238.0
+  run(m, inp, 0.1)
+  assert m.last_event == 'turn' and [(p.value, p.text) for p in icons(m, 'turn')] == [(2, '240m')]
+  m.last_event = None
+  for d in (180.0, 90.0, 10.0):
+    inp.turn_dist = d
+    run(m, inp, 3.0)
+  assert m.last_event is None                             # one reaction per maneuver
+  inp.turn_type, inp.turn_dist = 1, 400.0                 # the next one: a left turn
+  run(m, inp, 1.0)
+  inp.turn_dist = 200.0
+  run(m, inp, 0.1)
+  assert m.last_event == 'turn' and icons(m, 'turn')[-1].value == 1 and m.P['ex'].t < 0   # looks left
+  m.last_event = None
+  inp.turn_type, inp.turn_dist = 3, 150.0                 # a lane change by the navigation: the lane change reacts instead
+  run(m, inp, 9.0)
+  assert m.last_event is None
+
+
+def test_speed_bump_braces_then_bounces():
+  m, inp = ready(engaged=True, bump_dist=300.0)
+  run(m, inp, 0.2)
+  assert m.last_event is None
+  inp.bump_dist = 110.0
+  run(m, inp, 0.1)
+  assert m.last_event == 'bump' and icons(m, 'bump') and m.P['up'].t > 0.2            # bracing: a squint
+  run(m, inp, 1.1)
+  assert m.P['mO'].t > 0.3                                 # the bounce
+  m.last_event = None
+  run(m, inp, 8.0)
+  assert m.last_event is None                             # the same bump only once
+
+
+def test_seatbelt_off_reminds_every_half_minute():
+  m, inp = ready(engaged=True)
+  inp.seatbelt_off = True
+  run(m, inp, 0.1)
+  assert m.last_event == 'seatbelt' and icons(m, 'belt') and m.mood == 'worried'
+  m.last_event = None
+  run(m, inp, 20.0)
+  assert m.last_event is None
+  run(m, inp, 11.0)
+  assert m.last_event == 'seatbelt'
+
+
+def test_reverse_and_park_show_the_gear():
+  m, inp = ready(gear='drive', v_ego=0.0, standstill=True)
+  inp.gear = 'reverse'
+  run(m, inp, 0.1)
+  assert m.last_event == 'reverse' and [p.text for p in icons(m, 'badge')] == ['R']
+  run(m, inp, 3.0)
+  inp.gear = 'park'
+  run(m, inp, 0.1)
+  assert m.last_event == 'park' and 'P' in [p.text for p in icons(m, 'badge')] and icons(m, 'wave')
+
+
+def test_hazard_lights_show_the_warning_triangle():
+  m, inp = ready()
+  inp.hazard = inp.left_blinker = inp.right_blinker = True
+  run(m, inp, 0.1)
+  assert m.last_event == 'hazard' and icons(m, 'hazard') and m.signal == 0      # not a turn signal
+
+
+def test_set_speed_change_pops_one_badge():
+  m, inp = ready(engaged=True, set_speed=80.0)
+  run(m, inp, 0.5)
+  assert not icons(m, 'speed')                            # setting it on engage is not a change
+  inp.set_speed = 85.0
+  run(m, inp, 0.1)
+  assert [(p.value, p.direction) for p in icons(m, 'speed')] == [(85.0, 1)]
+  inp.set_speed = 82.0
+  run(m, inp, 0.1)
+  assert [(p.value, p.direction) for p in icons(m, 'speed')] == [(82.0, -1)]   # the same badge, updated
+  run(m, inp, 2.0)
+  assert not icons(m, 'speed')
+
+
+def test_wheel_rises_when_driving_and_its_hands_let_go_for_the_driver():
+  m, inp = ready()
+  assert m.P['drive'].v < 0.05
+  inp.engaged = True
+  run(m, inp, 3.0)
+  assert m.P['drive'].v > 0.95 and m.P['hands'].v > 0.95
+  inp.override = True                                     # the driver turns the wheel
+  run(m, inp, 0.5)
+  assert m.last_event == 'override' and m.P['hands'].v < 0.3
+  inp.override = False
+  run(m, inp, 2.0)
+  assert m.P['hands'].v > 0.9
+  inp.slow_steer = True                                   # too slow to steer: the turtle, hands off until it can again
+  run(m, inp, 1.0)
+  assert m.last_event == 'slow_steer' and icons(m, 'turtle')
+  run(m, inp, 1.5)
+  assert m.P['hands'].v < 0.1
+  inp.slow_steer = False
+  run(m, inp, 1.5)
+  assert m.P['hands'].v > 0.9
+  inp.engaged = False
+  run(m, inp, 3.0)
+  assert m.P['drive'].v < 0.05
+
+
+def test_driver_steering_during_a_lane_change_is_not_a_takeover():
+  m, inp = ready(engaged=True)
+  inp.lane_phase, inp.lane_dir, inp.override = 1, 1, True
+  run(m, inp, 1.0)
+  assert m.last_event == 'lane_go'
+
+
+def test_event_icons_say_what_happened():
+  cases = {'brake': 'bang', 'bsm': 'car', 'lead_go': 'car', 'cutin': 'car', 'gas': 'gauge', 'arrive': 'flag',
+           'slow_steer': 'turtle', 'lane_go': 'arrow', 'lane_done': 'check', 'hello': 'wave'}
+  for name, kind in cases.items():
+    m, inp = ready(engaged=name in ('gas', 'slow_steer', 'lane_go', 'lane_done', 'cutin', 'bsm'))
+    m.react(name, 1)
+    run(m, inp, 1.0)
+    assert icons(m, kind), name
+  m, inp = ready(engaged=True)
+  m.react('camera', 60)
+  run(m, inp, 0.3)
+  assert [p.value for p in icons(m, 'sign')] == [60]
