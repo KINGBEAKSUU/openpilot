@@ -856,7 +856,8 @@
           "params": [
             "ClampEnable",
             "ClampMinDistLane",
-            "ClampMinDistEdge"
+            "ClampMinDistEdge",
+            "ClampSteerGain"
           ]
         },
         {
@@ -5465,6 +5466,22 @@
       "default": 115,
       "unit": 5,
       "display_unit": "distanceCm"
+    },
+    {
+      "group": "ej",
+      "name": "ClampSteerGain",
+      "title": "클램프 조향 보정 게인(10)",
+      "descr": "레인리스에서 차가 선에 가까울 때 조향을 얼마나 강하게 밀어낼지 정합니다. 10 = 1.0배, 0이면 보정을 끕니다. 높이면 선에서 더 강하게 벗어나지만 과하면 출렁일 수 있습니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Clamp steering correction gain(10)",
+      "edescr": "How strongly steering pushes away from the line in laneless mode when the car gets too close. 10 = 1.0x, 0 disables the correction. Higher values push away harder but may oscillate if too high. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "钳制转向修正增益(10)",
+      "cdescr": "在无车道线模式下，车辆靠近车道线时转向推开的强度。10 = 1.0倍，0 关闭修正。数值越大推开越强，但过高可能摆动。保存后立即生效，无需重启。",
+      "min": 0,
+      "max": 20,
+      "default": 10,
+      "unit": 1
     },
     {
       "group": "ej",

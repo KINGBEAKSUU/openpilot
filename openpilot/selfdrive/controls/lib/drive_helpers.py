@@ -143,6 +143,187 @@ def read_lat_accel_limits(params):
           float(np.clip(jerk, 0.5, 20.0)))
 
 
+# 최소거리 클램프의 레인리스 조향 보정 (ClampSteerCorrector)
+# 레인리스 모드에서는 controlsd가 모델 곡률만으로 조향하므로, lateral planner의
+# 경로 클램프가 조향에 닿지 않는다. 이 보정기는 controlsd에서 모델의 차선·도로경계
+# 데이터를 직접 읽어 모델 곡률에 더할 곡률 보정을 계산한다. 경로 클램프와 같은
+# 파라미터(ClampEnable/ClampMinDistLane/ClampMinDistEdge)와 같은 가드(확률
+# 히스테리시스, 연석 std, 차선변경, 저속 페이드인)를 쓴다.
+CLAMP_STEER_PROB_ON = 0.5
+CLAMP_STEER_PROB_OFF = 0.3
+CLAMP_STEER_EDGE_STD_MAX = 0.5
+CLAMP_STEER_LOOKAHEAD_TIME = 1.0  # s, 룩어헤드 거리 = 속도 x 1초
+CLAMP_STEER_LOOKAHEAD_MIN = 5.0  # m
+CLAMP_STEER_LOOKAHEAD_MAX = 30.0  # m
+CLAMP_STEER_MAX_LAT_ACCEL = 1.5  # m/s^2, 보정이 만드는 횡가속 상한
+CLAMP_STEER_MAX_CURVATURE = 0.02  # 1/m, 보정 곡률 절대 상한 (저속 과조향 방지)
+CLAMP_STEER_GAIN_DEFAULT = 1.0
+CLAMP_STEER_GAIN_MAX = 2.0
+CLAMP_STEER_MIN_DIST_LANE_DEFAULT = 1.35  # m, 경로 클램프와 동일
+CLAMP_STEER_MIN_DIST_EDGE_DEFAULT = 1.15  # m
+
+
+class ClampSteerCorrector:
+  """레인리스 조향용 최소거리 클램프 보정기.
+
+  update()는 모델 곡률에 더할 곡률 보정(1/m)을 반환한다.
+  부호 규약 (controlsd와 동일): 양의 곡률 = 우회전(+y 방향). y는 +가 우측.
+  왼쪽 선(중앙선)에 가까우면 양의 보정(우측으로 밀어냄), 오른쪽 선·연석에
+  가까우면 음의 보정을 낸다. 위반이 없으면 0.0 (모델 조향을 그대로 둔다).
+
+  모델 데이터가 불완전하거나 파라미터 읽기에 실패하면 0.0을 반환해
+  controlsd가 죽지 않는다.
+  """
+
+  def __init__(self, params):
+    self.params = params
+    self.left_active = False
+    self.right_active = False
+    self.last_correction = 0.0
+
+  def _read_settings(self):
+    """(enabled, min_dist_lane_m, min_dist_edge_m, gain)을 읽는다.
+
+    get(..., return_default=True)을 쓴다. get_int/get_bool은 파일이 없으면
+    0/False를 반환해서 fresh install에서 클램프가 꺼지거나 거리가 0이 되기
+    때문이다. 키 미등록(구 빌드) 등 오류 시 상수 기본값으로 폴백한다.
+    get()은 BOOL/INT를 제대로 변환해서 반환하므로 보통 bool/int가 온다.
+    """
+    try:
+      enabled = self.params.get("ClampEnable", return_default=True)
+      min_lane_cm = self.params.get("ClampMinDistLane", return_default=True)
+      min_edge_cm = self.params.get("ClampMinDistEdge", return_default=True)
+      gain_raw = self.params.get("ClampSteerGain", return_default=True)
+    except Exception:
+      return True, CLAMP_STEER_MIN_DIST_LANE_DEFAULT, CLAMP_STEER_MIN_DIST_EDGE_DEFAULT, CLAMP_STEER_GAIN_DEFAULT
+    if enabled is None:
+      enabled = True
+    elif isinstance(enabled, str):
+      enabled = enabled.strip().lower() in ("1", "true", "on", "yes")
+    try:
+      min_lane = (CLAMP_STEER_MIN_DIST_LANE_DEFAULT if min_lane_cm is None else float(
+        np.clip(float(min_lane_cm) * 0.01, 0.0, 3.0)))
+      min_edge = (CLAMP_STEER_MIN_DIST_EDGE_DEFAULT if min_edge_cm is None else float(
+        np.clip(float(min_edge_cm) * 0.01, 0.0, 3.0)))
+      gain = (CLAMP_STEER_GAIN_DEFAULT if gain_raw is None else float(
+        np.clip(float(gain_raw) * 0.1, 0.0, CLAMP_STEER_GAIN_MAX)))
+    except (TypeError, ValueError):
+      return bool(enabled), CLAMP_STEER_MIN_DIST_LANE_DEFAULT, CLAMP_STEER_MIN_DIST_EDGE_DEFAULT, CLAMP_STEER_GAIN_DEFAULT
+    if not math.isfinite(min_lane):
+      min_lane = CLAMP_STEER_MIN_DIST_LANE_DEFAULT
+    if not math.isfinite(min_edge):
+      min_edge = CLAMP_STEER_MIN_DIST_EDGE_DEFAULT
+    if not math.isfinite(gain):
+      gain = CLAMP_STEER_GAIN_DEFAULT
+    return bool(enabled), min_lane, min_edge, gain
+
+  def update(self, md, v_ego, lane_changing):
+    """모델 곡률에 더할 곡률 보정(1/m)을 계산한다. 양수 = 우회전."""
+    self.last_correction = 0.0
+    enabled, min_lane, min_edge, gain = self._read_settings()
+    if not enabled or gain <= 0.0:
+      self.left_active = False
+      self.right_active = False
+      return 0.0
+    # 차선변경 중에는 선을 넘는 것이 의도된 동작이므로 보정하지 않는다.
+    if lane_changing:
+      self.left_active = False
+      self.right_active = False
+      return 0.0
+    # 저속 페이드인: 5km/h 이하 0, 10km/h 이상 100% (경로 클램프와 동일 구간)
+    strength = float(np.interp(v_ego * 3.6, [5.0, 10.0], [0.0, 1.0]))
+    if strength <= 0.0:
+      return 0.0
+    try:
+      return self._compute(md, v_ego, min_lane, min_edge, gain, strength)
+    except Exception:
+      return 0.0
+
+  def _compute(self, md, v_ego, min_lane, min_edge, gain, strength):
+    lane_lines = md.laneLines
+    edges = md.roadEdges
+    lines_ok = (len(lane_lines) >= 4 and len(lane_lines[1].y) >= 2
+                and len(lane_lines[2].y) >= 2 and len(md.laneLineProbs) >= 3)
+    edges_ok = (len(edges) >= 2 and len(edges[0].y) >= 2 and len(edges[1].y) >= 2
+                and len(md.roadEdgeStds) >= 2)
+    pos_ok = (len(md.position.x) >= 2 and len(md.position.y) >= 2)
+    if not pos_ok or (not lines_ok and not edges_ok):
+      return 0.0
+
+    # 확률 히스테리시스: 0.5를 넘으면 켜고 0.3 아래로 떨어져야 끈다 (경로 클램프와 동일).
+    if lines_ok:
+      l_prob = float(md.laneLineProbs[1])
+      r_prob = float(md.laneLineProbs[2])
+      if l_prob > CLAMP_STEER_PROB_ON:
+        self.left_active = True
+      elif l_prob < CLAMP_STEER_PROB_OFF:
+        self.left_active = False
+      if r_prob > CLAMP_STEER_PROB_ON:
+        self.right_active = True
+      elif r_prob < CLAMP_STEER_PROB_OFF:
+        self.right_active = False
+    else:
+      self.left_active = False
+      self.right_active = False
+
+    # 룩어헤드 거리: 1초 앞 지점 (5~30m). 고속일수록 멀리 보고 미리 조향한다.
+    lookahead = float(np.clip(v_ego * CLAMP_STEER_LOOKAHEAD_TIME,
+                              CLAMP_STEER_LOOKAHEAD_MIN, CLAMP_STEER_LOOKAHEAD_MAX))
+    path_y = float(np.interp(lookahead, md.position.x, md.position.y))
+    if not math.isfinite(path_y):
+      return 0.0
+
+    # 좌측 하한: 경로는 이 값보다 우측(+y)이어야 한다. 차선이 보이면 차선 기준,
+    # 안 보이면 도로경계 기준(연석 std가 작을 때만). 경로 클램프와 동일 로직.
+    lo = -np.inf
+    if self.left_active:
+      left_y = float(np.interp(lookahead, lane_lines[1].x, lane_lines[1].y))
+      lo = left_y + min_lane
+    elif edges_ok:
+      le_std = float(md.roadEdgeStds[0])
+      if le_std < CLAMP_STEER_EDGE_STD_MAX:
+        left_edge_y = float(np.interp(lookahead, edges[0].x, edges[0].y)) + le_std * 0.4
+        lo = left_edge_y + min_edge
+    # 우측 하한: 경로는 이 값보다 좌측(-y)이어야 한다.
+    hi = np.inf
+    if self.right_active:
+      right_y = float(np.interp(lookahead, lane_lines[2].x, lane_lines[2].y))
+      hi = right_y - min_lane
+    elif edges_ok:
+      re_std = float(md.roadEdgeStds[1])
+      if re_std < CLAMP_STEER_EDGE_STD_MAX:
+        right_edge_y = float(np.interp(lookahead, edges[1].x, edges[1].y)) - re_std * 0.4
+        hi = right_edge_y - min_edge
+    if not math.isfinite(lo):
+      lo = -np.inf
+    if not math.isfinite(hi):
+      hi = np.inf
+    if lo == -np.inf and hi == np.inf:
+      return 0.0
+
+    # 목표 y: 위반한 만큼만 밀어낸 위치. 양쪽 하한이 충돌하면(좁은 차로)
+    # 중간 = 차선 중앙을 목표로 한다.
+    if lo > hi:
+      target_y = (lo + hi) / 2.0
+    else:
+      target_y = float(np.clip(path_y, lo, hi))
+    y_corr = (target_y - path_y) * strength
+    if y_corr == 0.0:
+      return 0.0
+
+    # 곡률 변환 (pure pursuit): κ = 2·y / L². 양의 y_corr(우측 이동)는
+    # 양의 곡률(우회전)이다. 게인을 곱하고, 보정이 만드는 횡가속이
+    # 1.5 m/s²를 넘지 않도록, 그리고 곡률 자체가 0.02를 넘지 않도록
+    # 자른다 (모델 곡률 위의 nudge이므로 과도한 개입을 막고, 최종 한도는
+    # 뒤의 clip_curvature가 잡는다).
+    kappa = 2.0 * y_corr / (lookahead ** 2) * gain
+    max_kappa = min(CLAMP_STEER_MAX_LAT_ACCEL / max(v_ego, MIN_SPEED) ** 2,
+                    CLAMP_STEER_MAX_CURVATURE)
+    kappa = float(np.clip(kappa, -max_kappa, max_kappa))
+    self.last_correction = kappa
+    return kappa
+
+
 def get_accel_from_plan(speeds, accels, t_idxs, action_t=DT_MDL, vEgoStopping=0.05):
   if len(speeds) == len(t_idxs):
     v_now = speeds[0]
