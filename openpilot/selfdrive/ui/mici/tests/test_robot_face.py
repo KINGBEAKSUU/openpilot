@@ -166,9 +166,15 @@ def test_listen_feeds_the_microphone_and_dances_on_its_beat(face):
   assert not inp.music_on
 
 
-def test_phone_playing_dances_without_the_microphone_hearing_a_beat(face, tmp_path):
+def test_phone_playing_dances_without_the_microphone_hearing_a_beat(face, tmp_path, monkeypatch):
   import json
   import time
+  clock = [time.monotonic()]
+
+  def tick():                                               # one 20 FPS frame per call (_listen asks once a frame)
+    clock[0] += 0.05
+    return clock[0]
+  monkeypatch.setattr(time, 'monotonic', tick)
   path = tmp_path / 'navdy-feedback.json'
   path.write_text(json.dumps({'receivedAt': time.monotonic(), 'feedback': {'music': {'playing': True}}}))
   face.f._phone.path = str(path)
@@ -177,7 +183,7 @@ def test_phone_playing_dances_without_the_microphone_hearing_a_beat(face, tmp_pa
     inp = face.f._inputs()
     face.f._listen(0.05, inp)
     beats += len(inp.music_beats)
-  assert inp.music_on and inp.music_period == 0.5 and beats in (5, 6)
+  assert inp.music_on and inp.music_period == 0.5 and beats in (2, 3, 4)   # from 1.5 s in: playing has to hold
   m = face.f.model
   face.ui.sm['carState'].vEgo, face.ui.sm['carState'].standstill = 0.0, True
   face.f._phone.path, face.f._phone.checked = '/nonexistent/navdy-feedback.json', -1e9
@@ -192,7 +198,7 @@ def test_phone_playing_dances_without_the_microphone_hearing_a_beat(face, tmp_pa
     inp = face.f._inputs()
     face.f._listen(0.05, inp)
     m.update(0.05, inp)
-  assert m.sleep_stage == 0 and m.mood == 'vibe' and m.beats >= 6
+  assert m.sleep_stage == 0 and m.mood == 'vibe' and m.beats >= 4
   path.write_text(json.dumps({'receivedAt': time.monotonic(), 'feedback': {'music': {'playing': False}}}))
   face.f._phone.mtime, face.f._phone.checked = None, -1e9
   inp = face.f._inputs()

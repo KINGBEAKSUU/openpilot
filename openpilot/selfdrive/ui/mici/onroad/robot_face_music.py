@@ -31,25 +31,35 @@ CAPTURE_DELAY = 0.03                # s from a sound to micd stamping the chunk 
 NAVDY_FEEDBACK = '/dev/shm/navdy-feedback.json'   # the Navdy bridge's latest HUD reply (navdy.navigation.FEEDBACK_PATH)
 PHONE_CHECK_S = 1.0                 # read that file at most this often
 PHONE_STALE_S = 10.0                # a reply older than this (bridge stopped, HUD gone) says nothing
+PHONE_SETTLE_S = 1.5                # "playing" must hold this long before it counts (a moment of buffering or a
+                                    # skip is not music); "not playing" counts at once
 STEADY_PERIOD = 0.5                 # s per beat (120 BPM) when all we know is that a song is playing
 
 
 class PhoneMusic:
-  """Whether the phone is playing music: the HUD's current track ("music": {"playing": true}) in the reply the
-  Navdy bridge saves. Older HUDs send no "music" (not playing); the bridge deletes the file on disconnect."""
+  """Whether the phone is actually playing music: the player state of the HUD's current track ("music": {"playing":
+  true}) in the reply the Navdy bridge saves, not just that a track is known (a paused or stopped track says false).
+  Older HUDs send no "music" (not playing); the bridge deletes the file on disconnect."""
   def __init__(self, path: str = NAVDY_FEEDBACK):
     self.path = path
     self.checked = -math.inf
     self.mtime = None
     self.state = False
     self.received = -math.inf       # bridge time.monotonic() of that reply
+    self.since: float | None = None  # when it started saying playing
 
   def playing(self, now: float) -> bool:
     """`now`: time.monotonic() (the same clock the bridge stamps replies with)."""
     if now - self.checked >= PHONE_CHECK_S:
       self.checked = now
       self._read()
-    return self.state and now - self.received < PHONE_STALE_S
+    on = self.state and now - self.received < PHONE_STALE_S
+    if not on:
+      self.since = None
+      return False
+    if self.since is None:
+      self.since = now
+    return now - self.since >= PHONE_SETTLE_S
 
   def _read(self) -> None:
     try:
