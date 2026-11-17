@@ -33,7 +33,7 @@ def face(monkeypatch):
                'rl_color4ub', 'rl_vertex2f', 'rl_end', 'draw_line_ex', 'draw_circle_v', 'draw_ellipse',
                'rl_disable_backface_culling', 'rl_enable_backface_culling', 'rl_push_matrix', 'rl_pop_matrix',
                'rl_translatef', 'rl_rotatef', 'rl_scalef', 'draw_rectangle_rounded', 'draw_rectangle_rounded_lines_ex',
-               'draw_text_ex'):
+               'draw_text_ex', 'draw_triangle_strip'):
     setattr(rl, name, lambda *a, name=name: calls.append((name, *a)))
   ui = NS(started_frame=10, sm=SM())
   monkeypatch.setitem(sys.modules, 'pyray', rl)
@@ -76,7 +76,10 @@ def test_render_draws_both_eyes_and_keeps_the_matrix_balanced(face):
   n = names(face.calls)
   assert n[0] == 'draw_rectangle_rec'
   assert n.count('rl_push_matrix') == n.count('rl_pop_matrix') == 1
-  assert n.count('rl_vertex2f') > 300                     # both eye bodies are filled
+  strips = [c for c in face.calls if c[0] == 'draw_triangle_strip']
+  assert len(strips) >= 8                                 # both eye bodies, filled in gradient bands
+  assert len({c[3] for c in strips}) >= 4                 # the bands step through colours
+  assert n.count('rl_vertex2f') == 0                      # no per-vertex calls for the eyes
   assert n.count('draw_texture_pro') >= 2                 # glow behind each eye
 
 
