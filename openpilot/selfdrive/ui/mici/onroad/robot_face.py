@@ -51,23 +51,50 @@ class RobotFace:
 
     def fresh(name):
       return sm.alive[name] and sm.valid[name] and sm.recv_frame[name] >= ui_state.started_frame
+
+    def seen(name):
+      # sent on change or slowly (events, navigation): only ask that it belongs to this drive
+      return sm.recv_frame[name] >= ui_state.started_frame
     cs, ss = sm['carState'], sm['selfdriveState']
     car_ok, sd_ok = fresh('carState'), fresh('selfdriveState')
     alert = str(ss.alertType).split('/')[0] if sd_ok else ''
     lat = fresh('carControl') and sm['carControl'].latActive
-    return FaceInputs(
+    v_ego = float(cs.vEgo) if car_ok else 0.0
+    inp = FaceInputs(
       session=ui_state.started_frame,
       engaged=bool(sd_ok and ss.enabled) or bool(lat),
       left_blinker=bool(car_ok and cs.leftBlinker),
       right_blinker=bool(car_ok and cs.rightBlinker),
       steer_deg=float(cs.steeringAngleDeg) if car_ok else 0.0,
-      v_ego=float(cs.vEgo) if car_ok else 0.0,
+      v_ego=v_ego,
       a_ego=float(cs.aEgo) if car_ok else 0.0,
       standstill=bool(car_ok and cs.standstill),
       dm_alert=alert.startswith(DM_ALERTS),
       fcw='fcw' in alert.lower() or alert.startswith('forwardCollision'),
       night=self._night.update(time.time()),
+      blindspot_left=bool(car_ok and cs.leftBlindspot),
+      blindspot_right=bool(car_ok and cs.rightBlindspot),
+      gas=bool(car_ok and cs.gasPressed),
     )
+    if fresh('modelV2'):
+      meta = sm['modelV2'].meta
+      state, direction = str(meta.laneChangeState), str(meta.laneChangeDirection).lower()
+      inp.lane_phase = 1 if state == 'laneChangeStarting' else 2 if state == 'laneChangeFinishing' else 0
+      inp.lane_dir = -1 if 'left' in direction else 1 if 'right' in direction else 0
+    if fresh('radarState'):
+      lead = sm['radarState'].leadOne
+      if lead.status:
+        inp.lead_d, inp.lead_v = float(lead.dRel), float(lead.vLead)
+    if fresh('controlsState'):
+      inp.lat_accel = float(sm['controlsState'].curvature) * v_ego * v_ego
+    if seen('carrotMan'):
+      cm = sm['carrotMan']
+      inp.cam_dist, inp.cam_limit, inp.route_left = float(cm.xSpdDist), float(cm.xSpdLimit), float(cm.nGoPosDist)
+    # one-frame events can fall between UI frames; their alerts stay up for a second or two
+    names = {str(e.name) for e in sm['onroadEvents']} if seen('onroadEvents') else set()
+    inp.steer_sat = 'steerSaturated' in names or alert == 'steerSaturated'
+    inp.cutin = 'radarCutin' in names or alert == 'radarCutin'
+    return inp
 
   # ---- drawing helpers -------------------------------------------------------------------
   def _glow(self):
@@ -424,4 +451,18 @@ class RobotFace:
           pts.append((p.x + math.sin(p.age * 5) * 4 + 16 * math.sin(t) ** 3 / 16 * s,
                       p.y - (13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) / 16 * s))
         self._poly(pts, (255, 120, 155, (1 - k) * 0.9))
+      elif p.kind == 'streak':
+        # speed lines trailing a lane change
+        a = (1 - k) * 0.7
+        rl.draw_line_ex(rl.Vector2(p.x, p.y), rl.Vector2(p.x + p.direction * 30 * p.size, p.y), 4, color(eye, a))
+      elif p.kind == 'cam':
+        # a speed camera with its shutter flash
+        s = ease_out_back(min(k / 0.15, 1.0))
+        a = 1.0 if k < 0.75 else (1 - k) / 0.25
+        rl.draw_rectangle_rounded(rl.Rectangle(p.x - 17 * s, p.y - 11 * s, 34 * s, 22 * s), 0.35, 6, color(eye, a))
+        rl.draw_rectangle_rec(rl.Rectangle(p.x - 6 * s, p.y - 15 * s, 12 * s, 5 * s), color(eye, a))
+        rl.draw_circle_v(rl.Vector2(p.x, p.y + s), 7.5 * s, rl.Color(10, 10, 10, int(255 * a)))
+        rl.draw_circle_v(rl.Vector2(p.x, p.y + s), 4 * s, color(eye, a))
+        if 0.15 < k < 0.35:
+          self._blob(p.x + 12 * s, p.y - 12 * s, 70, 70, (255, 255, 255), (0.35 - k) / 0.2 * 0.85)
     _ = glow, ease_out_cubic
