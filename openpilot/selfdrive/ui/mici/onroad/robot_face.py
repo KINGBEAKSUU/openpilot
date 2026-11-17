@@ -169,8 +169,8 @@ class RobotFace:
     vis_top, vis_bottom = geo[5], geo[6]
     self._blob(ex, (vis_top + vis_bottom) / 2, w * 1.75, max(vis_bottom - vis_top, 8) * 1.75 + 20, glow_c, glow_a)
 
-  def _eye(self, ex, ey, w, h, geo, gx, gy, col_top, col_bottom, shade, shimmer):
-    xs, top, bottom, lid, keep = geo[:5]
+  def _eye(self, ex, ey, w, h, geo, gx, gy, col_top, col_bottom, shimmer):
+    xs, top, bottom, _, keep = geo[:5]
     y0 = ey - h / 2
     # the top-to-bottom gradient as BANDS solid bands, each the eye clipped to its slice of the height
     edges = y0 + h * np.arange(1, BANDS) / BANDS
@@ -178,7 +178,6 @@ class RobotFace:
     hi = np.concatenate((edges, [np.inf]))[:, None]
     t_all, b_all = np.clip(top, lo, hi), np.clip(bottom, lo, hi)
     band_cols = [color(mix(col_top, col_bottom, (k + 0.5) / BANDS)) for k in range(BANDS)]
-    shade_col = color(shade, 0.25)
     # one strip set per unbroken run of visible columns (normally one): its ends are the eye's straight sides
     idx = np.flatnonzero(keep)
     for run in np.split(idx, np.flatnonzero(np.diff(idx) > 1) + 1):
@@ -188,13 +187,6 @@ class RobotFace:
       t, b = t_all[:, sl], b_all[:, sl]
       rows = np.flatnonzero((b - t).max(axis=1) > 0.05)
       t, b, cols = t[rows], b[rows], [band_cols[k] for k in rows]
-      lid_run = lid[sl]
-      if lid_run.any():
-        # a faint shadow in the thin band right under the lid
-        tt = top[sl]
-        t = np.vstack((t, tt))
-        b = np.vstack((b, np.where(lid_run, np.minimum(tt + 5, bottom[sl]), tt)))
-        cols.append(shade_col)
       pts = np.empty((len(cols), (run[-1] - run[0] + 1) * 2, 2), np.float32)
       pts[:, 0::2, 0] = pts[:, 1::2, 0] = xs[sl]
       pts[:, 0::2, 1] = t
@@ -252,7 +244,7 @@ class RobotFace:
     eye, glow = mix(eye, (255, 255, 255), f), mix(glow, (255, 245, 235), f * 0.8)
     if m.night:
       eye, glow = mix(eye, NIGHT_EYE, 0.55), mix(glow, NIGHT_GLOW, 0.6)
-    bottom, shade = mix(eye, glow, 0.4), mix(glow, (40, 14, 4), 0.6)
+    bottom = mix(eye, glow, 0.4)
     bright = clamp(P['bright'].v, 0, 1)
     eye_d, bottom_d, glow_d = mix((0, 0, 0), eye, bright), mix((0, 0, 0), bottom, bright), glow
 
@@ -322,7 +314,7 @@ class RobotFace:
     for side, ex, ey, w, h, gx, gy, up_base, wink, geo in eyes:
       left = side < 0
       if geo is not None:
-        self._eye(ex, ey, w, h, geo, gx, gy, eye_d, bottom_d, shade, shimmer)
+        self._eye(ex, ey, w, h, geo, gx, gy, eye_d, bottom_d, shimmer)
       closed = clamp((up_base - 0.9) / 0.08, 0, 1)
       if closed > 0:
         # eyes held shut (dozing, sleeping, a yawn, a wink) show a stroke instead of vanishing
