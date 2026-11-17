@@ -42,7 +42,7 @@ def face(monkeypatch):
                'rl_disable_backface_culling', 'rl_enable_backface_culling', 'rl_push_matrix', 'rl_pop_matrix',
                'rl_translatef', 'rl_rotatef', 'rl_scalef', 'draw_rectangle_rounded', 'draw_rectangle_rounded_lines_ex',
                'draw_text_ex', 'draw_triangle_strip', 'draw_ring', 'draw_rectangle_pro', 'draw_circle_sector',
-               'draw_rectangle_lines_ex'):
+               'draw_rectangle_lines_ex', 'draw_triangle_fan'):
     setattr(rl, name, lambda *a, name=name: calls.append((name, *a)))
   ui = NS(started_frame=10, sm=SM())
   monkeypatch.setitem(sys.modules, 'pyray', rl)
@@ -235,7 +235,11 @@ def test_special_eyes(face, shape):
   else:
     m.stars(0.5)
   face.f.draw(face.rect)
-  assert names(face.calls).count('rl_vertex2f') >= 60          # two filled stars or hearts
+  fans = [c for c in face.calls if c[0] == 'draw_triangle_fan']
+  assert len(fans) == 2 * 4                                  # each eye: three halo steps and the shape itself
+  assert all(c[2] >= 12 for c in fans)                       # centre + outline + closing point
+  # through raylib's fan (it binds the shapes texture): raw rlBegin/rlVertex drew nothing on the device GPU
+  assert names(face.calls).count('rl_vertex2f') == 0
 
 
 def test_shut_eyes_draw_a_stroke_and_props_draw(face):
