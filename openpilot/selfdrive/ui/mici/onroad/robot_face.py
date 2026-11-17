@@ -21,6 +21,10 @@ EYE_Y = -6
 EYE_SCALE = (0.92, 0.94)
 SUPER_N = 3.2      # rounded-square eye outline
 BANDS = 12         # the top-to-bottom gradient as solid bands: one strip draw each, not a call per vertex
+GLOW_PX = 28       # the halo reaches this far past the eye's outline
+GLOW_LAYERS = 7    # stacked, widening copies of the outline; their alphas add up toward the edge
+GLOW_ALPHA = 0.064 # per layer, times the glow strength
+GLOW_EDGE = GLOW_PX * np.array([1.0, 0.92, 0.8, 0.65, 0.5, 0.33, 0.16])   # halo columns past each side of the eye
 
 EYE_TOP = (255, 243, 230)
 GLOW = (255, 150, 70)
@@ -165,9 +169,35 @@ class RobotFace:
       return None
     return xs, top, bottom, lid, keep, float(top[keep].min()), float(bottom[keep].max())
 
-  def _eye_glow(self, ex, w, geo, glow_c, glow_a):
-    vis_top, vis_bottom = geo[5], geo[6]
-    self._blob(ex, (vis_top + vis_bottom) / 2, w * 1.75, max(vis_bottom - vis_top, 8) * 1.75 + 20, glow_c, glow_a)
+  def _eye_glow(self, geo, glow_c, glow_a):
+    """A halo that follows the visible outline, so a crescent or a half-shut eye glows in its own shape.
+    (A plain ellipse filled the part the lids cut away and read as a blurred eye.) Each layer is the outline
+    grown by a disc of radius pad; the thin layers add up to a soft falloff."""
+    xs, top, bottom, _, keep = geo[:5]
+    idx = np.flatnonzero(keep)
+    col = color(glow_c, glow_a * GLOW_ALPHA)
+    pads = np.linspace(GLOW_PX, GLOW_PX / GLOW_LAYERS, GLOW_LAYERS)[:, None, None]
+    for run in np.split(idx, np.flatnonzero(np.diff(idx) > 1) + 1):
+      if run.size < 2:
+        continue
+      sl = slice(run[0], run[-1] + 1)
+      cols = np.unique(np.r_[run[0]:run[-1] + 1:2, run[-1]])   # every other column is plenty for a soft halo
+      x, t, b = xs[cols], top[cols], bottom[cols]
+      # one shared column grid for every layer: the eye's own columns plus a fan past each side
+      xo = np.concatenate((x[0] - GLOW_EDGE, x, x[-1] + GLOW_EDGE[::-1]))
+      dx = x[None, None, :] - xo[None, :, None]
+      rise = np.sqrt(np.maximum(pads * pads - dx * dx, 0.0))
+      near = np.abs(dx) <= pads
+      to = np.where(near, t - rise, np.inf).min(axis=2)
+      bo = np.where(near, b + rise, -np.inf).max(axis=2)
+      mid = np.interp(xo, x, (t + b) / 2)                   # columns a layer does not reach collapse onto the middle
+      reach = np.isfinite(bo)
+      to, bo = np.where(reach, np.minimum(to, bo), mid), np.where(reach, bo, mid)
+      pts = np.empty((GLOW_LAYERS, xo.size * 2, 2), np.float32)
+      pts[:, 0::2, 0] = pts[:, 1::2, 0] = xo
+      pts[:, 0::2, 1] = to
+      pts[:, 1::2, 1] = bo
+      self._draw_strips(pts, [col] * GLOW_LAYERS)
 
   def _eye(self, ex, ey, w, h, geo, gx, gy, col_top, col_bottom, shimmer):
     xs, top, bottom, _, keep = geo[:5]
@@ -308,9 +338,9 @@ class RobotFace:
       eyes.append((side, ex, ey, w, h, gx, gy, up_base, wink, self._eye_geometry(side, ex, ey, w, h, up, low)))
 
     # every glow first, then the bodies: each switch between the glow texture and plain fills is a GPU batch flush
-    for _, ex, _, w, _, _, _, _, _, geo in eyes:
+    for *_, geo in eyes:
       if geo is not None:
-        self._eye_glow(ex, w, geo, glow_d, glow_a)
+        self._eye_glow(geo, glow_d, glow_a)
     for side, ex, ey, w, h, gx, gy, up_base, wink, geo in eyes:
       left = side < 0
       if geo is not None:

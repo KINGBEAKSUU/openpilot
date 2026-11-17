@@ -127,7 +127,8 @@ def test_render_draws_both_eyes_and_keeps_the_matrix_balanced(face):
   assert len(strips) >= 8                                 # both eye bodies, filled in gradient bands
   assert len({c[3] for c in strips}) >= 4                 # the bands step through colours
   assert n.count('rl_vertex2f') == 0                      # no per-vertex calls for the eyes
-  assert n.count('draw_texture_pro') >= 2                 # glow behind each eye
+  layers = type(face.f).__init__.__globals__['GLOW_LAYERS']
+  assert sum(1 for c in strips if c[3].a < 60) >= 2 * layers   # a halo around each eye, following its outline
 
 
 @pytest.mark.parametrize('shape', ['heart', 'star'])
