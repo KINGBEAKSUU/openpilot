@@ -156,11 +156,15 @@ class RobotFace:
   def _poly(points, c):
     """Filled polygon as a fan from its centroid (shapes here are star-shaped around it).
 
-    Through raylib's DrawTriangleFan, which binds the shapes texture and its white texel: raw rlBegin/rlVertex
-    calls sampled whatever texture and coordinate the last draw left behind, and on the device GPU that made
-    stars, hearts, sparkles and arrowheads invisible (only the glow behind a star showed, as a blur)."""
+    Wound counter-clockwise on screen, the way raylib's front faces go: most outlines here run clockwise, and
+    whenever the batch reached the GPU with face culling on they were dropped (stars, hearts, sparkles and
+    arrowheads vanished on the device; a star showed only its glow, as a blur). draw() also flushes the batch
+    before it turns culling back on."""
     if len(points) < 3:
       return
+    area = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(points, [*points[1:], points[0]], strict=True))
+    if area > 0:            # clockwise on screen (y down)
+      points = points[::-1]
     cx = sum(p[0] for p in points) / len(points)
     cy = sum(p[1] for p in points) / len(points)
     fan = [rl.Vector2(cx, cy), *(rl.Vector2(x, y) for x, y in points), rl.Vector2(*points[0])]
@@ -486,6 +490,9 @@ class RobotFace:
     rl.rl_translatef(rect.x + rect.width / 2, rect.y + rect.height / 2, 0)
     self._screen_icons(eye_d)
     rl.rl_pop_matrix()
+    # raylib batches shapes and sends them to the GPU later (when the batch fills, or at the end of the frame): send
+    # them now, while culling is still off, so no strip or fan is dropped for its winding
+    rl.rl_draw_render_batch_active()
     rl.rl_enable_backface_culling()
 
   def _wheel(self, rect, ink, body, glow, effort):

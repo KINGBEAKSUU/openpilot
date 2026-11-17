@@ -42,7 +42,7 @@ def face(monkeypatch):
                'rl_disable_backface_culling', 'rl_enable_backface_culling', 'rl_push_matrix', 'rl_pop_matrix',
                'rl_translatef', 'rl_rotatef', 'rl_scalef', 'draw_rectangle_rounded', 'draw_rectangle_rounded_lines_ex',
                'draw_text_ex', 'draw_triangle_strip', 'draw_ring', 'draw_rectangle_pro', 'draw_circle_sector',
-               'draw_rectangle_lines_ex', 'draw_triangle_fan'):
+               'draw_rectangle_lines_ex', 'draw_triangle_fan', 'rl_draw_render_batch_active'):
     setattr(rl, name, lambda *a, name=name: calls.append((name, *a)))
   ui = NS(started_frame=10, sm=SM())
   monkeypatch.setitem(sys.modules, 'pyray', rl)
@@ -294,3 +294,17 @@ def test_icons_draw_in_screen_space(face):
   face.f.draw(face.rect)
   texts = [c[2] for c in face.calls if c[0] == 'draw_text_ex']
   assert '80' in texts and '120m' in texts and '85' in texts
+
+
+def test_fans_wind_counter_clockwise_and_the_batch_flushes_before_culling(face):
+  # clockwise outlines (most here) were dropped by the GPU once culling was back on when the batch was drawn
+  face.f._poly([(0, -10), (10, 0), (0, 10), (-10, 0)], (255, 255, 255, 1.0))      # clockwise on screen
+  fan = [c for c in face.calls if c[0] == 'draw_triangle_fan'][-1][1]
+  outline = [(v[0], v[1]) for v in fan[1:-1]]
+  area = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(outline, [*outline[1:], outline[0]], strict=True))
+  assert area < 0                                           # counter-clockwise on screen, raylib's front face
+  face.calls.clear()
+  face.f.draw(face.rect)
+  n = names(face.calls)
+  assert n.index('rl_draw_render_batch_active') < n.index('rl_enable_backface_culling')
+  assert n[-2:] == ['rl_draw_render_batch_active', 'rl_enable_backface_culling']
