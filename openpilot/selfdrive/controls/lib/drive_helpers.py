@@ -1,4 +1,5 @@
 import math
+import time
 
 import numpy as np
 from openpilot.cereal import log
@@ -161,6 +162,13 @@ CLAMP_STEER_GAIN_DEFAULT = 1.0
 CLAMP_STEER_GAIN_MAX = 2.0
 CLAMP_STEER_MIN_DIST_LANE_DEFAULT = 1.35  # m, 경로 클램프와 동일
 CLAMP_STEER_MIN_DIST_EDGE_DEFAULT = 1.15  # m
+# 알림(띵) 조건: 보정 곡률 절댓값이 ON 이상이면 보정 중, OFF 아래로 떨어져야
+# 종료 (히스테리시스). 종료 후 COOLDOWN 동안은 다시 켜지지 않아 띵 소리가
+# 연속으로 울리지 않는다. 0.001 1/m은 60km/h에서 약 0.28 m/s²,
+# 100km/h에서 약 0.77 m/s²의 횡가속에 해당 — 운전자가 느낄 만한 보정이다.
+CLAMP_STEER_ALERT_ON_THRESHOLD = 0.001  # 1/m
+CLAMP_STEER_ALERT_OFF_THRESHOLD = 0.0005  # 1/m
+CLAMP_STEER_ALERT_COOLDOWN_SEC = 5.0  # s
 
 
 class ClampSteerCorrector:
@@ -180,6 +188,11 @@ class ClampSteerCorrector:
     self.left_active = False
     self.right_active = False
     self.last_correction = 0.0
+    # 알림(띵) 상태: 보정이 의미 있는 크기로 걸릴 때 True. controlsd가
+    # controlsState.clampSteerActive로 selfdrived에 전달하고, selfdrived가
+    # clampSteerActive 이벤트로 prompt 사운드를 울린다.
+    self.alert_active = False
+    self._alert_cooldown_until = 0.0
 
   def _read_settings(self):
     """(enabled, min_dist_lane_m, min_dist_edge_m, gain)을 읽는다.
@@ -217,8 +230,55 @@ class ClampSteerCorrector:
       gain = CLAMP_STEER_GAIN_DEFAULT
     return bool(enabled), min_lane, min_edge, gain
 
+  def _read_alert_enabled(self):
+    """ClampSteerAlert 파라미터를 읽는다. 기본값 True (알림 켜짐).
+
+    get(..., return_default=True)을 쓴다. 키 미등록(구 빌드) 등 오류 시
+    True로 폴백해 알림이 계속 울린다.
+    """
+    try:
+      v = self.params.get("ClampSteerAlert", return_default=True)
+    except Exception:
+      return True
+    if v is None:
+      return True
+    if isinstance(v, str):
+      return v.strip().lower() in ("1", "true", "on", "yes")
+    return bool(v)
+
+  def _update_alert(self, kappa):
+    """보정 크기에 따라 알림 상태(alert_active)를 갱신한다.
+
+    보정 절댓값이 ON 임계값 이상이면 켜고, OFF 임계값 아래로 떨어져야
+    끈다 (히스테리시스). 한 번 꺼지면 쿨다운(5초) 동안 다시 켜지지 않아
+    띵 소리가 연속으로 울리지 않는다. 알림 파라미터가 꺼져 있으면 항상
+    False. 좌/우 방향과 무관하게 절댓값으로 판단한다.
+    """
+    if not self._read_alert_enabled():
+      self.alert_active = False
+      return
+    now = time.monotonic()
+    if self.alert_active:
+      if abs(kappa) < CLAMP_STEER_ALERT_OFF_THRESHOLD:
+        self.alert_active = False
+        self._alert_cooldown_until = now + CLAMP_STEER_ALERT_COOLDOWN_SEC
+    elif abs(kappa) >= CLAMP_STEER_ALERT_ON_THRESHOLD and now >= self._alert_cooldown_until:
+      self.alert_active = True
+
   def update(self, md, v_ego, lane_changing):
-    """모델 곡률에 더할 곡률 보정(1/m)을 계산한다. 양수 = 우회전."""
+    """모델 곡률에 더할 곡률 보정(1/m)을 계산한다. 양수 = 우회전.
+
+    반환되는 보정 크기에 따라 알림 상태(alert_active)도 함께 갱신한다.
+    보정이 0이면 알림은 꺼지는 방향으로 간다 (쿨다운은 _update_alert에서
+    관리). 모든 early return 경로가 이 래퍼를 거치므로 알림 상태가
+    stale로 남지 않는다.
+    """
+    kappa = self._update_impl(md, v_ego, lane_changing)
+    self._update_alert(kappa)
+    return kappa
+
+  def _update_impl(self, md, v_ego, lane_changing):
+    """update()의 본체. 보정 곡률만 계산하고 알림 상태는 건드리지 않는다."""
     self.last_correction = 0.0
     enabled, min_lane, min_edge, gain = self._read_settings()
     if not enabled or gain <= 0.0:

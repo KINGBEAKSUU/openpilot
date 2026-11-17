@@ -168,6 +168,7 @@ struct OnroadEvent @0xc4fa6047f024e718 {
     teslaTrafficStopTakeover @131;
     pandaCanFault @132;
     stockSccFault @133;
+    clampSteerActive @134;
 
     soundsUnavailableDEPRECATED @47;
   }
@@ -868,6 +869,7 @@ struct ControlsState @0x97ff69c53601abf1 {
   forceDecel @51 :Bool;
 
   activeLaneLine @67 : Bool;
+  clampSteerActive @68 :Bool;  # laneless clamp steering correction meaningfully active (dings via selfdrived)
 
   lateralControlState :union {
     pidState @53 :LateralPIDState;

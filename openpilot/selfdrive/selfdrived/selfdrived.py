@@ -545,6 +545,12 @@ class SelfdriveD:
       if undershooting and turning and lac.saturated:
         self.events.add(EventName.steerSaturated)
 
+    # 클램프 조향 보정 작동 알림 (레인리스 전용): controlsd가 보정이 의미 있게
+    # 걸릴 때 controlsState.clampSteerActive를 세운다. selfdrived는 플래그만
+    # 보고 이벤트를 만들고, 띵 소리·표시는 events.py의 알림 정의가 담당한다.
+    if self.sm['controlsState'].clampSteerActive:
+      self.events.add(EventName.clampSteerActive)
+
     # Check for FCW
     stock_long_is_braking = self.enabled and not self.CP.openpilotLongitudinalControl and CS.aEgo < -1.25
     model_fcw = self.sm['modelV2'].meta.hardBrakePredicted and not CS.brakePressed and not stock_long_is_braking

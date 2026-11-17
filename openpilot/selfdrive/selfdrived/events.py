@@ -599,6 +599,13 @@ EVENTS: dict[int, dict[str, Alert | AlertCallbackType]] = {
                         VisualAlert.none, AudibleAlert.systemReady, 0.2),
   },
 
+  EventName.clampSteerActive: {
+    ET.PERMANENT: Alert(
+      "클램프 조향 보정 작동", "",
+      AlertStatus.normal, AlertSize.small,
+      Priority.LOWEST, VisualAlert.none, AudibleAlert.prompt, 0.2),
+  },
+
   EventName.driverDistracted1: {
     ET.PERMANENT: Alert(
       "Pay Attention",

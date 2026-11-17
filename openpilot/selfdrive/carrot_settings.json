@@ -857,7 +857,8 @@
             "ClampEnable",
             "ClampMinDistLane",
             "ClampMinDistEdge",
-            "ClampSteerGain"
+            "ClampSteerGain",
+            "ClampSteerAlert"
           ]
         },
         {
@@ -5482,6 +5483,23 @@
       "max": 20,
       "default": 10,
       "unit": 1
+    },
+    {
+      "group": "ej",
+      "name": "ClampSteerAlert",
+      "title": "클램프 조향 보정 알림",
+      "descr": "레인리스에서 클램프 조향 보정이 걸릴 때 띵 소리와 함께 화면에 표시합니다. 끄면 보정은 그대로 동작하고 알림만 나지 않습니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Clamp steering correction alert",
+      "edescr": "Dings and shows a message when the clamp steering correction kicks in while driving laneless. Off only silences the alert; the correction still works. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "钳制转向修正提醒",
+      "cdescr": "在无车道线模式下钳制转向修正启动时发出提示音并显示消息。关闭后仅静音提醒，修正仍正常工作。保存后立即生效，无需重启。",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "unit": 1,
+      "control": "toggle"
     },
     {
       "group": "ej",

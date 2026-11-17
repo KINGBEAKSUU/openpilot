@@ -492,6 +492,12 @@ class Controls:
       cs.lateralControlState.torqueState = lac_log
 
     cs.activeLaneLine = self.lanefull_mode_enabled
+    # 클램프 조향 보정 알림: 레인리스 분기에서 보정이 의미 있게 걸릴 때만
+    # True. selfdrived가 이 플래그로 clampSteerActive 이벤트를 만들어
+    # prompt(띵) 사운드를 울린다. 레인풀/MEB/조향 비활성에서는 보정기가
+    # 돌지 않으므로 플래그를 강제로 내린다 (stale True 방지).
+    cs.clampSteerActive = bool(self.clamp_steer_corrector.alert_active and CC.latActive and
+                               not self.is_vw_meb and not self.lanefull_mode_enabled)
     self.pm.send('controlsState', dat)
 
     # carControl
