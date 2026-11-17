@@ -858,6 +858,17 @@
             "ClampMinDistLane",
             "ClampMinDistEdge"
           ]
+        },
+        {
+          "id": "EJ_LATACCEL",
+          "ko": "횡가속 한도",
+          "en": "Lateral accel limits",
+          "zh": "横向加速度限制",
+          "params": [
+            "LatAccelMaxLow",
+            "LatAccelMaxHigh",
+            "LatJerkMax"
+          ]
         }
       ]
     }
@@ -5454,6 +5465,54 @@
       "default": 115,
       "unit": 5,
       "display_unit": "distanceCm"
+    },
+    {
+      "group": "ej",
+      "name": "LatAccelMaxLow",
+      "title": "저속 횡가속 한도(45)",
+      "descr": "80km/h 이하에서 허용하는 최대 횡가속도입니다. 45=4.5m/s². 높이면 저속 커브에서 핸들이 더 돌아가지만, 핸들각 85°를 넘으면 EPS 보호를 위해 조향이 끊길 수 있습니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Low-speed lateral accel limit (45)",
+      "edescr": "Maximum lateral acceleration allowed at or below 80 km/h. 45 = 4.5 m/s². Higher values allow more steering in low-speed curves, but if the steering wheel angle exceeds 85° the steering request may cut out for EPS protection. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "低速横向加速度限制(45)",
+      "cdescr": "80km/h以下允许的最大横向加速度。45=4.5m/s²。数值越高，低速弯道方向盘转角越大，但方向盘转角超过85°时可能因EPS保护而中断转向。保存后立即生效，无需重启。",
+      "min": 20,
+      "max": 60,
+      "default": 45,
+      "unit": 1
+    },
+    {
+      "group": "ej",
+      "name": "LatAccelMaxHigh",
+      "title": "고속 횡가속 한도(30)",
+      "descr": "120km/h 이상에서 허용하는 최대 횡가속도입니다. 30=3.0m/s². 80~120km/h 구간은 저속·고속 한도 사이를 보간합니다. 높이면 고속 커브·램프에서 핸들이 더 돌아갑니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "High-speed lateral accel limit (30)",
+      "edescr": "Maximum lateral acceleration allowed at or above 120 km/h. 30 = 3.0 m/s². Between 80 and 120 km/h the limit interpolates between the low- and high-speed limits. Higher values allow more steering in high-speed curves and ramps. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "高速横向加速度限制(30)",
+      "cdescr": "120km/h以上允许的最大横向加速度。30=3.0m/s²。80~120km/h区间在低速与高速限制之间插值。数值越高，高速弯道和匝道方向盘转角越大。保存后立即生效，无需重启。",
+      "min": 20,
+      "max": 60,
+      "default": 30,
+      "unit": 1
+    },
+    {
+      "group": "ej",
+      "name": "LatJerkMax",
+      "title": "횡저크 한도(50)",
+      "descr": "핸들이 돌아가는 속도의 상한입니다. 50=5.0m/s³. 높이면 커브 진입 시 핸들이 더 빨리 돌아가지만 급격해질 수 있습니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Lateral jerk limit (50)",
+      "edescr": "Upper limit on how fast the steering wheel turns. 50 = 5.0 m/s³. Higher values turn the wheel faster when entering a curve, but can feel abrupt. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "横向加加速度限制(50)",
+      "cdescr": "方向盘转动速度的上限。50=5.0m/s³。数值越高，进入弯道时方向盘转动越快，但可能感觉突兀。保存后立即生效，无需重启。",
+      "min": 20,
+      "max": 100,
+      "default": 50,
+      "unit": 1
     }
   ]
 }

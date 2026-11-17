@@ -415,6 +415,10 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"ClampMinDistLane", {PERSISTENT, INT, "135"}},
     {"ClampMinDistEdge", {PERSISTENT, INT, "115"}},
 
+    {"LatAccelMaxLow", {PERSISTENT, INT, "45"}},
+    {"LatAccelMaxHigh", {PERSISTENT, INT, "30"}},
+    {"LatJerkMax", {PERSISTENT, INT, "50"}},
+
     {"LateralTorqueCustom", {PERSISTENT, INT, "0"}},
     {"LateralTorqueAccelFactor", {PERSISTENT, INT, "2500"}},
     {"LateralTorqueFriction", {PERSISTENT, INT, "100"}},
