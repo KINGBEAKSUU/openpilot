@@ -379,8 +379,8 @@ class RobotFace:
       zig = [(mx + hw * (i / 3 - 1), my + (3.5 if i % 2 else -3.5) * (0.6 + effort * 0.4)) for i in range(7)]
       self._stroke(zig, 4, eye_d, 0.9 * g)
 
-    # mouth only when it opens: surprise, a yawn, a sneeze, a sigh
-    o = clamp(P['mO'].v, 0, 1)
+    # mouth only when it opens: surprise, a yawn, a sneeze, a sigh (gritted teeth win while straining)
+    o = clamp(P['mO'].v, 0, 1) * (1 - g)
     if o > 0.12:
       mx = (P['gxL'].v + P['gxR'].v) * 7
       my = 64 + (P['gyL'].v + P['gyR'].v) * 4
