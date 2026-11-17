@@ -51,6 +51,7 @@ def face(monkeypatch):
   spec.loader.exec_module(module)
   f = module.RobotFace()
   f._audio_chunks = lambda: []           # no microphone in tests
+  f._phone.path = '/nonexistent/navdy-feedback.json'   # no Navdy bridge either
   return NS(f=f, ui=ui, calls=calls, rect=NS(x=0, y=0, width=536, height=240))
 
 
@@ -149,6 +150,40 @@ def test_listen_feeds_the_microphone_and_dances_on_its_beat(face):
   inp = face.f._inputs()
   face.f._listen(0.05, inp)
   assert not inp.music_on
+
+
+def test_phone_playing_dances_without_the_microphone_hearing_a_beat(face, tmp_path):
+  import json
+  import time
+  path = tmp_path / 'navdy-feedback.json'
+  path.write_text(json.dumps({'receivedAt': time.monotonic(), 'feedback': {'music': {'playing': True}}}))
+  face.f._phone.path = str(path)
+  beats = 0
+  for _ in range(60):                                       # 3 s at 20 FPS, the microphone hears nothing
+    inp = face.f._inputs()
+    face.f._listen(0.05, inp)
+    beats += len(inp.music_beats)
+  assert inp.music_on and inp.music_period == 0.5 and beats in (5, 6)
+  m = face.f.model
+  face.ui.sm['carState'].vEgo, face.ui.sm['carState'].standstill = 0.0, True
+  face.f._phone.path, face.f._phone.checked = '/nonexistent/navdy-feedback.json', -1e9
+  for _ in range(int(60 / 0.05)):                           # parked a minute without music: it dozes off
+    inp = face.f._inputs()
+    face.f._listen(0.05, inp)
+    m.update(0.05, inp)
+  assert m.sleep_stage == 2 and not inp.music_on
+  path.write_text(json.dumps({'receivedAt': time.monotonic(), 'feedback': {'music': {'playing': True}}}))
+  face.f._phone.path, face.f._phone.checked = str(path), -1e9
+  for _ in range(int(5 / 0.05)):                            # the phone starts a song: it wakes up and dances
+    inp = face.f._inputs()
+    face.f._listen(0.05, inp)
+    m.update(0.05, inp)
+  assert m.sleep_stage == 0 and m.mood == 'vibe' and m.beats >= 6
+  path.write_text(json.dumps({'receivedAt': time.monotonic(), 'feedback': {'music': {'playing': False}}}))
+  face.f._phone.mtime, face.f._phone.checked = None, -1e9
+  inp = face.f._inputs()
+  face.f._listen(0.05, inp)
+  assert not inp.music_on                                   # paused
 
 
 def test_event_props_draw(face):

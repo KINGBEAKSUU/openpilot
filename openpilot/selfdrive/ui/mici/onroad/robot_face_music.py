@@ -1,10 +1,14 @@
-"""NewUi 3 robot face: find the beat in the cabin microphone so the face can dance to music.
+"""NewUi 3 robot face: know when music plays so the face can dance to it.
 
-Pure numpy, display only. Input is micd's rawAudioData (16 kHz mono int16, 800 samples every 50 ms).
-Same method as the web preview: a spectral-flux onset envelope (bass weighted), autocorrelation of the
-last few seconds for the tempo, and a beat clock pulled toward each detected onset (a phase lock).
+Two sources, display only:
+- PhoneMusic: the phone's player state, which the Navdy HUD (v186+) adds to its reply to the Navdy bridge.
+- BeatTracker: the beat in the cabin microphone. Pure numpy; input is micd's rawAudioData (16 kHz mono int16,
+  800 samples every 50 ms). Same method as the web preview: a spectral-flux onset envelope (bass weighted),
+  autocorrelation of the last few seconds for the tempo, and a beat clock pulled toward each detected onset.
 """
+import json
 import math
+import os
 
 import numpy as np
 
@@ -23,6 +27,62 @@ HOLD = 6
 DB_FLOOR, DB_RANGE = -100.0, 70.0   # level mapping, like a web AnalyserNode's byte spectrum
 LEAD = 0.025                        # s: the UI shows a beat at its next 50 ms frame, so hand it over half a frame early
 CAPTURE_DELAY = 0.03                # s from a sound to micd stamping the chunk that holds it (input buffering)
+
+NAVDY_FEEDBACK = '/dev/shm/navdy-feedback.json'   # the Navdy bridge's latest HUD reply (navdy.navigation.FEEDBACK_PATH)
+PHONE_CHECK_S = 1.0                 # read that file at most this often
+PHONE_STALE_S = 10.0                # a reply older than this (bridge stopped, HUD gone) says nothing
+STEADY_PERIOD = 0.5                 # s per beat (120 BPM) when all we know is that a song is playing
+
+
+class PhoneMusic:
+  """Whether the phone is playing music: the HUD's current track ("music": {"playing": true}) in the reply the
+  Navdy bridge saves. Older HUDs send no "music" (not playing); the bridge deletes the file on disconnect."""
+  def __init__(self, path: str = NAVDY_FEEDBACK):
+    self.path = path
+    self.checked = -math.inf
+    self.mtime = None
+    self.state = False
+    self.received = -math.inf       # bridge time.monotonic() of that reply
+
+  def playing(self, now: float) -> bool:
+    """`now`: time.monotonic() (the same clock the bridge stamps replies with)."""
+    if now - self.checked >= PHONE_CHECK_S:
+      self.checked = now
+      self._read()
+    return self.state and now - self.received < PHONE_STALE_S
+
+  def _read(self) -> None:
+    try:
+      mtime = os.stat(self.path).st_mtime_ns
+    except OSError:
+      self.mtime, self.state = None, False
+      return
+    if mtime == self.mtime:
+      return
+    self.mtime = mtime
+    try:
+      with open(self.path, 'rb') as f:
+        saved = json.load(f)
+      music = saved['feedback'].get('music')
+      received = saved.get('receivedAt')
+      self.state = isinstance(music, dict) and music.get('playing') is True
+      self.received = float(received) if isinstance(received, (int, float)) and not isinstance(received, bool) else -math.inf
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+      self.state = False
+
+
+class SteadyBeat:
+  """A plain beat clock, for when we know a song is playing but hear no beat to follow."""
+  def __init__(self, period: float = STEADY_PERIOD, strength: float = 0.6):
+    self.period, self.strength, self.phase = period, strength, 0.0
+
+  def advance(self, dt: float) -> list[float]:
+    beats = []
+    self.phase += dt / self.period
+    while self.phase >= 1.0:
+      self.phase -= 1.0
+      beats.append(self.strength)
+    return beats
 
 
 class BeatTracker:

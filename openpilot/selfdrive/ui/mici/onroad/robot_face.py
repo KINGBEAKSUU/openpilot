@@ -10,7 +10,7 @@ import time
 import numpy as np
 import pyray as rl
 
-from openpilot.selfdrive.ui.mici.onroad.robot_face_music import CAPTURE_DELAY, BeatTracker
+from openpilot.selfdrive.ui.mici.onroad.robot_face_music import CAPTURE_DELAY, BeatTracker, PhoneMusic, SteadyBeat
 from openpilot.selfdrive.ui.mici.onroad.robot_face_model import (DM_ALERTS, FaceInputs, FaceModel, clamp, ease_out_back,
                                                                   ease_out_cubic, eye_span_arrays, fract, vnoise)
 from openpilot.selfdrive.ui.ui_state import ui_state
@@ -46,6 +46,8 @@ class RobotFace:
     self._last = time.monotonic()
     self._font = gui_app.font(FontWeight.BOLD)
     self._beat = BeatTracker()
+    self._phone = PhoneMusic()     # the phone's player, through the Navdy HUD
+    self._steady = SteadyBeat()    # the groove while the phone plays and the microphone finds no beat
     self._mic = None           # every rawAudioData chunk (not just the latest), opened on first use
     self._glow_tex = None
 
@@ -275,16 +277,21 @@ class RobotFace:
     return [(np.frombuffer(msg.rawAudioData.data, dtype=np.int16), msg.logMonoTime * 1e-9) for msg in messaging.drain_sock(self._mic)]
 
   def _listen(self, dt: float, inp: FaceInputs) -> None:
-    """Find the beat in the cabin microphone (micd, 50 ms chunks). Not while the car's own alert sound plays."""
+    """Music: dance to the beat the cabin microphone finds (micd, 50 ms chunks), or else to a steady 120 BPM while
+    the phone says a song is playing (Navdy HUD v186+). The car's own alert sound is never taken for music."""
     beats = self._beat.advance(dt)          # the clock moves to now first; the new audio then corrects it
+    steady = self._steady.advance(dt)
     chunks = self._audio_chunks()
     now = time.monotonic()
-    ss = ui_state.sm['selfdriveState']
-    if str(ss.alertSound) not in ('none', '0', ''):
-      return
-    for chunk, stamped in chunks:
-      self._beat.feed(chunk, age=max(0.0, now - stamped) + CAPTURE_DELAY)
-    inp.music_on, inp.music_beats, inp.music_period = self._beat.locked, tuple(beats), self._beat.period
+    heard = False
+    if str(ui_state.sm['selfdriveState'].alertSound) in ('none', '0', ''):
+      for chunk, stamped in chunks:
+        self._beat.feed(chunk, age=max(0.0, now - stamped) + CAPTURE_DELAY)
+      heard = self._beat.locked
+    if heard:
+      inp.music_on, inp.music_beats, inp.music_period = True, tuple(beats), self._beat.period
+    elif self._phone.playing(now):
+      inp.music_on, inp.music_beats, inp.music_period = True, tuple(steady), self._steady.period
 
   def draw(self, rect: rl.Rectangle) -> None:
     m, P = self.model, self.model.P
