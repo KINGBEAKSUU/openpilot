@@ -223,6 +223,9 @@ class AlertRenderer(Widget):
 
   def _render(self, rect: rl.Rectangle) -> bool:
     alert = self.get_alert(ui_state.sm)
+    if alert is not None and getattr(ui_state, "robot_ui", False) and alert.status != AlertStatus.critical:
+      alert = None
+      self._prev_alert = None
 
     # Animate fade and slide in/out
     self._alert_y_filter.update(self._rect.y - 50 if alert is None else self._rect.y)
