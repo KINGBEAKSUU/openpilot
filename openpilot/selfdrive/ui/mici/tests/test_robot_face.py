@@ -128,7 +128,9 @@ def test_straining_draws_gritted_teeth_and_shut_eyes(face):
 
 
 def test_listen_feeds_the_microphone_and_dances_on_its_beat(face):
+  import time
   import numpy as np
+  module_time = time.monotonic
   rate, bpm = 16000, 120
   t = np.arange(int(12 * rate)) / rate
   kick = np.zeros_like(t)
@@ -139,7 +141,7 @@ def test_listen_feeds_the_microphone_and_dances_on_its_beat(face):
   audio = (kick * 12000).astype(np.int16)
   chunks = [audio[i:i + 800] for i in range(0, audio.size, 800)]
   feed = iter(chunks)
-  face.f._audio_chunks = lambda: [next(feed)]
+  face.f._audio_chunks = lambda: [(next(feed), module_time())]
   beats = 0
   for _ in range(len(chunks)):
     inp = face.f._inputs()
@@ -147,7 +149,7 @@ def test_listen_feeds_the_microphone_and_dances_on_its_beat(face):
     beats += len(inp.music_beats)
   assert inp.music_on and abs(60 / inp.music_period - bpm) < 3 and beats >= 8
   face.ui.sm['selfdriveState'].alertSound = 'prompt'       # the car's own alert sound: not music
-  face.f._audio_chunks = lambda: [chunks[0]]
+  face.f._audio_chunks = lambda: [(chunks[0], module_time())]
   inp = face.f._inputs()
   face.f._listen(0.05, inp)
   assert not inp.music_on

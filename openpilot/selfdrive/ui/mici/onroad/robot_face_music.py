@@ -19,6 +19,8 @@ START = 0.5                         # ...held for HOLD estimates (0.5 s apart) i
 STEADY = 0.03                       # ...with those tempo estimates within 3%: music holds its tempo, road noise does not
 HOLD = 6
 DB_FLOOR, DB_RANGE = -100.0, 70.0   # level mapping, like a web AnalyserNode's byte spectrum
+LEAD = 0.025                        # s: the UI shows a beat at its next 50 ms frame, so hand it over half a frame early
+CAPTURE_DELAY = 0.03                # s from a sound to micd stamping the chunk that holds it (input buffering)
 
 
 class BeatTracker:
@@ -170,7 +172,7 @@ class BeatTracker:
     """Move the beat clock on by dt (s); the strengths of the beats that fell in it."""
     beats = []
     self.phase += dt / self.period
-    while self.phase >= 1.0:
+    while self.phase + LEAD / self.period >= 1.0:
       self.phase -= 1.0
       if self.locked:
         beats.append(self.strength)
