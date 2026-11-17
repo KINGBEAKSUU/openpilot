@@ -67,8 +67,10 @@ def test_inputs_read_engagement_alerts_and_motion(face):
   sm['carControl'].latActive = True                     # Carrot can steer without ACC: still "driving"
   sm['selfdriveState'].alertType = 'driverDistracted2/warning'
   sm['carState'].leftBlinker = True
+  sm['carState'].steeringAngleDeg = 30.0                   # wheel turned left
   inp = face.f._inputs()
   assert inp.engaged and inp.dm_alert and inp.left_blinker
+  assert inp.steer_deg == -30.0                            # the face looks and leans left
   sm['selfdriveState'].alertType = 'fcw/critical'
   assert face.f._inputs().fcw
   sm.recv_frame['carState'] = 9                          # a previous drive's car state is ignored
@@ -90,7 +92,7 @@ def test_inputs_read_driving_events(face):
   inp = face.f._inputs()
   assert (inp.lane_phase, inp.lane_dir) == (1, 1)
   assert (inp.lead_d, inp.lead_v, inp.cam_dist, inp.cam_limit, inp.route_left) == (9.5, 1.2, 280.0, 80.0, 1500.0)
-  assert inp.lat_accel == pytest.approx(0.02 * 10 * 10)
+  assert inp.lat_accel == pytest.approx(-0.02 * 10 * 10)        # curvature + is a right bend: lateral + is left
   assert inp.steer_sat and not inp.cutin and inp.blindspot_right and inp.gas
   sm['modelV2'].meta = NS(laneChangeState='laneChangeFinishing', laneChangeDirection='left')
   sm['onroadEvents'] = []

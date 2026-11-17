@@ -109,7 +109,7 @@ class FaceInputs:
   engaged: bool = False
   left_blinker: bool = False
   right_blinker: bool = False
-  steer_deg: float = 0.0
+  steer_deg: float = 0.0       # + turning right (carState.steeringAngleDeg is + left)
   v_ego: float = 0.0
   a_ego: float = 0.0
   standstill: bool = False

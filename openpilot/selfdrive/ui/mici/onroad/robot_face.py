@@ -65,7 +65,7 @@ class RobotFace:
       engaged=bool(sd_ok and ss.enabled) or bool(lat),
       left_blinker=bool(car_ok and cs.leftBlinker),
       right_blinker=bool(car_ok and cs.rightBlinker),
-      steer_deg=float(cs.steeringAngleDeg) if car_ok else 0.0,
+      steer_deg=-float(cs.steeringAngleDeg) if car_ok else 0.0,   # carState is + left; the face wants + right
       v_ego=v_ego,
       a_ego=float(cs.aEgo) if car_ok else 0.0,
       standstill=bool(car_ok and cs.standstill),
@@ -86,7 +86,7 @@ class RobotFace:
       if lead.status:
         inp.lead_d, inp.lead_v = float(lead.dRel), float(lead.vLead)
     if fresh('controlsState'):
-      inp.lat_accel = float(sm['controlsState'].curvature) * v_ego * v_ego
+      inp.lat_accel = -float(sm['controlsState'].curvature) * v_ego * v_ego   # curvature is + right here; + left wanted
     if seen('carrotMan'):
       cm = sm['carrotMan']
       inp.cam_dist, inp.cam_limit, inp.route_left = float(cm.xSpdDist), float(cm.xSpdLimit), float(cm.nGoPosDist)
