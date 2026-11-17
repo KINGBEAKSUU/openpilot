@@ -154,22 +154,17 @@ class RobotFace:
 
   @staticmethod
   def _poly(points, c):
-    """Filled polygon as a fan from its centroid (shapes here are star-shaped around it)."""
+    """Filled polygon as a fan from its centroid (shapes here are star-shaped around it).
+
+    Through raylib's DrawTriangleFan, which binds the shapes texture and its white texel: raw rlBegin/rlVertex
+    calls sampled whatever texture and coordinate the last draw left behind, and on the device GPU that made
+    stars, hearts, sparkles and arrowheads invisible (only the glow behind a star showed, as a blur)."""
     if len(points) < 3:
       return
     cx = sum(p[0] for p in points) / len(points)
     cy = sum(p[1] for p in points) / len(points)
-    col = color(c[:3], c[3] if len(c) > 3 else 1.0)
-    rl.rl_check_render_batch_limit(len(points) * 3)
-    rl.rl_begin(rl.RL_TRIANGLES)
-    rl.rl_color4ub(col.r, col.g, col.b, col.a)
-    for i in range(len(points)):
-      x1, y1 = points[i]
-      x2, y2 = points[(i + 1) % len(points)]
-      rl.rl_vertex2f(cx, cy)
-      rl.rl_vertex2f(x1, y1)
-      rl.rl_vertex2f(x2, y2)
-    rl.rl_end()
+    fan = [rl.Vector2(cx, cy), *(rl.Vector2(x, y) for x, y in points), rl.Vector2(*points[0])]
+    rl.draw_triangle_fan(fan, len(fan), color(c[:3], c[3] if len(c) > 3 else 1.0))
 
   @staticmethod
   def _stroke(points, thick, c, a=1.0, opaque=False):
