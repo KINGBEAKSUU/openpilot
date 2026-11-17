@@ -116,6 +116,19 @@ class FaceInputs:
   dm_alert: bool = False
   fcw: bool = False
   night: bool = False
+  lane_phase: int = 0         # 0 off, 1 lane change starting, 2 finishing
+  lane_dir: int = 0           # -1 left, 1 right
+  blindspot_left: bool = False
+  blindspot_right: bool = False
+  lead_d: float = 0.0         # lead distance, m (0 = no lead)
+  lead_v: float = 0.0         # lead's own speed, m/s
+  cam_dist: float = 0.0       # speed camera ahead, m (0 = none)
+  cam_limit: float = 0.0      # its limit, km/h
+  route_left: float = 0.0     # navigation distance to the goal, m (0 = no route)
+  steer_sat: bool = False     # steerSaturated is up
+  cutin: bool = False         # radarCutin is up
+  gas: bool = False
+  lat_accel: float = 0.0      # m/s², + turning left
 
 
 @dataclass
@@ -204,6 +217,17 @@ class FaceModel:
   DROWSY_AFTER_S = 45.0       # stopped this long: drowsy, then asleep
   HARD_BRAKE = -3.5           # m/s², or a forward collision warning
   BRAKE_COOLDOWN_S = 3.0
+  CAMERA_NEAR_M = 300.0       # react once per speed camera, this far out
+  CAMERA_OVER_KPH = 5.0       # this far over its limit is speeding
+  ARRIVE_M = 30.0
+  CURVE_ACCEL = 2.3           # m/s² of lateral acceleration, held CURVE_HOLD_S
+  CURVE_HOLD_S = 0.8
+  # Who may cut in: a reaction runs only when nothing at least as important is still playing.
+  PRIO = {'brake': 5, 'dm': 5, 'engage': 3, 'disengage': 3, 'dm_clear': 3, 'go': 2, 'sleepy': 0,
+          'strain': 4, 'bsm': 4, 'cutin': 3, 'camera_fast': 2, 'lead_go': 2, 'arrive': 2,
+          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'camera': 1, 'gas': 1, 'curve': 1}
+  COOLDOWN = {'strain': 6.0, 'bsm': 4.0, 'cutin': 6.0, 'lead_go': 10.0, 'gas': 10.0, 'curve': 40.0}
+  WAKES = ('lead_go',)  # the only event that wakes it from sleep
 
   def __init__(self, rng: random.Random | None = None):
     self.rng = rng or random.Random()
@@ -250,7 +274,20 @@ class FaceModel:
     self.squeeze = False
     self.shake = 0.0
     self.event_until = 0.0
+    self.prio = 0
+    self.last_event: str | None = None
+    self.cooldown: dict[str, float] = {}
     self.brake_until = 0.0
+    self.lane_phase = 0
+    self.bsm_side = 0
+    self.lead_move_for = 0.0
+    self.cam_armed = True
+    self.route_armed = True
+    self.route_near_at = -1e9
+    self.curve_for = 0.0
+    self.steer_sat = False
+    self.cutin = False
+    self.gas = False
     self.star_until = 0.0
     self.eye_shape: str | None = None
     self.behavior: str | None = None
@@ -355,6 +392,7 @@ class FaceModel:
     if inp.session != self.session:
       self.session = inp.session
       self.reset()
+      self.react('hello')
     self.night = inp.night
     self.steer = clamp(inp.steer_deg, -90.0, 90.0)
     sig = (-1 if inp.left_blinker else 0) + (1 if inp.right_blinker else 0)   # hazards cancel out
@@ -375,6 +413,74 @@ class FaceModel:
       self.react('sleepy')
     elif self.sleep_stage and inp.v_ego > 0.5:
       self.react('go')
+    self._driving_events(dt, inp, stopped)
+
+  def _driving_events(self, dt: float, inp: FaceInputs, stopped: bool) -> None:
+    # lane change: lean into it, then a proud little nod once it finishes (not when it is called off)
+    if inp.lane_phase != self.lane_phase:
+      if inp.lane_phase == 1 and self.lane_phase == 0 and inp.lane_dir:
+        self.event('lane_go', inp.lane_dir)
+      elif inp.lane_phase == 0 and self.lane_phase == 2:
+        self.event('lane_done')
+      self.lane_phase = inp.lane_phase
+    # a car in the blind spot on the side we are signalling toward
+    side = -1 if self.signal < 0 and inp.blindspot_left else 1 if self.signal > 0 and inp.blindspot_right else 0
+    if side and not self.bsm_side:
+      self.event('bsm', side)
+    self.bsm_side = side
+    # the car ahead pulls away while we wait
+    moving_off = stopped and self.stopped_for > 1.5 and 0 < inp.lead_d < 35 and inp.lead_v > 1.0
+    self.lead_move_for = self.lead_move_for + dt if moving_off else 0.0
+    if self.lead_move_for >= 0.4 and self.lead_move_for - dt < 0.4:
+      self.event('lead_go')
+    # speed camera: one reaction per camera
+    if inp.cam_dist <= 0 or inp.cam_dist > self.CAMERA_NEAR_M + 200:
+      self.cam_armed = True
+    elif self.cam_armed and inp.cam_dist <= self.CAMERA_NEAR_M and inp.cam_limit > 0 and inp.v_ego > 5:
+      self.cam_armed = False
+      self.event('camera_fast' if inp.v_ego * 3.6 > inp.cam_limit + self.CAMERA_OVER_KPH else 'camera')
+    # steering at its limit, a car cutting in, the driver taking the gas
+    if inp.steer_sat and not self.steer_sat and self.engaged:
+      self.event('strain', 1 if self.steer >= 0 else -1)
+    self.steer_sat = inp.steer_sat
+    if inp.cutin and not self.cutin and inp.v_ego > 3:
+      self.event('cutin')
+    self.cutin = inp.cutin
+    if inp.gas and not self.gas and self.engaged and inp.v_ego > 2:
+      self.event('gas')
+    self.gas = inp.gas
+    # arriving: the route counts down to the goal, or ends close to it
+    if inp.route_left > 0:
+      if inp.route_left > 300:
+        self.route_armed = True
+      if inp.route_left <= 150:
+        self.route_near_at = self.clock
+      if self.route_armed and inp.route_left <= self.ARRIVE_M:
+        self.route_armed = False
+        self.event('arrive')
+    elif self.route_armed and self.clock - self.route_near_at < 20:
+      self.route_armed = False
+      self.event('arrive')
+    # a fast bend
+    if inp.v_ego > 8 and abs(inp.lat_accel) > self.CURVE_ACCEL:
+      self.curve_for += dt
+      if self.curve_for >= self.CURVE_HOLD_S and self.curve_for - dt < self.CURVE_HOLD_S:
+        self.event('curve', 1 if inp.lat_accel > 0 else -1)
+    else:
+      self.curve_for = 0.0
+
+  def event(self, name: str, arg: float = 0.0) -> bool:
+    """Run a driving-event reaction unless something more important is playing or it just ran."""
+    prio = self.PRIO[name]
+    if self.clock < self.cooldown.get(name, -1.0):
+      return False
+    if (self.dm and prio < 5) or (self.sleep_stage == 2 and name not in self.WAKES):
+      return False
+    if self.clock < self.event_until and prio <= self.prio:
+      return False
+    self.cooldown[name] = self.clock + self.COOLDOWN.get(name, 0.0)
+    self.react(name, arg)
+    return True
 
   def _on_signal(self, sig: int) -> None:
     self.gaze_timer = 0
@@ -390,8 +496,10 @@ class FaceModel:
       self.P['er'].t = 0
 
   # ---- reactions: short choreographies -----------------------------------------------------
-  def react(self, name: str) -> None:
+  def react(self, name: str, arg: float = 0.0) -> None:
     self._cancel()
+    self.prio = self.PRIO.get(name, 1)
+    self.last_event = name
     self.squeeze = False
     self.behavior = None
     self.path = None
@@ -533,6 +641,152 @@ class FaceModel:
       self.later(1.2, lambda: self.start_blink(double=True, speed=1.2))
       self.later(1.55, lambda: (self._apply_mood('happy'), self.engaged or setattr(P['green'], 't', 0), self.kick('hy', -230)))
       self.later(2.4, lambda: self._apply_mood(self.rest_mood()))
+    else:
+      self._react_driving(name, arg)
+
+  def _glad(self) -> None:
+    """Happy face; the green driving tint only while engaged."""
+    self._apply_mood('happy')
+    if not self.engaged:
+      self.P['green'].t = 0
+
+  def _settle(self) -> None:
+    """End of a driving-event reaction: back to the resting face (or the turn-signal lean)."""
+    P = self.P
+    for k in ('ey', 'pitch', 'wL', 'wR', 'p_quest'):
+      P[k].t = 0
+    P['ex'].t = self.signal * 36
+    P['er'].t = self.signal * 7
+    self.squeeze = False
+    if not self.dm:
+      self.tremble = 0.0
+      if not self.sleep_stage:
+        self._apply_mood(self.rest_mood())
+    self.start_blink()
+
+  def _react_driving(self, name: str, arg: float) -> None:
+    P, L = self.P, self.later
+    d = int(arg) or 1
+    if name in self.WAKES or name in ('bsm', 'strain', 'cutin', 'arrive'):
+      self.sleep_stage = 0
+      self.stopped_for = 0.0      # count the stop afresh, or it dozes straight off again
+      self.wake()
+    if name == 'hello':
+      # wakes up with the car: eyes open, a hop and a sparkle
+      self.event_until = self.clock + 2.2
+      P['up'].v = P['up'].t = 1.0
+      L(0.35, lambda: (setattr(P['up'], 't', 0.35), self.kick('hy', -60)))
+      L(0.75, lambda: (self._glad(), self.kick('hy', -230), self._sparkle(4)))
+      L(1.1, lambda: self.kick('hy', 120))
+      L(1.6, self._settle)
+    elif name == 'lane_go':
+      # "here we go": a determined squint, sliding over with speed lines trailing
+      self.event_until = self.clock + 1.6
+      P['w'].t, P['h'].t, P['up'].t, P['tilt'].t, P['low'].t = 112, 92, 0.16, 0.22, 0.08
+      P['ex'].t, P['er'].t = d * 34, d * 8
+      self.look(d * 0.95, -0.05, 1.1)
+      self.kick('hx', d * 200)
+      for i in range(4):
+        L(i * 0.09, lambda i=i: self.spawn(kind='streak', x=-d * (150 + i * 14), y=-42 + i * 26, vx=-d * 240, life=0.5,
+                                            size=1 + (i % 2) * 0.5, direction=-d))
+      L(1.15, lambda: (setattr(P['ex'], 't', d * 14), setattr(P['er'], 't', 0), self.osc('rot', 3, 2.2, 3)))
+      L(1.5, self._settle)
+    elif name == 'lane_done':
+      # proud of it: a happy squint and a double nod
+      self.event_until = self.clock + 1.3
+      self._glad()
+      P['blush'].t = 0.4
+      self.kick('hy', -150)
+      L(0.2, lambda: self._sparkle(2))
+      L(0.3, lambda: self.kick('hy', 110))
+      L(0.48, lambda: self.kick('hy', -90))
+      L(1.1, self._settle)
+    elif name == 'bsm':
+      # "whoa, someone's there": recoil from that side while staring at it, then a no-no shake
+      self.event_until = self.clock + 2.0
+      P['w'].t, P['h'].t, P['up'].t, P['tilt'].t, P['smile'].t, P['amber'].t = 112, 132, 0.0, -0.3, -0.2, 0.8
+      P['ex'].t, P['er'].t = -d * 34, -d * 7
+      self.look(d * 1.1, -0.05, 0.9)
+      self.kick('hx', -d * 260)
+      self.kick('hy', 120)
+      self.spawn(kind='bang', x=d * 206, y=-70, life=1.3)
+      L(0.45, lambda: (self.osc('hx', 12, 5.5, 3.5), self.osc('rot', 4, 5.5, 3.5)))
+      L(1.6, lambda: (setattr(P['amber'], 't', 0), self._settle()))
+    elif name == 'lead_go':
+      # "oh, they're moving": wide eyes forward, then leaning in to go
+      self.event_until = self.clock + 1.9
+      P['w'].t, P['h'].t, P['up'].t = 110, 136, 0.0
+      self.look(0.0, -0.3, 0.9)
+      self.kick('hy', -260)
+      self.spawn(kind='bang', x=196, y=-84, life=1.2)
+      L(0.55, lambda: (setattr(P['pitch'], 't', 0.06), setattr(P['ey'], 't', -8), self.kick('hy', -120)))
+      L(0.9, lambda: self.start_blink(double=True, speed=1.2))
+      L(1.5, self._settle)
+    elif name in ('camera', 'camera_fast'):
+      # a speed camera: a wary glance up at it, the shutter flash; sweating if over its limit
+      fast = name == 'camera_fast'
+      self.event_until = self.clock + (2.6 if fast else 2.0)
+      self.spawn(kind='cam', x=178, y=-86, life=1.8)
+      self.look(0.7, -0.7, 0.45)
+      P['up'].t, P['tilt'].t = 0.2, 0.18
+      L(0.35, lambda: (setattr(P['flash'], 't', 0.9), self.start_blink(speed=1.6)))
+      L(0.5, lambda: setattr(P['flash'], 't', 0))
+      L(0.65, lambda: self.look(0.0, 0.0, 0.35))
+      L(1.0, lambda: self.look(0.7, -0.7, 0.4))
+      if fast:
+        L(0.7, lambda: (self._apply_mood('worried'), self._sweat(), setattr(self, 'tremble', 0.5)))
+        L(2.3, self._settle)
+      else:
+        L(1.6, self._settle)
+    elif name == 'strain':
+      # the turn is past the steering limit: screwed-up eyes, trembling, leaning into it
+      self.event_until = self.clock + 2.0
+      self.squeeze = True
+      self.tremble = 0.8
+      P['up'].t, P['amber'].t, P['pitch'].t = 0.97, 0.5, 0.05
+      P['ex'].t, P['er'].t = d * 26, d * 9
+      self._sweat()
+      self.kick('hx', d * 200)
+      L(1.5, lambda: (setattr(self, 'squeeze', False), setattr(self, 'tremble', 0.0), self._apply_mood('sigh'),
+                      setattr(P['pitch'], 't', -0.03), self.kick('hy', 90)))
+      L(2.0, self._settle)
+    elif name == 'cutin':
+      # someone cut in: a flinch back and a quick double blink
+      self.event_until = self.clock + 1.4
+      P['w'].t, P['h'].t, P['up'].t, P['pitch'].t = 104, 124, 0.0, -0.07
+      self.kick('hy', 220)
+      self.look(0.0, -0.1, 0.8)
+      self.start_blink(speed=1.8, double=True)
+      L(0.5, lambda: (setattr(P['pitch'], 't', 0), self.kick('hy', -90)))
+      L(1.1, self._settle)
+    elif name == 'gas':
+      # the driver pressed the gas: a curious glance their way, "you've got it?"
+      self.event_until = self.clock + 1.8
+      self._apply_mood('curious')
+      P['green'].t = 0.9 if self.engaged else 0
+      P['er'].t, P['ex'].t, P['p_quest'].t = -8, -14, 1
+      self.look(-0.65, 0.22, 1.0)
+      L(1.1, lambda: (setattr(P['p_quest'], 't', 0), self.look(0, 0, 0.2), self.kick('hy', -90)))
+      L(1.5, self._settle)
+    elif name == 'arrive':
+      # made it: star eyes, hops, sparkles and hearts
+      self.event_until = self.clock + 3.1
+      self._apply_mood('happy')
+      self.star_until = self.clock + 1.4
+      for i in range(3):
+        L(i * 0.42, lambda: (self.kick('hy', -280), self._sparkle(4)))
+      for i in range(4):
+        L(0.3 + i * 0.35, self._heart)
+      L(1.5, lambda: (self.osc('rot', 6, 2.2, 2.2), setattr(P['blush'], 't', 0.9)))
+      L(2.9, self._settle)
+    elif name == 'curve':
+      # a fast bend: "wheee", swung toward the outside of the turn
+      self.event_until = self.clock + 1.8
+      P['w'].t, P['h'].t, P['mO'].t = 112, 128, 0.45
+      P['ex'].t, P['er'].t = d * 30, d * 8
+      self.kick('hx', d * 220)
+      L(0.6, lambda: (self._glad(), self.kick('hy', -120)))
+      L(1.5, self._settle)
 
   # ---- idle habits -------------------------------------------------------------------------
   def _end_behavior(self) -> None:

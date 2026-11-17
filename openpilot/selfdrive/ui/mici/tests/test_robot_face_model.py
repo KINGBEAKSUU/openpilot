@@ -139,3 +139,185 @@ def test_long_random_drive_picks_many_habits_without_errors():
       seen.add(model.behavior)
   assert len(seen) >= 15
   assert all(math.isfinite(s.v) for s in model.P.values())
+
+
+# ---- driving-event reactions -------------------------------------------------------------------
+def ready(engaged=False, **kw):
+  """A model past its session-start hello (and engage hop), plus the inputs it is running on."""
+  model = FaceModel(random.Random(4))
+  inp = FaceInputs(session=1, engaged=engaged, v_ego=kw.pop('v_ego', 15.0), **kw)
+  run(model, inp, 4.0)
+  model.last_event = None
+  return model, inp
+
+
+def test_session_start_says_hello():
+  model = FaceModel(random.Random(1))
+  model.update(0.05, FaceInputs(session=1))
+  assert model.last_event == 'hello' and model.P['up'].t == 1.0          # eyes start shut
+  run(model, FaceInputs(session=1), 1.0)
+  assert model.mood == 'happy'
+  run(model, FaceInputs(session=1), 1.0)
+  assert model.mood == 'idle' and model.P['up'].t == 0
+
+
+def test_lane_change_leans_in_then_nods_only_when_it_finishes():
+  m, inp = ready(engaged=True)
+  inp.right_blinker = True
+  run(m, inp, 0.5)
+  inp.lane_phase, inp.lane_dir = 1, 1
+  run(m, inp, 0.1)
+  assert m.last_event == 'lane_go' and m.P['ex'].t > 0 and any(p.kind == 'streak' for p in m.parts)
+  run(m, inp, 2.0)
+  inp.lane_phase = 2
+  run(m, inp, 0.5)
+  inp.lane_phase, inp.right_blinker = 0, False
+  run(m, inp, 0.1)
+  assert m.last_event == 'lane_done' and m.mood == 'happy'
+  run(m, inp, 3.0)
+  assert m.mood == 'focus'
+  inp.lane_phase, inp.lane_dir = 1, -1                    # called off before it finished: no nod
+  run(m, inp, 2.0)
+  inp.lane_phase = 0
+  run(m, inp, 0.2)
+  assert m.last_event == 'lane_go'
+
+
+def test_blind_spot_car_on_the_signalled_side_startles():
+  m, inp = ready(engaged=True)
+  inp.blindspot_right = True                              # not signalling toward it: nothing
+  run(m, inp, 0.5)
+  assert m.last_event is None
+  inp.right_blinker = True
+  run(m, inp, 0.1)
+  assert m.last_event == 'bsm' and m.P['ex'].t < 0 and m.P['amber'].t > 0
+  assert any(p.kind == 'bang' and p.x > 0 for p in m.parts)
+  m.last_event = None
+  inp.blindspot_right = False
+  run(m, inp, 0.5)
+  inp.blindspot_right = True                              # back again inside the cooldown
+  run(m, inp, 0.5)
+  assert m.last_event is None
+
+
+def test_car_ahead_pulling_away_while_stopped_even_from_sleep():
+  m, inp = ready(v_ego=0.0, standstill=True, lead_d=8.0)
+  inp.lead_v = 2.0
+  run(m, inp, 0.3)
+  assert m.last_event is None                             # has to keep moving for 0.4 s
+  run(m, inp, 0.2)
+  assert m.last_event == 'lead_go' and m.P['h'].t > 130
+  m, inp = ready(v_ego=0.0, standstill=True, lead_d=8.0)
+  run(m, inp, 55.0)
+  assert m.sleep_stage == 2
+  inp.lead_v = 1.6
+  run(m, inp, 0.5)
+  assert m.last_event == 'lead_go' and m.sleep_stage == 0
+  run(m, inp, 2.0)
+  assert m.sleep_stage == 0                               # still stopped, but it does not doze straight off again
+
+
+def test_speed_camera_reacts_once_and_sweats_when_speeding():
+  m, inp = ready(engaged=True, v_ego=20.0, cam_limit=80.0)
+  inp.cam_dist = 600.0
+  run(m, inp, 0.2)
+  assert m.last_event is None
+  inp.cam_dist = 280.0
+  run(m, inp, 0.1)
+  assert m.last_event == 'camera' and any(p.kind == 'cam' for p in m.parts)
+  m.last_event = None
+  for d in (200.0, 100.0, 20.0):
+    inp.cam_dist = d
+    run(m, inp, 0.5)
+  assert m.last_event is None
+  inp.cam_dist = 0.0                                      # passed it
+  run(m, inp, 3.0)
+  inp.cam_dist, inp.v_ego = 250.0, 25.0                   # 90 km/h at an 80 camera
+  run(m, inp, 1.0)
+  assert m.last_event == 'camera_fast' and m.mood == 'worried' and any(p.kind == 'sweat' for p in m.parts)
+
+
+def test_steering_limit_cut_in_and_gas_override():
+  m, inp = ready(engaged=True, steer_deg=-20.0)
+  inp.steer_sat = True
+  run(m, inp, 0.1)
+  assert m.last_event == 'strain' and m.squeeze and m.P['ex'].t < 0
+  inp.cutin = True                                        # less important than the strain still playing
+  run(m, inp, 0.5)
+  assert m.last_event == 'strain'
+  inp.steer_sat = inp.cutin = False
+  run(m, inp, 2.5)
+  assert not m.squeeze
+  inp.cutin = True
+  run(m, inp, 0.1)
+  assert m.last_event == 'cutin'
+  run(m, inp, 2.0)
+  inp.gas = True
+  run(m, inp, 0.1)
+  assert m.last_event == 'gas' and m.P['p_quest'].t == 1
+  m, inp = ready(engaged=False)                           # not driving it: no strain, no gas
+  inp.steer_sat = inp.gas = True
+  run(m, inp, 0.5)
+  assert m.last_event is None
+
+
+def test_driver_alert_and_hard_braking_outrank_driving_events():
+  m, inp = ready(engaged=True)
+  inp.dm_alert = True
+  run(m, inp, 0.5)
+  inp.lane_phase, inp.lane_dir = 1, 1
+  run(m, inp, 0.5)
+  assert m.last_event == 'dm' and m.mood == 'worried'
+  inp.dm_alert, inp.lane_phase = False, 0
+  run(m, inp, 3.0)
+  inp.a_ego = -4.5
+  run(m, inp, 0.1)
+  inp.a_ego, inp.cutin = 0.0, True
+  run(m, inp, 0.5)
+  assert m.last_event == 'brake'
+
+
+def test_arrival_at_the_goal():
+  m, inp = ready()
+  for d in (1200.0, 500.0, 120.0):
+    inp.route_left = d
+    run(m, inp, 0.5)
+  assert m.last_event is None
+  inp.route_left = 25.0
+  run(m, inp, 0.1)
+  assert m.last_event == 'arrive' and m.clock < m.star_until
+  m, inp = ready()                                        # the route ends close to the goal
+  for d in (900.0, 140.0, 0.0):
+    inp.route_left = d
+    run(m, inp, 0.5)
+  assert m.last_event == 'arrive'
+  m, inp = ready()                                        # cancelled far from it
+  for d in (900.0, 0.0):
+    inp.route_left = d
+    run(m, inp, 0.5)
+  assert m.last_event is None
+
+
+def test_fast_bend_has_to_last():
+  m, inp = ready(engaged=True)
+  inp.lat_accel = 3.0
+  run(m, inp, 0.5)
+  assert m.last_event is None
+  run(m, inp, 0.5)
+  assert m.last_event == 'curve' and m.P['ex'].t > 0        # a left bend swings it to the right
+  m, inp = ready(engaged=True, v_ego=5.0, lat_accel=3.0)  # slow: just a corner
+  run(m, inp, 2.0)
+  assert m.last_event is None
+
+
+@pytest.mark.parametrize('engaged', [False, True])
+def test_every_driving_reaction_settles_back(engaged):
+  names = [n for n in FaceModel.PRIO if n not in ('brake', 'dm', 'engage', 'disengage', 'dm_clear', 'go', 'sleepy')]
+  m, inp = ready(engaged=engaged)
+  for name in names:
+    m.behavior_timer = 1e9                                # no idle habit afterwards, so the resting face shows
+    m.react(name, -1)
+    run(m, inp, 3.5)
+    assert m.mood == m.rest_mood() and not m.squeeze and m.tremble == 0, name
+    assert m.P['ex'].t == 0 and m.P['p_quest'].t == 0, name
+    assert all(math.isfinite(s.v) for s in m.P.values()), name

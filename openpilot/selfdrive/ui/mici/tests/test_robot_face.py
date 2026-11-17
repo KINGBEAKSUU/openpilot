@@ -13,9 +13,14 @@ ONROAD = Path(__file__).parents[1] / 'onroad'
 class SM(dict):
   def __init__(self):
     super().__init__(
-      carState=NS(leftBlinker=False, rightBlinker=False, steeringAngleDeg=0.0, vEgo=10.0, aEgo=0.0, standstill=False),
-      selfdriveState=NS(enabled=False, alertType=''), carControl=NS(latActive=False))
-    names = ('carState', 'selfdriveState', 'carControl')
+      carState=NS(leftBlinker=False, rightBlinker=False, steeringAngleDeg=0.0, vEgo=10.0, aEgo=0.0, standstill=False,
+                  leftBlindspot=False, rightBlindspot=False, gasPressed=False),
+      selfdriveState=NS(enabled=False, alertType=''), carControl=NS(latActive=False),
+      modelV2=NS(meta=NS(laneChangeState='off', laneChangeDirection='none')),
+      radarState=NS(leadOne=NS(status=False, dRel=0.0, vLead=0.0)),
+      controlsState=NS(curvature=0.0), carrotMan=NS(xSpdDist=0, xSpdLimit=0, nGoPosDist=0), onroadEvents=[])
+    names = ('carState', 'selfdriveState', 'carControl', 'modelV2', 'radarState', 'controlsState',
+             'carrotMan', 'onroadEvents')
     self.alive = dict.fromkeys(names, True)
     self.valid = dict.fromkeys(names, True)
     self.recv_frame = dict.fromkeys(names, 11)
@@ -71,7 +76,47 @@ def test_inputs_read_engagement_alerts_and_motion(face):
   assert not inp.left_blinker and inp.v_ego == 0.0
 
 
+def test_inputs_read_driving_events(face):
+  sm = face.ui.sm
+  inp = face.f._inputs()
+  assert (inp.lane_phase, inp.lead_d, inp.cam_dist, inp.route_left) == (0, 0.0, 0.0, 0.0)
+  assert not (inp.steer_sat or inp.cutin or inp.gas or inp.blindspot_left)
+  sm['modelV2'].meta = NS(laneChangeState='laneChangeStarting', laneChangeDirection='right')
+  sm['radarState'].leadOne = NS(status=True, dRel=9.5, vLead=1.2)
+  sm['controlsState'].curvature = 0.02
+  sm['carrotMan'] = NS(xSpdDist=280, xSpdLimit=80, nGoPosDist=1500)
+  sm['onroadEvents'] = [NS(name='steerSaturated')]
+  sm['carState'].rightBlindspot = sm['carState'].gasPressed = True
+  inp = face.f._inputs()
+  assert (inp.lane_phase, inp.lane_dir) == (1, 1)
+  assert (inp.lead_d, inp.lead_v, inp.cam_dist, inp.cam_limit, inp.route_left) == (9.5, 1.2, 280.0, 80.0, 1500.0)
+  assert inp.lat_accel == pytest.approx(0.02 * 10 * 10)
+  assert inp.steer_sat and not inp.cutin and inp.blindspot_right and inp.gas
+  sm['modelV2'].meta = NS(laneChangeState='laneChangeFinishing', laneChangeDirection='left')
+  sm['onroadEvents'] = []
+  sm['selfdriveState'].alertType = 'radarCutin/warning'   # the one-frame event is gone; its alert is still up
+  inp = face.f._inputs()
+  assert (inp.lane_phase, inp.lane_dir) == (2, -1) and inp.cutin and not inp.steer_sat
+  sm.recv_frame['carrotMan'] = sm.recv_frame['radarState'] = 9   # left over from a previous drive
+  inp = face.f._inputs()
+  assert inp.cam_dist == 0 and inp.lead_d == 0
+
+
+def test_event_props_draw(face):
+  m = face.f.model
+  m.spawn(kind='streak', x=-150, y=0, life=0.5, direction=-1)
+  m.spawn(kind='cam', x=178, y=-86, life=1.8, age=0.4)
+  face.f.draw(face.rect)
+  n = names(face.calls)
+  assert n.count('draw_circle_v') >= 2                    # the camera lens
+  assert 'draw_line_ex' in n and 'draw_rectangle_rounded' in n
+
+
 def test_render_draws_both_eyes_and_keeps_the_matrix_balanced(face):
+  face.f.render(face.rect)                                # a new drive: the hello starts with the eyes shut
+  for _ in range(60):
+    face.f.model.update(0.05, face.f._inputs())
+  face.calls.clear()
   face.f.render(face.rect)
   n = names(face.calls)
   assert n[0] == 'draw_rectangle_rec'
