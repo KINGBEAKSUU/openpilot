@@ -285,7 +285,8 @@ def test_arrival_at_the_goal():
   assert m.last_event is None
   inp.route_left = 25.0
   run(m, inp, 0.1)
-  assert m.last_event == 'arrive' and m.clock < m.star_until
+  assert m.last_event == 'arrive' and m.star_from < m.clock < m.star_until
+  assert m.star_from > m.clock - 0.2                      # the stars pop in now, not 0.7 s before they end
   m, inp = ready()                                        # the route ends close to the goal
   for d in (900.0, 140.0, 0.0):
     inp.route_left = d
