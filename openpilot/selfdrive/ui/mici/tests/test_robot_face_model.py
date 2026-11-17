@@ -328,6 +328,28 @@ def test_too_slow_to_steer_hands_over_then_takes_back():
   assert m.last_event is None
 
 
+def test_dances_to_music_only_when_nothing_else_is_going_on():
+  m, inp = ready(engaged=True)
+  inp.music_on, inp.music_period = True, 0.5
+  y0, notes = m.P['hy'].vel, 0
+  for i in range(80):                                     # 4 s at 120 BPM
+    inp.music_beats = (0.8,) if i % 10 == 0 else ()
+    m.update(0.05, inp)
+    notes += sum(p.kind == 'note' and p.age < 0.06 for p in m.parts)
+  assert m.mood == 'vibe' and m.beats == 8 and notes >= 2
+  assert m.P['green'].t == 0.6                              # still the driving tint while it dances
+  inp.right_blinker = True                                # a turn signal: no dancing through it
+  beats = m.beats
+  for i in range(20):
+    inp.music_beats = (0.8,) if i % 10 == 0 else ()
+    m.update(0.05, inp)
+  assert m.beats == beats
+  inp.right_blinker, inp.music_on, inp.music_beats = False, False, ()
+  m.behavior_timer = 1e9                                  # no idle habit in between
+  run(m, inp, 3.5)
+  assert m.mood == 'focus'                                # the music stopped: back to driving
+
+
 def test_cut_in_at_crawling_speed():
   m, inp = ready(engaged=True, v_ego=2.8)                 # 10 km/h, as in the replayed drive
   inp.cutin = True

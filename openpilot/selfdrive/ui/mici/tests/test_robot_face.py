@@ -15,7 +15,7 @@ class SM(dict):
     super().__init__(
       carState=NS(leftBlinker=False, rightBlinker=False, steeringAngleDeg=0.0, vEgo=10.0, aEgo=0.0, standstill=False,
                   leftBlindspot=False, rightBlindspot=False, gasPressed=False),
-      selfdriveState=NS(enabled=False, alertType=''), carControl=NS(latActive=False, actuators=NS(torque=0.0)),
+      selfdriveState=NS(enabled=False, alertType='', alertSound='none'), carControl=NS(latActive=False, actuators=NS(torque=0.0)),
       carOutput=NS(actuatorsOutput=NS(torque=0.0)),
       modelV2=NS(meta=NS(laneChangeState='off', laneChangeDirection='none')),
       radarState=NS(leadOne=NS(status=False, dRel=0.0, vLead=0.0)),
@@ -54,6 +54,7 @@ def face(monkeypatch):
   module = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(module)
   f = module.RobotFace()
+  f._audio_chunks = lambda: []           # no microphone in tests
   return NS(f=f, ui=ui, calls=calls, rect=NS(x=0, y=0, width=536, height=240))
 
 
@@ -124,6 +125,32 @@ def test_straining_draws_gritted_teeth_and_shut_eyes(face):
   face.f.draw(face.rect)
   lines = [c for c in face.calls if c[0] == 'draw_line_ex']
   assert len(lines) >= 6 + 2 * 2                              # the zigzag mouth and a >< stroke per eye
+
+
+def test_listen_feeds_the_microphone_and_dances_on_its_beat(face):
+  import numpy as np
+  rate, bpm = 16000, 120
+  t = np.arange(int(12 * rate)) / rate
+  kick = np.zeros_like(t)
+  for b in np.arange(0, 12, 60 / bpm):
+    i = int(b * rate)
+    tt = t[:int(0.25 * rate)]
+    kick[i:i + tt.size] += np.sin(2 * np.pi * (60 + 80 * np.exp(-tt * 12)) * tt)[:kick.size - i] * np.exp(-tt * 10)[:kick.size - i]
+  audio = (kick * 12000).astype(np.int16)
+  chunks = [audio[i:i + 800] for i in range(0, audio.size, 800)]
+  feed = iter(chunks)
+  face.f._audio_chunks = lambda: [next(feed)]
+  beats = 0
+  for _ in range(len(chunks)):
+    inp = face.f._inputs()
+    face.f._listen(0.05, inp)
+    beats += len(inp.music_beats)
+  assert inp.music_on and abs(60 / inp.music_period - bpm) < 3 and beats >= 8
+  face.ui.sm['selfdriveState'].alertSound = 'prompt'       # the car's own alert sound: not music
+  face.f._audio_chunks = lambda: [chunks[0]]
+  inp = face.f._inputs()
+  face.f._listen(0.05, inp)
+  assert not inp.music_on
 
 
 def test_event_props_draw(face):
