@@ -67,7 +67,7 @@ def test_finds_the_tempo_and_lands_on_the_beat(bpm):
   assert len(late) == pytest.approx((16 - 9) / period, abs=2)
 
 
-@pytest.mark.parametrize('seed', range(6))
+@pytest.mark.parametrize('seed', range(12))
 def test_road_noise_never_makes_it_dance(seed):
   _, beats, locked = listen(road(30, seed))
   assert not locked.any() and beats.size == 0
