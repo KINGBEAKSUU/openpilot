@@ -94,11 +94,13 @@ def test_phone_music_reads_the_navdy_reply(tmp_path):
   assert not phone.playing(100.0)                                   # no reply saved (bridge not connected)
   save_reply(path, {'cameraSpeedKph': 0, 'music': {'playing': True}}, 100.0)
   phone.checked = -1e9
-  assert phone.playing(100.5)
-  save_reply(path, {'cameraSpeedKph': 0, 'music': {'playing': False}}, 101.0)
+  assert not phone.playing(100.5)                                   # just started: not music yet
+  assert not phone.playing(101.5)
+  assert phone.playing(102.1)                                       # held for 1.5 s
+  save_reply(path, {'cameraSpeedKph': 0, 'music': {'playing': False}}, 102.0)
   phone.mtime = None
-  assert phone.playing(101.0)                                       # read at most once a second
-  assert not phone.playing(101.6)                                   # paused
+  assert phone.playing(102.4)                                       # read at most once a second
+  assert not phone.playing(102.6)                                   # paused: stops at once
   for feedback in ({'cameraSpeedKph': 0}, {'music': None}, {'music': {'playing': 1}}, {'music': 'playing'}):
     save_reply(path, feedback, 200.0)                               # an older HUD, no track yet, wrong types
     phone.mtime, phone.checked = None, -1e9
@@ -112,7 +114,8 @@ def test_phone_music_ignores_an_old_reply(tmp_path):
   path = tmp_path / 'navdy-feedback.json'
   phone = PhoneMusic(str(path))
   save_reply(path, {'music': {'playing': True}}, 100.0)
-  assert phone.playing(105.0)
+  assert not phone.playing(105.0)
+  assert phone.playing(106.6)
   assert not phone.playing(110.5)                                  # the bridge stopped saving replies
   save_reply(path, {'music': {'playing': True}}, True)             # not a time
   phone.mtime, phone.checked = None, -1e9
@@ -126,3 +129,19 @@ def test_steady_beat_keeps_120_bpm():
   steady = SteadyBeat()
   beats = sum(len(steady.advance(0.05)) for _ in range(200))      # 10 s of 20 FPS frames
   assert beats in (19, 20) and steady.period == 0.5
+
+
+def test_phone_music_needs_playing_to_hold_not_a_blip(tmp_path):
+  # a moment of "playing" (a skip, a buffer) is not music; it has to hold for 1.5 s, and any "not playing" resets it
+  path = tmp_path / 'navdy-feedback.json'
+  phone = PhoneMusic(str(path))
+  t = 100.0
+  for playing in (True, False, True, False, True, False):
+    save_reply(path, {'music': {'playing': playing}}, t)
+    phone.mtime = None
+    assert not phone.playing(t)
+    t += 1.0
+  save_reply(path, {'music': {'playing': True}}, t)
+  phone.mtime = None
+  assert not phone.playing(t) and not phone.playing(t + 1.0)
+  assert phone.playing(t + 2.0)
