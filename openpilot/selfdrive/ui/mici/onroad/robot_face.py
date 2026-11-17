@@ -7,11 +7,12 @@ the car state for it and draws the "glowing eyes" face with raylib.
 import math
 import time
 
+import numpy as np
 import pyray as rl
 
 from openpilot.selfdrive.ui.mici.onroad.clock_face import NightMode
 from openpilot.selfdrive.ui.mici.onroad.robot_face_model import (DM_ALERTS, FaceInputs, FaceModel, clamp, ease_out_back,
-                                                                  ease_out_cubic, eye_spans, fract, vnoise)
+                                                                  ease_out_cubic, eye_span_arrays, fract, vnoise)
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 
@@ -19,6 +20,7 @@ GAP = 110          # eye centres are this far from the middle
 EYE_Y = -6
 EYE_SCALE = (0.92, 0.94)
 SUPER_N = 3.2      # rounded-square eye outline
+BANDS = 12         # the top-to-bottom gradient as solid bands: one strip draw each, not a call per vertex
 
 EYE_TOP = (255, 243, 230)
 GLOW = (255, 150, 70)
@@ -76,6 +78,7 @@ class RobotFace:
     return self._glow_tex
 
   def _blob(self, x, y, w, h, c, a):
+    """Soft radial glow: one textured quad (4 vertices)."""
     tex = self._glow()
     rl.draw_texture_pro(tex, rl.Rectangle(0, 0, tex.width, tex.height), rl.Rectangle(x - w / 2, y - h / 2, w, h),
                         rl.Vector2(0, 0), 0.0, color(c, a))
@@ -113,47 +116,69 @@ class RobotFace:
             for t in (i / n for i in range(n + 1))]
 
   # ---- the eye ---------------------------------------------------------------------------
-  def _eye(self, side, ex, ey, w, h, up, low, gx, gy, col_top, col_bottom, shade, glow_c, glow_a, shimmer):
-    m = self.model
-    P = m.P
-    spans = eye_spans(ex, ey, w, h, SUPER_N, up, low, P['tilt'].v, P['smile'].v, P['sag'].v, side)
-    if spans:
-      top = min(s[1] for s in spans)
-      bottom = max(s[2] for s in spans)
-      vis = bottom - top
-      self._blob(ex, (top + bottom) / 2, w * 1.75, max(vis, 8) * 1.75 + 20, glow_c, glow_a)
-      y0 = ey - h / 2
-      rl.rl_check_render_batch_limit(len(spans) * 24)
-      rl.rl_begin(rl.RL_TRIANGLES)
+  @staticmethod
+  def _draw_strips(pts: np.ndarray, colors) -> None:
+    """One triangle strip per row of pts (rows, n, 2), all from one vertex buffer: a C call per strip, not per vertex."""
+    rows, n = pts.shape[0], pts.shape[1]
+    ffi = getattr(rl, 'ffi', None)
+    if ffi is None:  # recording stub in tests
+      for row, col in zip(pts, colors, strict=True):
+        rl.draw_triangle_strip([rl.Vector2(float(x), float(y)) for x, y in row], n, col)
+      return
+    buf = ffi.new('Vector2[]', rows * n)
+    np.frombuffer(ffi.buffer(buf), dtype=np.float32)[:] = pts.ravel()
+    base = ffi.cast('Vector2 *', buf)  # a bare array would be wrapped as Vector2(*)[]
+    for r, col in enumerate(colors):
+      rl.draw_triangle_strip(base + r * n, n, col)
 
-      def vert(x, y, lid):
-        c = mix(col_top, col_bottom, clamp((y - y0) / h, 0, 1))
-        if lid:
-          c = mix(c, shade, 0.25)          # a faint shadow, only in the thin band right under the lid
-        rl.rl_color4ub(int(c[0]), int(c[1]), int(c[2]), 255)
-        rl.rl_vertex2f(x, y)
+  def _eye_geometry(self, side, ex, ey, w, h, up, low):
+    P = self.model.P
+    xs, top, bottom, lid, keep = eye_span_arrays(ex, ey, w, h, SUPER_N, up, low, P['tilt'].v, P['smile'].v, P['sag'].v, side)
+    if not keep.any():
+      return None
+    return xs, top, bottom, lid, keep, float(top[keep].min()), float(bottom[keep].max())
 
-      def quad(xa, ya1, ya2, la, xb, yb1, yb2, lb):
-        vert(xa, ya1, la)
-        vert(xa, ya2, False)
-        vert(xb, yb1, lb)
-        vert(xb, yb1, lb)
-        vert(xa, ya2, False)
-        vert(xb, yb2, False)
-      for (xa, ta, ba, la), (xb, tb, bb, lb) in zip(spans, spans[1:], strict=False):
-        if xb - xa > w / 20:            # skip across a gap where the eye was cut through
-          continue
-        ma, mb = min(ta + 5, ba), min(tb + 5, bb)
-        quad(xa, ta, ma, la, xb, tb, mb, lb)
-        quad(xa, ma, ba, False, xb, mb, bb, False)
-      rl.rl_end()
-      # catchlights, drifting against the gaze; only where the eye is open there
-      for fx, fy, rx, ry, a in ((0.3, 0.25, 0.1, 0.078, 0.86), (0.42, 0.36, 0.042, 0.036, 0.5)):
-        px, py = ex - w / 2 + w * fx - gx * 6, y0 + h * fy - gy * 4
-        col_span = min(spans, key=lambda s: abs(s[0] - px))
-        if col_span[1] + h * ry < py < col_span[2] - h * ry:
-          rl.draw_ellipse(int(px), int(py), w * rx, h * ry, rl.Color(255, 255, 255, int(255 * a * shimmer)))
-    return spans
+  def _eye_glow(self, ex, w, geo, glow_c, glow_a):
+    vis_top, vis_bottom = geo[5], geo[6]
+    self._blob(ex, (vis_top + vis_bottom) / 2, w * 1.75, max(vis_bottom - vis_top, 8) * 1.75 + 20, glow_c, glow_a)
+
+  def _eye(self, ex, ey, w, h, geo, gx, gy, col_top, col_bottom, shade, shimmer):
+    xs, top, bottom, lid, keep = geo[:5]
+    y0 = ey - h / 2
+    # the top-to-bottom gradient as BANDS solid bands, each the eye clipped to its slice of the height
+    edges = y0 + h * np.arange(1, BANDS) / BANDS
+    lo = np.concatenate(([-np.inf], edges))[:, None]
+    hi = np.concatenate((edges, [np.inf]))[:, None]
+    t_all, b_all = np.clip(top, lo, hi), np.clip(bottom, lo, hi)
+    band_cols = [color(mix(col_top, col_bottom, (k + 0.5) / BANDS)) for k in range(BANDS)]
+    shade_col = color(shade, 0.25)
+    # one strip set per unbroken run of visible columns (normally one): its ends are the eye's straight sides
+    idx = np.flatnonzero(keep)
+    for run in np.split(idx, np.flatnonzero(np.diff(idx) > 1) + 1):
+      if run.size < 2:
+        continue
+      sl = slice(run[0], run[-1] + 1)
+      t, b = t_all[:, sl], b_all[:, sl]
+      rows = np.flatnonzero((b - t).max(axis=1) > 0.05)
+      t, b, cols = t[rows], b[rows], [band_cols[k] for k in rows]
+      lid_run = lid[sl]
+      if lid_run.any():
+        # a faint shadow in the thin band right under the lid
+        tt = top[sl]
+        t = np.vstack((t, tt))
+        b = np.vstack((b, np.where(lid_run, np.minimum(tt + 5, bottom[sl]), tt)))
+        cols.append(shade_col)
+      pts = np.empty((len(cols), (run[-1] - run[0] + 1) * 2, 2), np.float32)
+      pts[:, 0::2, 0] = pts[:, 1::2, 0] = xs[sl]
+      pts[:, 0::2, 1] = t
+      pts[:, 1::2, 1] = b
+      self._draw_strips(pts, cols)
+    # catchlights, drifting against the gaze; only where the eye is open there
+    for fx, fy, rx, ry, a in ((0.3, 0.25, 0.1, 0.078, 0.86), (0.42, 0.36, 0.042, 0.036, 0.5)):
+      px, py = ex - w / 2 + w * fx - gx * 6, y0 + h * fy - gy * 4
+      i = int(np.argmin(np.abs(xs - px)))
+      if keep[i] and top[i] + h * ry < py < bottom[i] - h * ry:
+        rl.draw_ellipse(int(px), int(py), w * rx, h * ry, rl.Color(255, 255, 255, int(255 * a * shimmer)))
 
   def _special_eye(self, shape, side, ex, ey, col_eye, glow_c, glow_a):
     m = self.model
@@ -238,6 +263,7 @@ class RobotFace:
     shimmer = 0.92 + vnoise(clock * 2.4, 8) * 0.08
     relaxed = (1 - m.attn) * 0.14 + (0.05 if m.night else 0)
     shape = m.eye_shape or ('star' if clock < m.star_until else None)
+    eyes = []
     for side in (-1, 1):
       left = side < 0
       gx = P['gxL'].v if left else P['gxR'].v
@@ -260,7 +286,16 @@ class RobotFace:
       up_base = clamp(P['up'].v + relaxed + lid_gaze + flutter + wink * 1.1, 0, 1)
       up = up_base + (1 - up_base) * blink
       low = P['low'].v + blink * 0.08 + max(0.0, -gy) * 0.04 + wink * 0.25
-      spans = self._eye(side, ex, ey, w, h, up, low, gx, gy, eye_d, bottom_d, shade, glow_d, glow_a, shimmer)
+      eyes.append((side, ex, ey, w, h, gx, gy, up_base, wink, self._eye_geometry(side, ex, ey, w, h, up, low)))
+
+    # every glow first, then the bodies: each switch between the glow texture and plain fills is a GPU batch flush
+    for _, ex, _, w, _, _, _, _, _, geo in eyes:
+      if geo is not None:
+        self._eye_glow(ex, w, geo, glow_d, glow_a)
+    for side, ex, ey, w, h, gx, gy, up_base, wink, geo in eyes:
+      left = side < 0
+      if geo is not None:
+        self._eye(ex, ey, w, h, geo, gx, gy, eye_d, bottom_d, shade, shimmer)
       closed = clamp((up_base - 0.9) / 0.08, 0, 1)
       if closed > 0:
         # eyes held shut (dozing, sleeping, a yawn, a wink) show a stroke instead of vanishing
@@ -269,7 +304,7 @@ class RobotFace:
           pts = [(ex - d * w * 0.22, ey - 11), (ex + d * w * 0.2, ey + 4), (ex - d * w * 0.22, ey + 19)]
         else:
           happy = P['smile'].v > 0.5 or wink > 0.5
-          yy = ey + 6 if happy else (max(s[2] for s in spans) if spans else ey + h * 0.3) + 2
+          yy = ey + 6 if happy else (geo[6] if geo is not None else ey + h * 0.3) + 2
           bend = -14 if happy else 14 + m.breath * 2
           pts = self._quad(ex - w * 0.36, yy, ex, yy + bend, ex + w * 0.36, yy)
         self._blob(ex, ey + 8, w * 1.2, 40, glow_d, 0.35 * closed * bright)

@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections.abc import Callable
+
+import numpy as np
 
 
 def clamp(v: float, a: float, b: float) -> float:
@@ -164,38 +166,38 @@ class _Osc:
   t: float = 0.0
 
 
-def eye_spans(cx: float, cy: float, w: float, h: float, n: float, up: float, low: float, tilt: float, smile: float,
-              sag: float, side: int, cols: int = 36) -> list[tuple[float, float, float, bool]]:
-  """Visible vertical spans of a superellipse eye cut by the upper and lower lids.
+def eye_span_arrays(cx: float, cy: float, w: float, h: float, n: float, up: float, low: float, tilt: float, smile: float,
+                    sag: float, side: int, cols: int = 36):
+  """A superellipse eye cut by the upper and lower lids, as vertical spans over cols + 1 columns.
 
-  Returns (x, top, bottom, top_is_lid) per column, left to right; columns with nothing
-  visible are left out. Both lids are quadratic curves whose control x is the eye's
-  centre, so their height is a simple function of x.
+  Returns arrays (x, top, bottom, top_is_lid, visible). Both lids are quadratic curves whose
+  control x is the eye's centre, so their height is a simple function of x.
   """
   x0, y0 = cx - w / 2, cy - h / 2
   xl, xr = x0 - 16, x0 + w + 16
   base = y0 - 3 + up * (h + 6)
   t = tilt * h * 0.32
-  inner, outer = base + t, base - t
-  y_left, y_right = (outer, inner) if side < 0 else (inner, outer)
-  sag_y = sag * h * 0.12
-  y_mid = (y_left + y_right) / 2 + sag_y
+  y_left, y_right = (base - t, base + t) if side < 0 else (base + t, base - t)
+  y_mid = (y_left + y_right) / 2 + sag * h * 0.12
   lower_base = y0 + h + 3 - low * h
   lower_mid = lower_base - smile * h * 0.56
-  spans = []
-  for i in range(cols + 1):
-    x = x0 + w * i / cols
-    u = (x - xl) / (xr - xl)
-    upper = (1 - u) ** 2 * y_left + 2 * (1 - u) * u * y_mid + u ** 2 * y_right
-    lower = (1 - u) ** 2 * lower_base + 2 * (1 - u) * u * lower_mid + u ** 2 * lower_base
-    r = min(1.0, abs((x - cx) / (w / 2)))
-    half = (h / 2) * max(0.0, 1 - r ** n) ** (1 / n)
-    top_shape, bottom_shape = cy - half, cy + half
-    top = max(top_shape, upper)
-    bottom = min(bottom_shape, lower)
-    if bottom > top + 0.3:
-      spans.append((x, top, bottom, upper > top_shape))
-  return spans
+  # columns bunch up toward the sides, where the outline is steep, so the rounded corners stay smooth
+  x = x0 + w * (1 - np.cos(np.linspace(0.0, math.pi, cols + 1))) / 2
+  u = (x - xl) / (xr - xl)
+  upper = (1 - u) ** 2 * y_left + 2 * (1 - u) * u * y_mid + u ** 2 * y_right
+  lower = (1 - u) ** 2 * lower_base + 2 * (1 - u) * u * lower_mid + u ** 2 * lower_base
+  r = np.minimum(1.0, np.abs((x - cx) / (w / 2)))
+  half = (h / 2) * np.maximum(0.0, 1 - r ** n) ** (1 / n)
+  top = np.maximum(cy - half, upper)
+  bottom = np.minimum(cy + half, lower)
+  return x, top, bottom, upper > cy - half, bottom > top + 0.3
+
+
+def eye_spans(cx: float, cy: float, w: float, h: float, n: float, up: float, low: float, tilt: float, smile: float,
+              sag: float, side: int, cols: int = 36) -> list[tuple[float, float, float, bool]]:
+  """eye_span_arrays as (x, top, bottom, top_is_lid) tuples, left to right, visible columns only."""
+  x, top, bottom, lid, keep = eye_span_arrays(cx, cy, w, h, n, up, low, tilt, smile, sag, side, cols)
+  return [(float(a), float(b), float(c), bool(d)) for a, b, c, d, k in zip(x, top, bottom, lid, keep, strict=True) if k]
 
 
 class FaceModel:
