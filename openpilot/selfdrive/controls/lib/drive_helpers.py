@@ -176,6 +176,12 @@ CLAMP_STEER_ALERT_COOLDOWN_SEC = 5.0  # s
 # 위반이 서서히 커지므로 슬루 제한에 걸리지 않는다.
 CLAMP_STEER_LANE_CHANGE_HOLDOFF_SEC = 2.0  # s
 CLAMP_STEER_SLEW_RATE = 0.01  # 1/m/s, 최대 보정(0.0054)까지 약 0.54초
+# 위반 불감대 (히스테리시스): 정상 주행에서 모델 경로가 선 쪽으로 조금씩
+# 출렁이는 것만으로 보정이 자꾸 켜지는 것을 막는다. 위반이 20cm를 넘으면
+# 켜지고, 10cm 아래로 떨어져야 꺼진다. 문제 지점(위반 약 60cm)에서는 그대로
+# 동작하고, 보정 크기 자체는 줄이지 않는다(게이트만 건다).
+CLAMP_STEER_DEADBAND_ON = 0.20  # m
+CLAMP_STEER_DEADBAND_OFF = 0.10  # m
 
 
 class ClampSteerCorrector:
@@ -206,6 +212,8 @@ class ClampSteerCorrector:
     self._lane_change_holdoff_until = 0.0
     self._prev_kappa = 0.0
     self._prev_time = None
+    # 불감대 게이트 상태: 위반이 20cm를 넘으면 True, 10cm 아래로 떨어지면 False.
+    self._correction_active = False
 
   def _read_settings(self):
     """(enabled, min_dist_lane_m, min_dist_edge_m, gain)을 읽는다.
@@ -321,6 +329,7 @@ class ClampSteerCorrector:
     if not enabled or gain <= 0.0:
       self.left_active = False
       self.right_active = False
+      self._correction_active = False
       return 0.0
     # 차선변경 중에는 선을 넘는 것이 의도된 동작이므로 보정하지 않는다.
     # 차선변경이 끝난 뒤에도 홀드오프(2초) 동안은 보정하지 않는다. desire/
@@ -332,17 +341,21 @@ class ClampSteerCorrector:
     if lane_changing:
       self.left_active = False
       self.right_active = False
+      self._correction_active = False
       self._lane_change_holdoff_until = now + CLAMP_STEER_LANE_CHANGE_HOLDOFF_SEC
       return 0.0
     if now < self._lane_change_holdoff_until:
+      self._correction_active = False
       return 0.0
     # 저속 페이드인: 5km/h 이하 0, 10km/h 이상 100% (경로 클램프와 동일 구간)
     strength = float(np.interp(v_ego * 3.6, [5.0, 10.0], [0.0, 1.0]))
     if strength <= 0.0:
+      self._correction_active = False
       return 0.0
     try:
       return self._compute(md, v_ego, min_lane, min_edge, gain, strength)
     except Exception:
+      self._correction_active = False
       return 0.0
 
   def _compute(self, md, v_ego, min_lane, min_edge, gain, strength):
@@ -413,6 +426,18 @@ class ClampSteerCorrector:
       target_y = (lo + hi) / 2.0
     else:
       target_y = float(np.clip(path_y, lo, hi))
+    # 위반 불감대 (히스테리시스): 위반이 20cm를 넘으면 켜지고 10cm 아래로
+    # 떨어져야 꺼진다. 작은 위반은 무시해 정상 주행에서 보정이 자꾸 켜지는
+    # 것을 막는다. 보정 크기는 줄이지 않는다(게이트만 건다). 켜질 때의
+    # 목표값 점프는 슬루 제한이 부드럽게 올려준다.
+    violation = abs(target_y - path_y)
+    if self._correction_active:
+      if violation < CLAMP_STEER_DEADBAND_OFF:
+        self._correction_active = False
+    elif violation > CLAMP_STEER_DEADBAND_ON:
+      self._correction_active = True
+    if not self._correction_active:
+      return 0.0
     y_corr = (target_y - path_y) * strength
     if y_corr == 0.0:
       return 0.0
