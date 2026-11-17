@@ -233,7 +233,14 @@ class Controls:
       # 레인리스: 모델 곡률에 최소거리 클램프 보정을 더한다. lateral planner의
       # 경로 클램프는 레인리스 조향에 닿지 않으므로 여기서 직접 보정한다.
       # 차가 선에 가까울 때만 위반한 만큼 개입하고, 평상시에는 0이다.
+      # 차선변경 중에는 클램프 보정을 끈다. desire만으로는 부족하다: desire는
+      # laneChangeStarting/Finishing에서만 서고, Finishing 종료는 타이머
+      # 기준이라 차가 새 차선에 안착하기 전에 꺼질 수 있다. laneChangeState는
+      # preLaneChange부터 서 있어 의도 단계부터 커버하고, 깜빡이는 FSM과
+      # 무관한 독립 신호다. 종료 후 홀드오프·슬루 제한은 보정기 내부에서 처리한다.
       lane_changing = (model_v2.meta.desire != log.Desire.none
+                       or model_v2.meta.laneChangeState != log.LaneChangeState.off
+                       or CS.leftBlinker or CS.rightBlinker
                        or getattr(self.sm['carrotMan'], 'atc_active', False))
       clamp_kappa = self.clamp_steer_corrector.update(model_v2, CS.vEgo, lane_changing)
       new_desired_curvature = smooth_value(

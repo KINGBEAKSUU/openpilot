@@ -169,6 +169,13 @@ CLAMP_STEER_MIN_DIST_EDGE_DEFAULT = 1.15  # m
 CLAMP_STEER_ALERT_ON_THRESHOLD = 0.001  # 1/m
 CLAMP_STEER_ALERT_OFF_THRESHOLD = 0.0005  # 1/m
 CLAMP_STEER_ALERT_COOLDOWN_SEC = 5.0  # s
+# 차선변경 종료 후 홀드오프 + 보정 변화율 제한: 차선변경 중에는 보정이 꺼지고,
+# 종료 직후 차가 새 차선에 안착하기 전에는 큰 위반이 남아 있을 수 있다.
+# 홀드오프로 재개를 늦추고, 슬루 제한으로 재개 시 보정이 0에서 점진적으로
+# 올라가게 해 급조향(확 틀어졌다 바로잡는 현상)을 막는다. 정상 주행에서는
+# 위반이 서서히 커지므로 슬루 제한에 걸리지 않는다.
+CLAMP_STEER_LANE_CHANGE_HOLDOFF_SEC = 2.0  # s
+CLAMP_STEER_SLEW_RATE = 0.01  # 1/m/s, 최대 보정(0.0054)까지 약 0.54초
 
 
 class ClampSteerCorrector:
@@ -193,6 +200,12 @@ class ClampSteerCorrector:
     # clampSteerActive 이벤트로 prompt 사운드를 울린다.
     self.alert_active = False
     self._alert_cooldown_until = 0.0
+    # 차선변경 홀드오프 + 슬루 제한 상태. _prev_time이 None이거나 마지막 호출이
+    # 0.5초보다 오래 전이면(보정기가 안 돌던 구간, 예: 레인풀 모드) 이전 출력을
+    # 버리고 0에서 다시 시작한다.
+    self._lane_change_holdoff_until = 0.0
+    self._prev_kappa = 0.0
+    self._prev_time = None
 
   def _read_settings(self):
     """(enabled, min_dist_lane_m, min_dist_edge_m, gain)을 읽는다.
@@ -274,8 +287,32 @@ class ClampSteerCorrector:
     stale로 남지 않는다.
     """
     kappa = self._update_impl(md, v_ego, lane_changing)
+    kappa = self._slew_limit(kappa)
+    self.last_correction = kappa
     self._update_alert(kappa)
     return kappa
+
+  def _slew_limit(self, kappa):
+    """보정 곡률의 변화율을 제한한다 (급조향 방지).
+
+    목표 보정과 이전 출력의 차이를 CLAMP_STEER_SLEW_RATE * dt 이내로 자른다.
+    차선변경 종료 직후처럼 큰 위반이 갑자기 나타나는 경우에도 보정이 0에서
+    최대까지 약 0.5초에 걸쳐 점진적으로 올라간다. 정상 주행에서는 차가 선에
+    서서히 다가가므로 목표 보정의 변화가 느려 제한에 걸리지 않는다.
+    첫 호출이거나 0.5초 이상 호출이 없었으면(보정기가 안 돌던 구간) 이전
+    출력을 버리고 0에서 시작한다. dt는 0.1초로 상한을 두어 긴 간격이
+    제한을 무력화하지 못하게 한다.
+    """
+    now = time.monotonic()
+    if self._prev_time is None or (now - self._prev_time) > 0.5:
+      self._prev_time = now
+      self._prev_kappa = 0.0
+      return 0.0
+    dt = min(max(now - self._prev_time, 0.0), 0.1)
+    self._prev_time = now
+    max_delta = CLAMP_STEER_SLEW_RATE * dt
+    self._prev_kappa += float(np.clip(kappa - self._prev_kappa, -max_delta, max_delta))
+    return self._prev_kappa
 
   def _update_impl(self, md, v_ego, lane_changing):
     """update()의 본체. 보정 곡률만 계산하고 알림 상태는 건드리지 않는다."""
@@ -286,9 +323,18 @@ class ClampSteerCorrector:
       self.right_active = False
       return 0.0
     # 차선변경 중에는 선을 넘는 것이 의도된 동작이므로 보정하지 않는다.
+    # 차선변경이 끝난 뒤에도 홀드오프(2초) 동안은 보정하지 않는다. desire/
+    # laneChangeState가 꺼지는 시점은 타이머 기준이라 차가 새 차선에 안착하기
+    # 전일 수 있고, 그때 큰 위반이 남아 있으면 보정이 0에서 최대까지 단번에
+    # 뛰며 차를 확 틀어버리기 때문이다. 홀드오프 타이머는 차선변경 중 매
+    # 사이클 갱신되므로, 종료 시점부터 정확히 홀드오프 시간만큼 유지된다.
+    now = time.monotonic()
     if lane_changing:
       self.left_active = False
       self.right_active = False
+      self._lane_change_holdoff_until = now + CLAMP_STEER_LANE_CHANGE_HOLDOFF_SEC
+      return 0.0
+    if now < self._lane_change_holdoff_until:
       return 0.0
     # 저속 페이드인: 5km/h 이하 0, 10km/h 이상 100% (경로 클램프와 동일 구간)
     strength = float(np.interp(v_ego * 3.6, [5.0, 10.0], [0.0, 1.0]))
