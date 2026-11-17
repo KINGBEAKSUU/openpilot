@@ -237,23 +237,37 @@ def test_speed_camera_reacts_once_and_sweats_when_speeding():
   assert m.last_event == 'camera_fast' and m.mood == 'worried' and any(p.kind == 'sweat' for p in m.parts)
 
 
-def test_steering_limit_cut_in_and_gas_override():
-  m, inp = ready(engaged=True, steer_deg=-20.0)
-  inp.steer_sat = True
+def test_straining_grows_with_steering_torque():
+  m, inp = ready(engaged=True)
+  efforts = []
+  for torque in (0.3, 0.5, 0.65, 0.8, 0.95, 1.0):
+    inp.steer_torque = -torque                             # pushing left
+    run(m, inp, 1.0)
+    efforts.append(m.effort)
+  assert efforts[0] == 0 and efforts[1] < 0.05             # everyday torque: no strain
+  assert efforts == sorted(efforts) and efforts[-1] > 0.95  # harder and harder, all-out at the limit
+  assert m.effort_side == -1 and m.behavior is None
+  inp.steer_torque = 0.1
+  run(m, inp, 0.3)
+  assert 0.2 < m.effort < 0.95                             # eases off a little slower than it builds
+  run(m, inp, 3.0)
+  assert m.effort < 0.01
+  m, inp = ready(engaged=False, steer_torque=1.0)          # not steering it: no strain
+  run(m, inp, 1.0)
+  assert m.effort == 0
+
+
+def test_cut_in_and_gas_override():
+  m, inp = ready(engaged=True)
+  inp.cutin = True
   run(m, inp, 0.1)
-  assert m.last_event == 'strain' and m.squeeze and m.P['ex'].t < 0
-  inp.cutin = True                                        # less important than the strain still playing: it waits
-  run(m, inp, 0.5)
-  assert m.last_event == 'strain' and 'cutin' in m.pending
-  inp.steer_sat = inp.cutin = False
-  run(m, inp, 2.0)
-  assert m.last_event == 'cutin' and not m.squeeze         # and plays right after
+  assert m.last_event == 'cutin'
   run(m, inp, 2.0)
   inp.gas = True
   run(m, inp, 0.1)
   assert m.last_event == 'gas' and m.P['p_quest'].t == 1
-  m, inp = ready(engaged=False)                           # not driving it: no strain, no gas
-  inp.steer_sat = inp.gas = True
+  m, inp = ready(engaged=False)                           # not driving it: no gas glance
+  inp.gas = True
   run(m, inp, 0.5)
   assert m.last_event is None
 
@@ -287,6 +301,31 @@ def test_gas_glance_never_hides_a_lane_change_or_a_bend():
   assert m.last_event == 'cutin'
   run(m, inp, 0.6)
   assert m.last_event == 'curve'                          # queued, then played
+
+
+def test_too_slow_to_steer_hands_over_then_takes_back():
+  m, inp = ready(engaged=True, v_ego=2.5)
+  m.behavior_timer = 1e9                                   # no idle habit in between
+  inp.slow_steer = True
+  run(m, inp, 0.1)
+  assert m.last_event == 'slow_steer' and m.P['green'].t == FaceModel.SLOW_GREEN
+  run(m, inp, 3.0)
+  assert m.mood == 'focus' and m.P['green'].t == FaceModel.SLOW_GREEN   # stays pale while it cannot steer
+  inp.slow_steer, inp.v_ego = False, 3.5
+  run(m, inp, 0.1)
+  assert m.last_event == 'steer_back'
+  run(m, inp, 1.5)
+  assert m.mood == 'focus' and m.P['green'].t == pytest.approx(0.9)
+  m.last_event = None
+  inp.slow_steer = True                                    # stop-and-go: not again inside 20 s
+  run(m, inp, 1.0)
+  inp.slow_steer = False
+  run(m, inp, 1.0)
+  assert m.last_event is None                              # and no "got it" without the hand-over
+  m, inp = ready(engaged=False, v_ego=2.5)                 # not driving it: nothing to hand over
+  inp.slow_steer = True
+  run(m, inp, 0.5)
+  assert m.last_event is None
 
 
 def test_cut_in_at_crawling_speed():

@@ -15,11 +15,12 @@ class SM(dict):
     super().__init__(
       carState=NS(leftBlinker=False, rightBlinker=False, steeringAngleDeg=0.0, vEgo=10.0, aEgo=0.0, standstill=False,
                   leftBlindspot=False, rightBlindspot=False, gasPressed=False),
-      selfdriveState=NS(enabled=False, alertType=''), carControl=NS(latActive=False),
+      selfdriveState=NS(enabled=False, alertType=''), carControl=NS(latActive=False, actuators=NS(torque=0.0)),
+      carOutput=NS(actuatorsOutput=NS(torque=0.0)),
       modelV2=NS(meta=NS(laneChangeState='off', laneChangeDirection='none')),
       radarState=NS(leadOne=NS(status=False, dRel=0.0, vLead=0.0)),
       controlsState=NS(curvature=0.0), carrotMan=NS(xSpdDist=0, xSpdLimit=0, nGoPosDist=0), onroadEvents=[])
-    names = ('carState', 'selfdriveState', 'carControl', 'modelV2', 'radarState', 'controlsState',
+    names = ('carState', 'selfdriveState', 'carControl', 'carOutput', 'modelV2', 'radarState', 'controlsState',
              'carrotMan', 'onroadEvents')
     self.alive = dict.fromkeys(names, True)
     self.valid = dict.fromkeys(names, True)
@@ -82,7 +83,7 @@ def test_inputs_read_driving_events(face):
   sm = face.ui.sm
   inp = face.f._inputs()
   assert (inp.lane_phase, inp.lead_d, inp.cam_dist, inp.route_left) == (0, 0.0, 0.0, 0.0)
-  assert not (inp.steer_sat or inp.cutin or inp.gas or inp.blindspot_left)
+  assert not (inp.cutin or inp.gas or inp.blindspot_left) and inp.steer_torque == 0
   sm['modelV2'].meta = NS(laneChangeState='laneChangeStarting', laneChangeDirection='right')
   sm['radarState'].leadOne = NS(status=True, dRel=9.5, vLead=1.2)
   sm['controlsState'].curvature = 0.02
@@ -93,15 +94,36 @@ def test_inputs_read_driving_events(face):
   assert (inp.lane_phase, inp.lane_dir) == (1, 1)
   assert (inp.lead_d, inp.lead_v, inp.cam_dist, inp.cam_limit, inp.route_left) == (9.5, 1.2, 280.0, 80.0, 1500.0)
   assert inp.lat_accel == pytest.approx(-0.02 * 10 * 10)        # curvature + is a right bend: lateral + is left
-  assert inp.steer_sat and not inp.cutin and inp.blindspot_right and inp.gas
+  assert not inp.cutin and inp.blindspot_right and inp.gas
   sm['modelV2'].meta = NS(laneChangeState='laneChangeFinishing', laneChangeDirection='left')
   sm['onroadEvents'] = []
   sm['selfdriveState'].alertType = 'radarCutin/warning'   # the one-frame event is gone; its alert is still up
   inp = face.f._inputs()
-  assert (inp.lane_phase, inp.lane_dir) == (2, -1) and inp.cutin and not inp.steer_sat
+  assert (inp.lane_phase, inp.lane_dir) == (2, -1) and inp.cutin
+  sm['selfdriveState'].alertType = 'belowSteerSpeed/warning'
+  assert face.f._inputs().slow_steer
   sm.recv_frame['carrotMan'] = sm.recv_frame['radarState'] = 9   # left over from a previous drive
   inp = face.f._inputs()
   assert inp.cam_dist == 0 and inp.lead_d == 0
+
+
+def test_steering_torque_reads_the_sent_torque_as_plus_right(face):
+  sm = face.ui.sm
+  sm['carOutput'].actuatorsOutput.torque = 0.8                # pushing the wheel left
+  assert face.f._inputs().steer_torque == 0                   # only while it is steering
+  sm['carControl'].latActive = True
+  assert face.f._inputs().steer_torque == pytest.approx(-0.8)
+  sm.alive['carOutput'] = False                               # no output: what the controller asked for
+  sm['carControl'].actuators.torque = -0.6
+  assert face.f._inputs().steer_torque == pytest.approx(0.6)
+
+
+def test_straining_draws_gritted_teeth_and_shut_eyes(face):
+  m = face.f.model
+  m.effort, m.effort_side = 1.0, 1
+  face.f.draw(face.rect)
+  lines = [c for c in face.calls if c[0] == 'draw_line_ex']
+  assert len(lines) >= 6 + 2 * 2                              # the zigzag mouth and a >< stroke per eye
 
 
 def test_event_props_draw(face):

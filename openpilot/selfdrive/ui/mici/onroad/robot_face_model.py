@@ -125,8 +125,9 @@ class FaceInputs:
   cam_dist: float = 0.0       # speed camera ahead, m (0 = none)
   cam_limit: float = 0.0      # its limit, km/h
   route_left: float = 0.0     # navigation distance to the goal, m (0 = no route)
-  steer_sat: bool = False     # steerSaturated is up
+  steer_torque: float = 0.0   # steering torque it is applying, 1.0 = the car's limit; + right
   cutin: bool = False         # radarCutin is up
+  slow_steer: bool = False    # belowSteerSpeed: too slow for the car to steer
   gas: bool = False
   lat_accel: float = 0.0      # m/s², + turning left
 
@@ -224,10 +225,14 @@ class FaceModel:
   CURVE_HOLD_S = 0.8
   # Who may cut in: a reaction runs only when nothing at least as important is still playing.
   PRIO = {'brake': 5, 'dm': 5, 'engage': 3, 'disengage': 3, 'dm_clear': 3, 'go': 2, 'sleepy': 0,
-          'strain': 4, 'bsm': 4, 'cutin': 3, 'camera_fast': 2, 'lead_go': 2, 'arrive': 2,
-          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'camera': 1, 'curve': 1, 'gas': 0}
-  COOLDOWN = {'strain': 6.0, 'bsm': 4.0, 'cutin': 6.0, 'lead_go': 10.0, 'gas': 10.0, 'curve': 40.0}
+          'bsm': 4, 'cutin': 3, 'camera_fast': 2, 'lead_go': 2, 'arrive': 2,
+          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'camera': 1, 'curve': 1, 'slow_steer': 1, 'steer_back': 1, 'gas': 0}
+  COOLDOWN = {'bsm': 4.0, 'cutin': 6.0, 'lead_go': 10.0, 'gas': 10.0, 'curve': 40.0, 'slow_steer': 20.0}
   WAKES = ('lead_go',)  # the only event that wakes it from sleep
+  SLOW_GREEN = 0.4      # the driving tint while too slow to steer (0.9 when steering)
+  # Steering effort: from this much torque it starts to strain and at EFFORT_FULL it is all-out (eyes shut tight).
+  # Replayed drives: the median is 0.1-0.45, the top tenth 0.5-0.8, the limit 1.0.
+  EFFORT_FROM, EFFORT_FULL = 0.5, 0.95
 
   def __init__(self, rng: random.Random | None = None):
     self.rng = rng or random.Random()
@@ -286,9 +291,12 @@ class FaceModel:
     self.route_armed = True
     self.route_near_at = -1e9
     self.curve_for = 0.0
-    self.steer_sat = False
+    self.effort = 0.0          # 0..1, how hard it is straining on the wheel
+    self.effort_side = 0
     self.cutin = False
     self.gas = False
+    self.slow_steer = False
+    self.handed_over = False
     self.star_from = 0.0
     self.star_until = 0.0
     self.eye_shape: str | None = None
@@ -392,7 +400,9 @@ class FaceModel:
                vy=-46 - self.rng.random() * 20, life=1.4, size=6 + self.rng.random() * 4)
 
   def _sweat(self) -> None:
-    self.spawn(kind='sweat', x=-186, y=-64, vy=18, life=2.2)
+    if sum(p.kind == 'sweat' for p in self.parts) >= 2:   # a drop or two, never a stack of them
+      return
+    self.spawn(kind='sweat', x=-186 + (self.rng.random() - 0.5) * 28, y=-64 + (self.rng.random() - 0.5) * 16, vy=18, life=2.2)
 
   # ---- inputs -> events --------------------------------------------------------------------
   def _inputs(self, dt: float, inp: FaceInputs) -> None:
@@ -450,13 +460,26 @@ class FaceModel:
     elif self.cam_armed and inp.cam_dist <= self.CAMERA_NEAR_M and inp.cam_limit > 0 and inp.v_ego > 5:
       self.cam_armed = False
       self.want('camera_fast' if inp.v_ego * 3.6 > inp.cam_limit + self.CAMERA_OVER_KPH else 'camera', 0, 3.0)
-    # steering at its limit, a car cutting in, the driver taking the gas (not while signalling: that is just a lane change)
-    if inp.steer_sat and not self.steer_sat and self.engaged:
-      self.want('strain', 1 if self.steer >= 0 else -1, 2.0)
-    self.steer_sat = inp.steer_sat
+    # steering effort grows with the torque it applies (rises fast, eases off slower); no event, a continuous strain
+    torque = abs(inp.steer_torque) if self.engaged else 0.0
+    target = clamp((torque - self.EFFORT_FROM) / (self.EFFORT_FULL - self.EFFORT_FROM), 0.0, 1.0)
+    self.effort += (target - self.effort) * (1 - math.exp(-dt / (0.25 if target > self.effort else 0.6)))
+    if torque > 0.05:
+      self.effort_side = 1 if inp.steer_torque > 0 else -1
+    # a car cutting in, the driver taking the gas (not while signalling: that is just a lane change)
     if inp.cutin and not self.cutin and inp.v_ego > 0.5:
       self.want('cutin', 0, 2.5)
     self.cutin = inp.cutin
+    # below the car's minimum steering speed the assist lets go: hand the wheel over, then take it back
+    if inp.slow_steer and not self.slow_steer and self.engaged:
+      self.pending.pop('steer_back', None)
+      self.want('slow_steer', 0, 2.5)
+    elif not inp.slow_steer and self.slow_steer:
+      self.pending.pop('slow_steer', None)
+      if self.handed_over and self.engaged:
+        self.want('steer_back', 0, 1.5)
+      self.handed_over = False
+    self.slow_steer = inp.slow_steer
     if inp.gas and not self.gas and self.engaged and inp.v_ego > 2 and not self.signal:
       self.want('gas', 0, 1.0)
     self.gas = inp.gas
@@ -687,7 +710,7 @@ class FaceModel:
   def _react_driving(self, name: str, arg: float) -> None:
     P, L = self.P, self.later
     d = int(arg) or 1
-    if name in self.WAKES or name in ('bsm', 'strain', 'cutin', 'arrive'):
+    if name in self.WAKES or name in ('bsm', 'cutin', 'arrive'):
       self.sleep_stage = 0
       self.stopped_for = 0.0      # count the stop afresh, or it dozes straight off again
       self.wake()
@@ -760,18 +783,6 @@ class FaceModel:
         L(2.3, self._settle)
       else:
         L(1.6, self._settle)
-    elif name == 'strain':
-      # the turn is past the steering limit: screwed-up eyes, trembling, leaning into it
-      self.event_until = self.clock + 2.0
-      self.squeeze = True
-      self.tremble = 0.8
-      P['up'].t, P['amber'].t, P['pitch'].t = 0.97, 0.5, 0.05
-      P['ex'].t, P['er'].t = d * 26, d * 9
-      self._sweat()
-      self.kick('hx', d * 200)
-      L(1.5, lambda: (setattr(self, 'squeeze', False), setattr(self, 'tremble', 0.0), self._apply_mood('sigh'),
-                      setattr(P['pitch'], 't', -0.03), self.kick('hy', 90)))
-      L(2.0, self._settle)
     elif name == 'cutin':
       # someone cut in: a flinch back and a quick double blink
       self.event_until = self.clock + 1.4
@@ -801,6 +812,27 @@ class FaceModel:
         L(0.3 + i * 0.35, self._heart)
       L(1.5, lambda: (self.osc('rot', 6, 2.2, 2.2), setattr(P['blush'], 't', 0.9)))
       L(2.9, self._settle)
+    elif name == 'slow_steer':
+      # too slow for the car to steer: "your turn" -- a glance at the driver and a little bow
+      self.event_until = self.clock + 2.2
+      self.handed_over = True
+      self._apply_mood('contact')
+      P['green'].t, P['blush'].t = self.SLOW_GREEN, 0.2
+      P['er'].t, P['ex'].t = -6, -16
+      self.look(-0.62, 0.2, 1.4)
+      L(0.25, lambda: (setattr(P['pitch'], 't', 0.07), self.kick('hy', 140)))
+      L(0.7, lambda: (setattr(P['pitch'], 't', 0), self.start_blink(speed=0.5)))
+      L(1.5, lambda: self.look(0, 0.05, 0.4))
+      L(2.0, self._settle)
+    elif name == 'steer_back':
+      # fast enough again: "got it" -- a quick perk-up toward the road
+      self.event_until = self.clock + 1.2
+      P['h'].t, P['w'].t = 118, 104
+      self.look(0, -0.1, 0.5)
+      self.kick('hy', -220)
+      L(0.15, lambda: self._sparkle(2))
+      L(0.35, lambda: self.kick('hy', 110))
+      L(1.0, self._settle)
     elif name == 'curve':
       # a fast bend: "wheee", swung toward the outside of the turn
       self.event_until = self.clock + 1.8
@@ -1024,7 +1056,7 @@ class FaceModel:
     self._behaviors()[name][3]()
 
   def _update_behaviors(self, dt: float) -> None:
-    if (self.behavior or self.signal or self.dm or self.sleep_stage or self.clock < self.event_until or
+    if (self.behavior or self.signal or self.dm or self.sleep_stage or self.clock < self.event_until or self.effort > 0.2 or
         (self.hold and self.clock < self.hold[2]) or self.mood not in ('idle', 'focus')):
       return
     self.behavior_timer -= dt
@@ -1180,7 +1212,8 @@ class FaceModel:
         self.spawn(kind='z', x=150 + self.rng.random() * 18, y=-42, vx=20, vy=-24, life=2.8,
                    size=13 + self.rng.random() * 5, phase=self.rng.random() * 6)
         self.z_timer = 1.25
-    if self.tremble > 0.5 and self.rng.random() < dt * 0.7:
+    sweaty = (self.tremble > 0.5 and self.rng.random() < dt * 0.7) or (self.effort > 0.55 and self.rng.random() < dt * 1.2 * self.effort)
+    if sweaty:
       self._sweat()
     if self.signal:
       prev = self.tick_phase
@@ -1226,6 +1259,8 @@ class FaceModel:
     self._update_particles(dt)
     P = self.P
     P['bright'].t = 0.62 if self.night else 1.0
+    if self.slow_steer and self.engaged and self.mood == 'focus':
+      P['green'].t = self.SLOW_GREEN                       # not steering right now: a paler driving tint
     P['steer'].t = self.steer
     P['p_nightcap'].t = 1.0 if self.sleep_stage == 2 else 0.0
     steps = max(1, math.ceil(dt / (1 / 120)))     # 120 Hz is stable for the stiffest spring (k 760) and halves the cost

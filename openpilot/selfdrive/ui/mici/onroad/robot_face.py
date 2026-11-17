@@ -89,6 +89,10 @@ class RobotFace:
       lead = sm['radarState'].leadOne
       if lead.status:
         inp.lead_d, inp.lead_v = float(lead.dRel), float(lead.vLead)
+    if lat:
+      # the torque actually sent (1.0 = the car's limit), else what the controller asked for; + left there, + right here
+      out = sm['carOutput'] if fresh('carOutput') else None
+      inp.steer_torque = -float(out.actuatorsOutput.torque if out is not None else sm['carControl'].actuators.torque)
     if fresh('controlsState'):
       inp.lat_accel = -float(sm['controlsState'].curvature) * v_ego * v_ego   # curvature is + right here; + left wanted
     if seen('carrotMan'):
@@ -96,8 +100,8 @@ class RobotFace:
       inp.cam_dist, inp.cam_limit, inp.route_left = float(cm.xSpdDist), float(cm.xSpdLimit), float(cm.nGoPosDist)
     # one-frame events can fall between UI frames; their alerts stay up for a second or two
     names = {str(e.name) for e in sm['onroadEvents']} if seen('onroadEvents') else set()
-    inp.steer_sat = 'steerSaturated' in names or alert == 'steerSaturated'
     inp.cutin = 'radarCutin' in names or alert == 'radarCutin'
+    inp.slow_steer = 'belowSteerSpeed' in names or alert == 'belowSteerSpeed'
     return inp
 
   # ---- drawing helpers -------------------------------------------------------------------
@@ -162,9 +166,9 @@ class RobotFace:
     for r, col in enumerate(colors):
       rl.draw_triangle_strip(base + r * n, n, col)
 
-  def _eye_geometry(self, side, ex, ey, w, h, up, low):
+  def _eye_geometry(self, side, ex, ey, w, h, up, low, tilt):
     P = self.model.P
-    xs, top, bottom, lid, keep = eye_span_arrays(ex, ey, w, h, SUPER_N, up, low, P['tilt'].v, P['smile'].v, P['sag'].v, side)
+    xs, top, bottom, lid, keep = eye_span_arrays(ex, ey, w, h, SUPER_N, up, low, tilt, P['smile'].v, P['sag'].v, side)
     if not keep.any():
       return None
     return xs, top, bottom, lid, keep, float(top[keep].min()), float(bottom[keep].max())
@@ -266,10 +270,16 @@ class RobotFace:
     m, P = self.model, self.model.P
     rl.draw_rectangle_rec(rect, rl.BLACK)
 
+    # straining on the wheel: grows with the steering torque, all-out (eyes shut tight) near the limit
+    effort = m.effort
+    shut = clamp((effort - 0.8) / 0.12, 0, 1)
+    tremble = max(m.tremble, effort * 0.9)
+
     # palette
     eye, glow = EYE_TOP, GLOW
     eye, glow = mix(eye, GREEN_EYE, P['green'].v), mix(glow, GREEN_GLOW, P['green'].v)
-    eye, glow = mix(eye, AMBER_EYE, P['amber'].v), mix(glow, AMBER_GLOW, P['amber'].v)
+    amber = max(P['amber'].v, effort * 0.5)
+    eye, glow = mix(eye, AMBER_EYE, amber), mix(glow, AMBER_GLOW, amber)
     f = clamp(P['flash'].v, 0, 1)
     eye, glow = mix(eye, (255, 255, 255), f), mix(glow, (255, 245, 235), f * 0.8)
     if m.night:
@@ -281,14 +291,14 @@ class RobotFace:
     # whole-face motion
     clock = m.clock
     pulse = max(0.0, 1 - fract(m.tick_phase) * 3.2) if m.signal else 0.0
-    trem = (math.sin(clock * 57) * 1.1 + math.sin(clock * 31) * 0.7) * m.tremble if m.tremble else 0.0
+    trem = (math.sin(clock * 57) * 1.1 + math.sin(clock * 31) * 0.7) * tremble if tremble else 0.0
     sway_x, sway_y, sway_r = vnoise(clock * 0.33, 1) * 0.7, vnoise(clock * 0.29, 2) * 0.5, vnoise(clock * 0.23, 3) * 0.3
     sleep_sway = math.sin(clock * 0.9) * 2.5 if m.sleep_stage == 2 else 0.0
     ride = math.sin(clock * 2.3) * 0.6 + vnoise(clock * 1.6, 21) * 0.9 if m.engaged and not m.sleep_stage else 0.0
     arc = min(abs(P['hx'].vel + P['ex'].vel) * 0.025, 4)
-    hx = P['hx'].v + P['ex'].v + m.osc_offset('hx') + trem + sway_x
+    hx = P['hx'].v + P['ex'].v + m.osc_offset('hx') + trem + sway_x + m.effort_side * effort * 16
     hy = P['hy'].v + P['ey'].v + m.osc_offset('hy') - m.breath * 2 + sway_y + arc - pulse * 0.8 + ride
-    rot = P['rot'].v + P['er'].v + m.osc_offset('rot') + sway_r + sleep_sway
+    rot = P['rot'].v + P['er'].v + m.osc_offset('rot') + sway_r + sleep_sway + m.effort_side * effort * 5
     stretch = clamp(-P['hy'].vel * 0.00028, -0.11, 0.13)
     pitch = 1 + P['pitch'].v
     sy = (1 + stretch) * (1 + m.breath * 0.012) * pitch
@@ -331,13 +341,14 @@ class RobotFace:
       w = P['w'].v * EYE_SCALE[0] * persp * (1 + sacc + squash * 0.6) * (1.012 if left else 1)
       h = P['h'].v * EYE_SCALE[1] * persp * (1 - squash) * (1 - sacc * 0.4) * (1 + m.breath * 0.008) * (1 if left else 1.008)
       lid_gaze = max(0.0, gy) * 0.17 - max(0.0, -gy) * 0.06
-      flutter = vnoise(clock * 2.2, 7 if left else 11) * 0.006 + (math.sin(clock * 40 + side) * 0.012 if m.tremble else 0)
-      up_base = clamp(P['up'].v + relaxed + lid_gaze + flutter + wink * 1.1, 0, 1)
+      flutter = vnoise(clock * 2.2, 7 if left else 11) * 0.006 + (math.sin(clock * 40 + side) * 0.012 if tremble else 0)
+      up_base = clamp(P['up'].v + relaxed + lid_gaze + flutter + wink * 1.1 + effort * 0.3 + shut * 0.7, 0, 1)
       up = up_base + (1 - up_base) * blink
-      low = P['low'].v + blink * 0.08 + max(0.0, -gy) * 0.04 + wink * 0.25
-      eyes.append((side, ex, ey, w, h, gx, gy, up_base, wink, self._eye_geometry(side, ex, ey, w, h, up, low)))
+      low = P['low'].v + blink * 0.08 + max(0.0, -gy) * 0.04 + wink * 0.25 + effort * 0.12
+      geo = self._eye_geometry(side, ex, ey, w, h, up, low, P['tilt'].v + effort * 0.4)
+      eyes.append((side, ex, ey, w, h, gx, gy, up_base, wink, geo))
 
-    # every glow first, then the bodies: each switch between the glow texture and plain fills is a GPU batch flush
+    # every glow first, then the bodies, so one eye's halo never lies over the other eye
     for *_, geo in eyes:
       if geo is not None:
         self._eye_glow(geo, glow_d, glow_a)
@@ -348,7 +359,7 @@ class RobotFace:
       closed = clamp((up_base - 0.9) / 0.08, 0, 1)
       if closed > 0:
         # eyes held shut (dozing, sleeping, a yawn, a wink) show a stroke instead of vanishing
-        if m.squeeze:
+        if m.squeeze or shut > 0.5:
           d = 1 if left else -1
           pts = [(ex - d * w * 0.22, ey - 11), (ex + d * w * 0.2, ey + 4), (ex - d * w * 0.22, ey + 19)]
         else:
@@ -358,6 +369,15 @@ class RobotFace:
           pts = self._quad(ex - w * 0.36, yy, ex, yy + bend, ex + w * 0.36, yy)
         self._blob(ex, ey + 8, w * 1.2, 40, glow_d, 0.35 * closed * bright)
         self._stroke(pts, 8, eye_d, 0.92 * closed)
+
+    # gritted teeth while straining on the wheel
+    g = clamp((effort - 0.35) / 0.3, 0, 1)
+    if g > 0.01:
+      mx = (P['gxL'].v + P['gxR'].v) * 7 + m.effort_side * effort * 4
+      my = 62 + math.sin(clock * 45) * 0.8 * effort
+      hw = 14 + effort * 4
+      zig = [(mx + hw * (i / 3 - 1), my + (3.5 if i % 2 else -3.5) * (0.6 + effort * 0.4)) for i in range(7)]
+      self._stroke(zig, 4, eye_d, 0.9 * g)
 
     # mouth only when it opens: surprise, a yawn, a sneeze, a sigh
     o = clamp(P['mO'].v, 0, 1)
