@@ -76,5 +76,6 @@ def test_road_noise_never_makes_it_dance(seed):
 def test_silence_and_music_stopping():
   bt, _, locked = listen(np.zeros(10 * RATE, np.int16))
   assert not locked.any()
-  bt, _, _ = listen(np.concatenate((drums(120, 12), np.zeros(8 * RATE, np.int16))))
-  assert not bt.locked                                    # the music stopped: it lets go
+  _, _, locked = listen(np.concatenate((drums(120, 12), np.zeros(8 * RATE, np.int16))))
+  assert locked[int(11.5 / 0.05)]
+  assert not locked[int(15 / 0.05):].any()                # the music stopped: it lets go within 3 s

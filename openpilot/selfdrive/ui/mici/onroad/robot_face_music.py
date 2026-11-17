@@ -145,10 +145,11 @@ class BeatTracker:
     self.conf += (conf - self.conf) * 0.5
     self.confs = [*self.confs[-(HOLD - 1):], self.conf]
     steady = len(self.periods) == HOLD and (max(self.periods) - min(self.periods)) / period < STEADY
-    if not self.locked and steady and min(self.confs) > START:
+    playing = self.t - self.last_onset <= max(2.0, 4 * self.period)   # a hit within the last four beats
+    if not self.locked and steady and playing and min(self.confs) > START:
       self.locked = True
-    elif self.locked and self.conf < CONFIDENT:
-      self.locked = False
+    elif self.locked and (self.conf < CONFIDENT or not playing):
+      self.locked = False                 # the beat faded, or the music stopped (the 6 s window still holds it)
     if self.conf > 0.2:
       self._comb_phase()
 
