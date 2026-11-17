@@ -11,6 +11,7 @@ import numpy as np
 import pyray as rl
 
 from openpilot.selfdrive.ui.mici.onroad.clock_face import NightMode
+from openpilot.selfdrive.ui.mici.onroad.robot_face_music import BeatTracker
 from openpilot.selfdrive.ui.mici.onroad.robot_face_model import (DM_ALERTS, FaceInputs, FaceModel, clamp, ease_out_back,
                                                                   ease_out_cubic, eye_span_arrays, fract, vnoise)
 from openpilot.selfdrive.ui.ui_state import ui_state
@@ -47,6 +48,8 @@ class RobotFace:
     self._night = NightMode()
     self._last = time.monotonic()
     self._font = gui_app.font(FontWeight.BOLD)
+    self._beat = BeatTracker()
+    self._mic = None           # every rawAudioData chunk (not just the latest), opened on first use
     self._glow_tex = None
 
   # ---- inputs -------------------------------------------------------------------------
@@ -263,8 +266,27 @@ class RobotFace:
     now = time.monotonic()
     dt, self._last = now - self._last, now
     m = self.model
-    m.update(dt, self._inputs())
+    inp = self._inputs()
+    self._listen(dt, inp)
+    m.update(dt, inp)
     self.draw(rect)
+
+  def _audio_chunks(self) -> list[np.ndarray]:
+    from openpilot.cereal import messaging
+    if self._mic is None:
+      self._mic = messaging.sub_sock('rawAudioData', conflate=False)
+    return [np.frombuffer(msg.rawAudioData.data, dtype=np.int16) for msg in messaging.drain_sock(self._mic)]
+
+  def _listen(self, dt: float, inp: FaceInputs) -> None:
+    """Find the beat in the cabin microphone (micd, 50 ms chunks). Not while the car's own alert sound plays."""
+    beats = self._beat.advance(dt)          # the clock moves to now first; the new audio then corrects it
+    chunks = self._audio_chunks()
+    ss = ui_state.sm['selfdriveState']
+    if str(ss.alertSound) not in ('none', '0', ''):
+      return
+    for i, chunk in enumerate(chunks):
+      self._beat.feed(chunk, age=0.05 * (len(chunks) - 1 - i) + 0.03)   # micd hands over a block ~30 ms after it ends
+    inp.music_on, inp.music_beats, inp.music_period = self._beat.locked, tuple(beats), self._beat.period
 
   def draw(self, rect: rl.Rectangle) -> None:
     m, P = self.model, self.model.P

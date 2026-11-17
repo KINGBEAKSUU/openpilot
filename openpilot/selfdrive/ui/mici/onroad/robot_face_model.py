@@ -128,6 +128,9 @@ class FaceInputs:
   steer_torque: float = 0.0   # steering torque it is applying, 1.0 = the car's limit; + right
   cutin: bool = False         # radarCutin is up
   slow_steer: bool = False    # belowSteerSpeed: too slow for the car to steer
+  music_on: bool = False      # the microphone hears music with a steady beat
+  music_beats: tuple = ()     # strengths of the beats that fell in this frame
+  music_period: float = 0.5   # s per beat
   gas: bool = False
   lat_accel: float = 0.0      # m/s², + turning left
 
@@ -297,6 +300,9 @@ class FaceModel:
     self.gas = False
     self.slow_steer = False
     self.handed_over = False
+    self.beats = 0
+    self.sway = 1
+    self.music_quiet = 0.0
     self.star_from = 0.0
     self.star_until = 0.0
     self.eye_shape: str | None = None
@@ -507,6 +513,41 @@ class FaceModel:
       until, arg = self.pending[name]
       if self.clock > until or self.event(name, arg):
         del self.pending[name]
+
+  def _music(self, dt: float, inp: FaceInputs) -> None:
+    """Dance to music the microphone hears, when nothing else is going on (as in the web preview)."""
+    free = (not self.signal and not self.dm and not self.sleep_stage and self.clock >= self.event_until and not self.behavior
+            and self.effort < 0.2 and self.mood in ('idle', 'focus', 'vibe', 'contact', 'curious', 'think'))
+    if inp.music_on:
+      self.music_quiet = 0.0
+      if free:
+        if self.mood != 'vibe':
+          self._apply_mood('vibe')
+        for strength in inp.music_beats:
+          self._on_beat(strength, inp.music_period)
+    elif self.mood == 'vibe' and not self.behavior:
+      self.music_quiet += dt
+      if self.music_quiet > 3.0:
+        self.P['ex'].t = self.P['er'].t = 0
+        self._apply_mood(self.rest_mood())
+
+  def _on_beat(self, strength: float, period: float) -> None:
+    P = self.P
+    self.beats += 1
+    down = self.beats % 4 == 1                            # the first beat of a bar: bigger, with a note
+    self.kick('hy', 100 + 90 * strength + (80 if down else 0))
+    if self.beats % 2 == 0:
+      self.sway = -self.sway
+      P['ex'].t, P['er'].t = self.sway * 18, self.sway * 6
+    if down:
+      self._note()
+      if self.rng.random() < 0.5:
+        self._note()
+    if down and self.rng.random() < 0.25:                 # feeling it: eyes shut for a beat
+      P['up'].t, P['smile'].t = 0.97, 1.0
+      self.later(period * 0.9, lambda: self.mood == 'vibe' and (setattr(P['up'], 't', 0.1), setattr(P['smile'], 't', 0.55)), keep=True)
+    elif self.rng.random() < 0.12:
+      self.start_blink(speed=1.3)
 
   def want(self, name: str, arg: float = 0.0, within: float = 2.0) -> None:
     """Queue a driving event: it plays once nothing more important is playing, or is dropped after `within` s."""
@@ -1239,6 +1280,7 @@ class FaceModel:
     dt = clamp(dt, 0.0, 0.05)
     self.clock += dt
     self._inputs(dt, inp)
+    self._music(dt, inp)
     self._run_timers()
     if not self.signal and not self.dm and not self.sleep_stage and self.mood in IDLE_LIKE:
       self.idle_for += dt
