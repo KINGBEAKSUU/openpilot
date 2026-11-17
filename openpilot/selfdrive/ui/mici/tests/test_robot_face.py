@@ -46,10 +46,6 @@ def face(monkeypatch):
   monkeypatch.setitem(sys.modules, 'openpilot.selfdrive.ui.ui_state', NS(ui_state=ui))
   monkeypatch.setitem(sys.modules, 'openpilot.system.ui.lib.application', NS(gui_app=NS(font=lambda *_: 'font', target_fps=20),
                                                                               FontWeight=NS(BOLD='bold')))
-  clock_spec = importlib.util.spec_from_file_location('_test_robot_clock', ONROAD / 'clock_face.py')
-  clock_mod = importlib.util.module_from_spec(clock_spec)
-  clock_spec.loader.exec_module(clock_mod)
-  monkeypatch.setitem(sys.modules, 'openpilot.selfdrive.ui.mici.onroad.clock_face', clock_mod)
   spec = importlib.util.spec_from_file_location('_test_robot_face', ONROAD / 'robot_face.py')
   module = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(module)
