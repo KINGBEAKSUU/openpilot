@@ -268,7 +268,7 @@ def test_gas_glance_never_hides_a_lane_change_or_a_bend():
   run(m, inp, 0.3)
   inp.lane_phase, inp.lane_dir = 1, 1
   run(m, inp, 0.1)
-  assert m.last_event == 'lane_go'
+  assert m.last_event == 'lane_go' and m.P['asym'].t == 0   # none of the curious glance's lopsided eyes left over
   m, inp = ready(engaged=True)
   inp.gas = True
   run(m, inp, 0.2)

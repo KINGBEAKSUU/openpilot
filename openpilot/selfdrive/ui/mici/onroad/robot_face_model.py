@@ -691,6 +691,8 @@ class FaceModel:
       self.sleep_stage = 0
       self.stopped_for = 0.0      # count the stop afresh, or it dozes straight off again
       self.wake()
+    if not self.sleep_stage:
+      self._apply_mood(self.rest_mood())   # start from the resting face, not whatever the last reaction left behind
     if name == 'hello':
       # wakes up with the car: eyes open, a hop and a sparkle
       self.event_until = self.clock + 2.2
