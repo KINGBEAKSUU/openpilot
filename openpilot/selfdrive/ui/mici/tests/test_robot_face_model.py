@@ -103,10 +103,10 @@ def test_long_stop_dozes_off_and_pulling_away_wakes_it(m):
   assert m.mood == 'idle'
 
 
-def test_new_session_resets_and_night_dims(m):
+def test_new_session_resets(m):
   run(m, FaceInputs(session=1, engaged=True, dm_alert=True), 2.0)
-  run(m, FaceInputs(session=2, night=True), 0.1)
-  assert m.mood == 'idle' and not m.dm and m.P['bright'].t == 0.62
+  run(m, FaceInputs(session=2), 0.1)
+  assert m.mood == 'idle' and not m.dm and m.P['bright'].t == 1.0   # no night dimming: full colour day and night
 
 
 def test_every_habit_runs_and_nothing_goes_wild():
@@ -348,6 +348,18 @@ def test_dances_to_music_only_when_nothing_else_is_going_on():
   m.behavior_timer = 1e9                                  # no idle habit in between
   run(m, inp, 3.5)
   assert m.mood == 'focus'                                # the music stopped: back to driving
+
+
+def test_music_wakes_it_from_a_long_stop_and_keeps_it_up():
+  # parked and asleep, as when it was tried in the car: the music has to wake it, or it never dances
+  m, inp = ready(engaged=True, v_ego=0.0, standstill=True)
+  run(m, inp, 60.0)
+  assert m.sleep_stage == 2
+  inp.music_on, inp.music_period = True, 0.5
+  for i in range(int(60 / 0.05)):                         # a minute of music, still parked
+    inp.music_beats = (0.8,) if i % 10 == 0 else ()
+    m.update(0.05, inp)
+  assert m.sleep_stage == 0 and m.mood == 'vibe' and m.beats > 100
 
 
 def test_cut_in_at_crawling_speed():

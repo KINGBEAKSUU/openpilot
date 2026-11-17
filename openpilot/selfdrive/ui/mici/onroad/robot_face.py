@@ -10,7 +10,6 @@ import time
 import numpy as np
 import pyray as rl
 
-from openpilot.selfdrive.ui.mici.onroad.clock_face import NightMode
 from openpilot.selfdrive.ui.mici.onroad.robot_face_music import CAPTURE_DELAY, BeatTracker
 from openpilot.selfdrive.ui.mici.onroad.robot_face_model import (DM_ALERTS, FaceInputs, FaceModel, clamp, ease_out_back,
                                                                   ease_out_cubic, eye_span_arrays, fract, vnoise)
@@ -31,7 +30,6 @@ EYE_TOP = (255, 243, 230)
 GLOW = (255, 150, 70)
 GREEN_EYE, GREEN_GLOW = (228, 255, 240), (50, 230, 150)
 AMBER_EYE, AMBER_GLOW = (255, 233, 196), (255, 150, 20)
-NIGHT_EYE, NIGHT_GLOW = (255, 214, 170), (255, 110, 35)
 
 
 def mix(a, b, t):
@@ -45,7 +43,6 @@ def color(c, a=1.0) -> rl.Color:
 class RobotFace:
   def __init__(self):
     self.model = FaceModel()
-    self._night = NightMode()
     self._last = time.monotonic()
     self._font = gui_app.font(FontWeight.BOLD)
     self._beat = BeatTracker()
@@ -78,7 +75,6 @@ class RobotFace:
       standstill=bool(car_ok and cs.standstill),
       dm_alert=alert.startswith(DM_ALERTS),
       fcw='fcw' in alert.lower() or alert.startswith('forwardCollision'),
-      night=self._night.update(time.time()),
       blindspot_left=bool(car_ok and cs.leftBlindspot),
       blindspot_right=bool(car_ok and cs.rightBlindspot),
       gas=bool(car_ok and cs.gasPressed),
@@ -306,8 +302,6 @@ class RobotFace:
     eye, glow = mix(eye, AMBER_EYE, amber), mix(glow, AMBER_GLOW, amber)
     f = clamp(P['flash'].v, 0, 1)
     eye, glow = mix(eye, (255, 255, 255), f), mix(glow, (255, 245, 235), f * 0.8)
-    if m.night:
-      eye, glow = mix(eye, NIGHT_EYE, 0.55), mix(glow, NIGHT_GLOW, 0.6)
     bottom = mix(eye, glow, 0.4)
     bright = clamp(P['bright'].v, 0, 1)
     eye_d, bottom_d, glow_d = mix((0, 0, 0), eye, bright), mix((0, 0, 0), bottom, bright), glow
@@ -344,7 +338,7 @@ class RobotFace:
     glow_a = (0.58 + m.breath * 0.05 + pulse * 0.25 + (math.sin(clock * 6) * 0.5 + 0.5) * 0.25 * m.dm) * bright
     glow_a *= 1 + vnoise(clock * 3, 6) * 0.03
     shimmer = 0.92 + vnoise(clock * 2.4, 8) * 0.08
-    relaxed = (1 - m.attn) * 0.14 + (0.05 if m.night else 0)
+    relaxed = (1 - m.attn) * 0.14
     shape = m.eye_shape or ('star' if clock < m.star_until else None)
     eyes = []
     for side in (-1, 1):

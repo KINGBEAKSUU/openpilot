@@ -115,7 +115,6 @@ class FaceInputs:
   standstill: bool = False
   dm_alert: bool = False
   fcw: bool = False
-  night: bool = False
   lane_phase: int = 0         # 0 off, 1 lane change starting, 2 finishing
   lane_dir: int = 0           # -1 left, 1 right
   blindspot_left: bool = False
@@ -272,7 +271,6 @@ class FaceModel:
     self.engaged = False
     self.signal = 0
     self.steer = 0.0
-    self.night = False
     self.dm = False
     self.tremble = 0.0
     self.sleep_stage = 0
@@ -416,7 +414,6 @@ class FaceModel:
       self.session = inp.session
       self.reset()
       self.react('hello')
-    self.night = inp.night
     self.steer = clamp(inp.steer_deg, -90.0, 90.0)
     sig = (-1 if inp.left_blinker else 0) + (1 if inp.right_blinker else 0)   # hazards cancel out
     if sig != self.signal:
@@ -432,7 +429,7 @@ class FaceModel:
       self.react('brake')
     stopped = inp.standstill or abs(inp.v_ego) < 0.1
     self.stopped_for = self.stopped_for + dt if stopped else 0.0
-    if self.sleep_stage == 0 and self.stopped_for > self.DROWSY_AFTER_S and not self.dm and not self.signal:
+    if self.sleep_stage == 0 and self.stopped_for > self.DROWSY_AFTER_S and not self.dm and not self.signal and not inp.music_on:
       self.react('sleepy')
     elif self.sleep_stage and inp.v_ego > 0.5:
       self.react('go')
@@ -518,6 +515,15 @@ class FaceModel:
     """Dance to music the microphone hears, when nothing else is going on (as in the web preview)."""
     free = (not self.signal and not self.dm and not self.sleep_stage and self.clock >= self.event_until and not self.behavior
             and self.effort < 0.2 and self.mood in ('idle', 'focus', 'vibe', 'contact', 'curious', 'think'))
+    if inp.music_on and self.sleep_stage:
+      # music wakes it up (it dozes off on long stops, which is exactly when people test it parked)
+      self._cancel()
+      self.sleep_stage = 0
+      self.stopped_for = 0.0
+      self.wake()
+      self._apply_mood(self.rest_mood())
+      self.start_blink(double=True)
+      free = self.clock >= self.event_until and not self.behavior and not self.signal and not self.dm
     if inp.music_on:
       self.music_quiet = 0.0
       if free:
@@ -1239,7 +1245,7 @@ class FaceModel:
     P['hy'].t = ty * 7 + (6 if self.sleep_stage == 1 else 9 if self.sleep_stage == 2 else 0) + (-4 if self.mood == 'think' else 0)
 
   def _update_breath(self, dt: float) -> None:
-    period = (6.2 if self.sleep_stage == 2 else 5.2 if self.sleep_stage == 1 else 4.9 if self.night else 4.3)
+    period = (6.2 if self.sleep_stage == 2 else 5.2 if self.sleep_stage == 1 else 4.3)
     period += fbm(self.clock * 0.1, 9) * 0.6
     self.breath_phase = fract(self.breath_phase + dt / period)
     p = self.breath_phase
@@ -1300,7 +1306,6 @@ class FaceModel:
     self._oscs[:] = [o for o in self._oscs if math.exp(-o.decay * o.t) >= 0.02]
     self._update_particles(dt)
     P = self.P
-    P['bright'].t = 0.62 if self.night else 1.0
     if self.slow_steer and self.engaged and self.mood == 'focus':
       P['green'].t = self.SLOW_GREEN                       # not steering right now: a paler driving tint
     P['steer'].t = self.steer

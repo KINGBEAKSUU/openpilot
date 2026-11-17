@@ -11,7 +11,7 @@ import pyray as rl
 CASES = {
   'idle': 3.0, 'engage-star': 0.35, 'engage-happy': 0.9, 'driving': 4.0, 'signal-right': 4.6, 'brake': 0.3,
   'driver-monitoring': 1.2, 'yawn': 50.2, 'asleep': 55.0, 'love': 1.0, 'cool': 1.2, 'think': 1.6, 'curious': 1.0,
-  'night': 3.0, 'straining': 2.2,
+  'straining': 2.2,
 }
 # driving-event reactions: case: (reaction, arg, engaged, seconds after it starts)
 EVENTS = {
@@ -44,7 +44,7 @@ def main():
     for case in args.case or [*CASES, *EVENTS]:
       face = RobotFace()
       face.model = FaceModel(random.Random(5))
-      inp = FaceInputs(session=1, v_ego=12.0, night=case == 'night')
+      inp = FaceInputs(session=1, v_ego=12.0)
       if case in EVENTS:
         reaction, arg, inp.engaged, after = EVENTS[case]
         t = 0.0
