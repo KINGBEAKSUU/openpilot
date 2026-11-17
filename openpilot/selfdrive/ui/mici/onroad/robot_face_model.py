@@ -225,7 +225,7 @@ class FaceModel:
   # Who may cut in: a reaction runs only when nothing at least as important is still playing.
   PRIO = {'brake': 5, 'dm': 5, 'engage': 3, 'disengage': 3, 'dm_clear': 3, 'go': 2, 'sleepy': 0,
           'strain': 4, 'bsm': 4, 'cutin': 3, 'camera_fast': 2, 'lead_go': 2, 'arrive': 2,
-          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'camera': 1, 'gas': 1, 'curve': 1}
+          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'camera': 1, 'curve': 1, 'gas': 0}
   COOLDOWN = {'strain': 6.0, 'bsm': 4.0, 'cutin': 6.0, 'lead_go': 10.0, 'gas': 10.0, 'curve': 40.0}
   WAKES = ('lead_go',)  # the only event that wakes it from sleep
 
@@ -277,6 +277,7 @@ class FaceModel:
     self.prio = 0
     self.last_event: str | None = None
     self.cooldown: dict[str, float] = {}
+    self.pending: dict[str, tuple[float, float]] = {}   # name: (play by, arg)
     self.brake_until = 0.0
     self.lane_phase = 0
     self.bsm_side = 0
@@ -425,35 +426,39 @@ class FaceModel:
     # lane change: lean into it, then a proud little nod once it finishes (not when it is called off)
     if inp.lane_phase != self.lane_phase:
       if inp.lane_phase == 1 and self.lane_phase == 0 and inp.lane_dir:
-        self.event('lane_go', inp.lane_dir)
-      elif inp.lane_phase == 0 and self.lane_phase == 2:
-        self.event('lane_done')
+        self.want('lane_go', inp.lane_dir, 3.0)
+      elif inp.lane_phase == 0:
+        self.pending.pop('lane_go', None)
+        if self.lane_phase == 2:
+          self.want('lane_done', 0, 2.5)
       self.lane_phase = inp.lane_phase
     # a car in the blind spot on the side we are signalling toward
     side = -1 if self.signal < 0 and inp.blindspot_left else 1 if self.signal > 0 and inp.blindspot_right else 0
     if side and not self.bsm_side:
-      self.event('bsm', side)
+      self.want('bsm', side, 1.5)
+    elif not side:
+      self.pending.pop('bsm', None)
     self.bsm_side = side
     # the car ahead pulls away while we wait
     moving_off = stopped and self.stopped_for > 1.5 and 0 < inp.lead_d < 35 and inp.lead_v > 1.0
     self.lead_move_for = self.lead_move_for + dt if moving_off else 0.0
     if self.lead_move_for >= 0.4 and self.lead_move_for - dt < 0.4:
-      self.event('lead_go')
+      self.want('lead_go', 0, 2.0)
     # speed camera: one reaction per camera
     if inp.cam_dist <= 0 or inp.cam_dist > self.CAMERA_NEAR_M + 200:
       self.cam_armed = True
     elif self.cam_armed and inp.cam_dist <= self.CAMERA_NEAR_M and inp.cam_limit > 0 and inp.v_ego > 5:
       self.cam_armed = False
-      self.event('camera_fast' if inp.v_ego * 3.6 > inp.cam_limit + self.CAMERA_OVER_KPH else 'camera')
-    # steering at its limit, a car cutting in, the driver taking the gas
+      self.want('camera_fast' if inp.v_ego * 3.6 > inp.cam_limit + self.CAMERA_OVER_KPH else 'camera', 0, 3.0)
+    # steering at its limit, a car cutting in, the driver taking the gas (not while signalling: that is just a lane change)
     if inp.steer_sat and not self.steer_sat and self.engaged:
-      self.event('strain', 1 if self.steer >= 0 else -1)
+      self.want('strain', 1 if self.steer >= 0 else -1, 2.0)
     self.steer_sat = inp.steer_sat
-    if inp.cutin and not self.cutin and inp.v_ego > 3:
-      self.event('cutin')
+    if inp.cutin and not self.cutin and inp.v_ego > 0.5:
+      self.want('cutin', 0, 2.5)
     self.cutin = inp.cutin
-    if inp.gas and not self.gas and self.engaged and inp.v_ego > 2:
-      self.event('gas')
+    if inp.gas and not self.gas and self.engaged and inp.v_ego > 2 and not self.signal:
+      self.want('gas', 0, 1.0)
     self.gas = inp.gas
     # arriving: the route counts down to the goal, or ends close to it
     if inp.route_left > 0:
@@ -463,17 +468,26 @@ class FaceModel:
         self.route_near_at = self.clock
       if self.route_armed and inp.route_left <= self.ARRIVE_M:
         self.route_armed = False
-        self.event('arrive')
+        self.want('arrive', 0, 5.0)
     elif self.route_armed and self.clock - self.route_near_at < 20:
       self.route_armed = False
-      self.event('arrive')
+      self.want('arrive', 0, 5.0)
     # a fast bend
     if inp.v_ego > 8 and abs(inp.lat_accel) > self.CURVE_ACCEL:
       self.curve_for += dt
       if self.curve_for >= self.CURVE_HOLD_S and self.curve_for - dt < self.CURVE_HOLD_S:
-        self.event('curve', 1 if inp.lat_accel > 0 else -1)
+        self.want('curve', 1 if inp.lat_accel > 0 else -1, 2.0)
     else:
       self.curve_for = 0.0
+    # queued events play as soon as nothing more important is playing, most important first
+    for name in sorted(self.pending, key=lambda n: -self.PRIO[n]):
+      until, arg = self.pending[name]
+      if self.clock > until or self.event(name, arg):
+        del self.pending[name]
+
+  def want(self, name: str, arg: float = 0.0, within: float = 2.0) -> None:
+    """Queue a driving event: it plays once nothing more important is playing, or is dropped after `within` s."""
+    self.pending[name] = (self.clock + within, arg)
 
   def event(self, name: str, arg: float = 0.0) -> bool:
     """Run a driving-event reaction unless something more important is playing or it just ran."""
