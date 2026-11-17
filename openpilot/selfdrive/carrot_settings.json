@@ -841,6 +841,25 @@
           ]
         }
       ]
+    },
+    {
+      "id": "EJ",
+      "ko": "ej",
+      "en": "ej",
+      "zh": "ej",
+      "groups": [
+        {
+          "id": "EJ_CLAMP",
+          "ko": "최소거리 클램프",
+          "en": "Min-distance clamp",
+          "zh": "最小距离钳制",
+          "params": [
+            "ClampEnable",
+            "ClampMinDistLane",
+            "ClampMinDistEdge"
+          ]
+        }
+      ]
     }
   ],
   "params": [
@@ -5384,6 +5403,57 @@
           "Speed automatic"
         ]
       }
+    },
+    {
+      "group": "ej",
+      "name": "ClampEnable",
+      "title": "최소거리 클램프 사용",
+      "descr": "레인리스에서 경로가 차선·도로경계를 밟지 않도록 최소 거리를 유지합니다. 끄면 클램프가 동작하지 않습니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Min-distance clamp",
+      "edescr": "Keeps the path a minimum distance away from lane lines and road edges in laneless mode. Off disables the clamp. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "最小距离钳制",
+      "cdescr": "在无车道线模式下使路径与车道线和路缘保持最小距离。关闭则停用钳制。保存后立即生效，无需重启。",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "unit": 1,
+      "control": "toggle"
+    },
+    {
+      "group": "ej",
+      "name": "ClampMinDistLane",
+      "title": "차선 최소거리 (135)cm",
+      "descr": "감지된 차선에서 이 거리 안쪽으로 경로가 들어가지 않습니다. 클수록 선에서 멀리 떨어져 주행합니다. 차로가 좁아 양쪽 최소거리 합보다 좁아지면 차선 중앙으로 갑니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Min distance from lane line (135)cm",
+      "edescr": "The path never comes closer than this to a detected lane line. Larger values keep further from the line. If the lane is narrower than the sum of both minimum distances, the path goes to the lane center. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "距车道线最小距离 (135)cm",
+      "cdescr": "路径与检测到的车道线保持至少该距离。数值越大离车道线越远。若车道宽度小于两侧最小距离之和，路径将移至车道中央。保存后立即生效，无需重启。",
+      "min": 60,
+      "max": 200,
+      "default": 135,
+      "unit": 5,
+      "display_unit": "distanceCm"
+    },
+    {
+      "group": "ej",
+      "name": "ClampMinDistEdge",
+      "title": "도로경계 최소거리 (115)cm",
+      "descr": "차선이 안 보일 때 도로경계(연석)에서 유지하는 최소 거리입니다. 클수록 경계에서 멀리 떨어져 주행합니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Min distance from road edge (115)cm",
+      "edescr": "Minimum distance kept from the road edge (curb) when no lane line is visible on that side. Larger values keep further from the edge. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "距路缘最小距离 (115)cm",
+      "cdescr": "该侧看不到车道线时，与路缘（路肩）保持的最小距离。数值越大离路缘越远。保存后立即生效，无需重启。",
+      "min": 40,
+      "max": 180,
+      "default": 115,
+      "unit": 5,
+      "display_unit": "distanceCm"
     }
   ]
 }
