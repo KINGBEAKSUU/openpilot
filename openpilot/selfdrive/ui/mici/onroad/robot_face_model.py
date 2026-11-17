@@ -288,6 +288,7 @@ class FaceModel:
     self.steer_sat = False
     self.cutin = False
     self.gas = False
+    self.star_from = 0.0
     self.star_until = 0.0
     self.eye_shape: str | None = None
     self.behavior: str | None = None
@@ -355,6 +356,11 @@ class FaceModel:
 
   def spawn(self, **kw) -> None:
     self.parts.append(Particle(**kw))
+
+  def stars(self, sec: float) -> None:
+    """Star eyes for sec seconds; they pop in from now."""
+    self.star_from = self.clock
+    self.star_until = self.clock + sec
 
   def wake(self) -> None:
     self.attn = 1.0
@@ -526,7 +532,7 @@ class FaceModel:
         self.kick('hy', -250)
         P['pitch'].t = 0.015
         self._sparkle(5)
-        self.star_until = self.clock + 0.7
+        self.stars(0.7)
 
       def land():
         self.kick('hy', 130)
@@ -772,7 +778,7 @@ class FaceModel:
       # made it: star eyes, hops, sparkles and hearts
       self.event_until = self.clock + 3.1
       self._apply_mood('happy')
-      self.star_until = self.clock + 1.4
+      self.stars(1.4)
       for i in range(3):
         L(i * 0.42, lambda: (self.kick('hy', -280), self._sparkle(4)))
       for i in range(4):

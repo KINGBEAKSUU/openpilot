@@ -211,7 +211,7 @@ class RobotFace:
     m = self.model
     big = 1.6
     if shape == 'star':
-      k = clamp((m.clock - (m.star_until - 0.7)) / 0.16, 0, 1)
+      k = clamp((m.clock - m.star_from) / 0.16, 0, 1)
       s = ease_out_back(k) * big
       rot = math.sin(m.clock * 9 + side) * 0.18
       pts = []

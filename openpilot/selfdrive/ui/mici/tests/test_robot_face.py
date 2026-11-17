@@ -134,7 +134,7 @@ def test_special_eyes(face, shape):
   if shape == 'heart':
     m.eye_shape = 'heart'
   else:
-    m.star_until = m.clock + 0.5
+    m.stars(0.5)
   face.f.draw(face.rect)
   assert names(face.calls).count('rl_vertex2f') >= 60          # two filled stars or hearts
 
