@@ -205,6 +205,6 @@ def new_ui_mode():
   return namespace['new_ui_mode']
 
 
-@pytest.mark.parametrize('stored,mode', [(None, 0), (0, 0), (1, 1), (2, 2), (3, 0), (-1, 0), (True, 1), (False, 0), ('2', 0)])
+@pytest.mark.parametrize('stored,mode', [(None, 0), (0, 0), (1, 1), (2, 2), (3, 3), (4, 0), (-1, 0), (True, 1), (False, 0), ('2', 0)])
 def test_new_ui_mode_parsing(stored, mode):
   assert new_ui_mode()(stored) == mode

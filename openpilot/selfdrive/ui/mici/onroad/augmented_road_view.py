@@ -171,6 +171,7 @@ class AugmentedRoadView(CameraView):
     self._vision_renderer = VisionRenderer()
     self._alert_renderer = AlertRenderer()
     self._clock_face = None  # NewUi 2, created on first use
+    self._robot_face = None  # NewUi 3, created on first use
     self._driver_state_renderer = DriverPreview(compact=True)
     self._confidence_ball = ConfidenceBall()
     self._traffic_light = TrafficLight()
@@ -235,8 +236,9 @@ class AugmentedRoadView(CameraView):
       self._update_calibration()
 
     # Create inner content area with border padding
-    # NewUi 2: a clock replaces the camera, model and HUD while onroad; alerts still draw on top.
-    clock_ui = ui_state.started and getattr(ui_state, "clock_ui", False)
+    # NewUi 2/3: a clock or a robot face replaces the camera, model and HUD while onroad; alerts still draw on top.
+    robot_ui = ui_state.started and getattr(ui_state, "robot_ui", False)
+    clock_ui = ui_state.started and getattr(ui_state, "clock_ui", False) or robot_ui
     self._content_rect = rl.Rectangle(
       self.rect.x,
       self.rect.y,
@@ -255,7 +257,9 @@ class AugmentedRoadView(CameraView):
 
     road_view_mode = self._road_view_mode()
     _t = time.monotonic()
-    if clock_ui:
+    if robot_ui:
+      self._robot().render(self._content_rect)
+    elif clock_ui:
       self._clock().render(self._content_rect)
     elif self._suppress_camera_for_cluster or road_view_mode in (2, 3):
       rl.draw_rectangle_rec(self._content_rect, rl.BLACK)
@@ -351,6 +355,12 @@ class AugmentedRoadView(CameraView):
     if preview := getattr(self, '_driver_state_renderer', None):
       preview.close()
     super().close()
+
+  def _robot(self):
+    if self._robot_face is None:
+      from openpilot.selfdrive.ui.mici.onroad.robot_face import RobotFace
+      self._robot_face = RobotFace()
+    return self._robot_face
 
   def _clock(self):
     if self._clock_face is None:
