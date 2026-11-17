@@ -154,18 +154,22 @@ class LateralPlanner:
     self.LP.curvature = measured_curvature
     self.path_xyz, self.lanelines_active = self.LP.get_d_path(sm['carState'], v_ego_car, self.t_idxs, self.path_xyz, self.curve_speed)
 
+    self.latDebugText = self.LP.debugText
+    #self.lanelines_active = True if self.LP.d_prob > 0.3 and self.LP.lanefull_mode else False
+
+    self.path_xyz[:, 1] += self.pathOffset
+    # 최소거리 클램프: 최종 경로(PathOffset 포함)가 차선·도로경계를 밟지 않도록 bound한다.
+    # 레인리스 모드에서도 동작한다.
+    self.path_xyz = self.LP.apply_min_distance_clamp(self.path_xyz, v_ego_car)
+
     if self.lanelines_active:
+      # 클램프된 최종 경로에서 yaw를 다시 구한다.
       self.plan_yaw, self.plan_yaw_rate = yaw_from_path_no_scipy(
         self.path_xyz, self.v_plan,
         smooth_window=5,
         clip_rate=2.0,
         align_first_yaw=None #md.orientation.z[0]  # 초기 정렬
       )
-      
-    self.latDebugText = self.LP.debugText
-    #self.lanelines_active = True if self.LP.d_prob > 0.3 and self.LP.lanefull_mode else False
-
-    self.path_xyz[:, 1] += self.pathOffset
 
     self.lat_mpc.set_weights(self.lateralPathCost, self.lateralMotionCost,
                              LATERAL_ACCEL_COST, LATERAL_JERK_COST,
@@ -268,8 +272,9 @@ class LateralPlanner:
       f"{'lanemode' if self.lanelines_active else 'laneless'} | " +
       f"{self.LP.lane_width_left:.1f}m | " +
       f"{self.LP.lane_width:.1f}m | " +
-      f"{self.LP.lane_width_right:.1f}m | " +
-      f"{f'offset={self.LP.offset_total * 100.0:.1f}cm turn={np.clip(self.curve_speed, -200, 200):.0f}km/h' if self.lanelines_active else ''}"
+      f"{self.LP.lane_width_right:.1f}m" +
+      f"{f' | clamp={self.LP.clamp_sides}{self.LP.clamp_max_correction * 100.0:.0f}cm' if self.LP.clamp_max_correction > 0.005 else ''}" +
+      f"{f' | offset={self.LP.offset_total * 100.0:.1f}cm turn={np.clip(self.curve_speed, -200, 200):.0f}km/h' if self.lanelines_active else ''}"
     )
 
     lateralPlan.latDebugText = debugText
