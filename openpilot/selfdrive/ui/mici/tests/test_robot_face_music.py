@@ -1,8 +1,11 @@
-"""NewUi 3 robot face: beat tracking on microphone audio (micd rawAudioData, 16 kHz int16)."""
+"""NewUi 3 robot face: beat tracking on microphone audio (micd rawAudioData, 16 kHz int16) and the phone's
+player state from the Navdy HUD reply."""
+import json
+
 import numpy as np
 import pytest
 
-from openpilot.selfdrive.ui.mici.onroad.robot_face_music import RATE, BeatTracker
+from openpilot.selfdrive.ui.mici.onroad.robot_face_music import RATE, BeatTracker, PhoneMusic, SteadyBeat
 
 
 def drums(bpm, secs, noise=0.0, seed=1):
@@ -79,3 +82,47 @@ def test_silence_and_music_stopping():
   _, _, locked = listen(np.concatenate((drums(120, 12), np.zeros(8 * RATE, np.int16))))
   assert locked[int(11.5 / 0.05)]
   assert not locked[int(15 / 0.05):].any()                # the music stopped: it lets go within 3 s
+
+
+def save_reply(path, feedback, received_at):
+  path.write_text(json.dumps({'receivedAt': received_at, 'feedback': feedback, 'modelRouteCacheToken': None}))
+
+
+def test_phone_music_reads_the_navdy_reply(tmp_path):
+  path = tmp_path / 'navdy-feedback.json'
+  phone = PhoneMusic(str(path))
+  assert not phone.playing(100.0)                                   # no reply saved (bridge not connected)
+  save_reply(path, {'cameraSpeedKph': 0, 'music': {'playing': True}}, 100.0)
+  phone.checked = -1e9
+  assert phone.playing(100.5)
+  save_reply(path, {'cameraSpeedKph': 0, 'music': {'playing': False}}, 101.0)
+  phone.mtime = None
+  assert phone.playing(101.0)                                       # read at most once a second
+  assert not phone.playing(101.6)                                   # paused
+  for feedback in ({'cameraSpeedKph': 0}, {'music': None}, {'music': {'playing': 1}}, {'music': 'playing'}):
+    save_reply(path, feedback, 200.0)                               # an older HUD, no track yet, wrong types
+    phone.mtime, phone.checked = None, -1e9
+    assert not phone.playing(200.0), feedback
+  path.write_text('{"receivedAt": 300.0, "feedback": {"music": {"playing": tr')   # not JSON
+  phone.mtime, phone.checked = None, -1e9
+  assert not phone.playing(300.0)
+
+
+def test_phone_music_ignores_an_old_reply(tmp_path):
+  path = tmp_path / 'navdy-feedback.json'
+  phone = PhoneMusic(str(path))
+  save_reply(path, {'music': {'playing': True}}, 100.0)
+  assert phone.playing(105.0)
+  assert not phone.playing(110.5)                                  # the bridge stopped saving replies
+  save_reply(path, {'music': {'playing': True}}, True)             # not a time
+  phone.mtime, phone.checked = None, -1e9
+  assert not phone.playing(111.0)
+  path.unlink()                                                    # the bridge deletes it on disconnect
+  phone.checked = -1e9
+  assert not phone.playing(111.0)
+
+
+def test_steady_beat_keeps_120_bpm():
+  steady = SteadyBeat()
+  beats = sum(len(steady.advance(0.05)) for _ in range(200))      # 10 s of 20 FPS frames
+  assert beats in (19, 20) and steady.period == 0.5

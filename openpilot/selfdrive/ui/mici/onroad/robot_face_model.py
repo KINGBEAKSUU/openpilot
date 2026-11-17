@@ -127,7 +127,7 @@ class FaceInputs:
   steer_torque: float = 0.0   # steering torque it is applying, 1.0 = the car's limit; + right
   cutin: bool = False         # radarCutin is up
   slow_steer: bool = False    # belowSteerSpeed: too slow for the car to steer
-  music_on: bool = False      # the microphone hears music with a steady beat
+  music_on: bool = False      # music plays: the phone says so (via Navdy) or the microphone hears a steady beat
   music_beats: tuple = ()     # strengths of the beats that fell in this frame
   music_period: float = 0.5   # s per beat
   gas: bool = False
@@ -512,7 +512,7 @@ class FaceModel:
         del self.pending[name]
 
   def _music(self, dt: float, inp: FaceInputs) -> None:
-    """Dance to music the microphone hears, when nothing else is going on (as in the web preview)."""
+    """Dance to music (the phone's, or what the microphone hears) when nothing else is going on (as in the web preview)."""
     free = (not self.signal and not self.dm and not self.sleep_stage and self.clock >= self.event_until and not self.behavior
             and self.effort < 0.2 and self.mood in ('idle', 'focus', 'vibe', 'contact', 'curious', 'think'))
     if inp.music_on and self.sleep_stage:
