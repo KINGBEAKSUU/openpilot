@@ -13,6 +13,8 @@ FRAME, HOP = 512, 256               # 32 ms windows every 16 ms: a 62.5 Hz onset
 ENV_HZ = RATE / HOP
 WINDOW_S = 6.0                      # tempo from this much recent audio
 BASS_HZ, TOP_HZ = 150.0, 8000.0
+LOW_HZ = (30.0, 400.0)              # the C4 microphone hears little of the car's speakers above this (measured in the car)
+FLOOR_S = 1.5                       # steady sound (engine, fan, hum) is followed this slowly and taken out
 MIN_BPM, MAX_BPM, PRIOR_BPM = 80.0, 180.0, 118.0
 CONFIDENT = 0.2                     # sure enough to keep dancing; to begin it needs START and a steady tempo
 START = 0.3                         # ...held for HOLD estimates (0.5 s apart) in a row (real cabin music reached 0.34-0.42),
@@ -29,6 +31,8 @@ class BeatTracker:
     freqs = np.fft.rfftfreq(FRAME, 1 / RATE)
     self.bass = (freqs > 0) & (freqs <= BASS_HZ)
     self.full = (freqs > 0) & (freqs <= TOP_HZ)
+    self.low = (freqs >= LOW_HZ[0]) & (freqs <= LOW_HZ[1])
+    self.floor_k = 1 - math.exp(-1 / (FLOOR_S * ENV_HZ))
     lags = np.arange(int(ENV_HZ * 60 / MAX_BPM) - 1, int(ENV_HZ * 60 / MIN_BPM) + 2)
     self.lags = lags
     bpm = 60 * ENV_HZ / lags
@@ -39,6 +43,7 @@ class BeatTracker:
   def reset(self) -> None:
     self.pending = np.zeros(0, np.float32)
     self.prev = None
+    self.floor = None
     self.env = np.zeros(int(WINDOW_S * ENV_HZ), np.float32)
     self.count = 0
     self.mean, self.var, self.o1, self.o2 = 0.0, 1e-4, 0.0, 0.0
@@ -76,10 +81,13 @@ class BeatTracker:
     mag = np.abs(np.fft.rfft(seg * self.window)) * (4.0 / FRAME)
     level = np.clip((20 * np.log10(mag + 1e-9) - DB_FLOOR) / DB_RANGE, 0.0, 1.0)
     if self.prev is None:
-      self.prev = level
+      self.prev, self.floor = level, level.copy()
     rise = np.maximum(level - self.prev, 0.0)
     self.prev = level
-    o = float(rise[self.bass].mean()) * 0.65 + float(rise[self.full].mean()) * 1.4
+    # the low band above its own slow floor: kicks and bass notes stand out of the engine and road rumble
+    white = np.maximum(level - self.floor, 0.0)
+    self.floor += (level - self.floor) * self.floor_k
+    o = float(rise[self.bass].mean()) * 0.65 + float(rise[self.full].mean()) * 1.4 + float(white[self.low].mean()) * 3.0
     self._envelope(o)
     self.t += 1 / ENV_HZ
     if self.t >= self.tempo_at:
