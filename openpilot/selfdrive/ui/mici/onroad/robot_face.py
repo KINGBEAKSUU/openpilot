@@ -452,6 +452,8 @@ class RobotFace:
       geo = self._eye_geometry(side, ex, ey, w, h, up, low, P['tilt'].v + effort * 0.4)
       eyes.append((side, ex, ey, w, h, gx, gy, up_base, wink, geo))
 
+    # where each eye's outer edge is this frame: the headphone cups sit just beyond it, whatever the eyes do
+    self._eye_edge = {side: side * ex + w * 0.5 for side, ex, ey, w, h, *_ in eyes}
     # every glow first, then the bodies, so one eye's halo never lies over the other eye
     for *_, geo in eyes:
       if geo is not None:
@@ -679,19 +681,32 @@ class RobotFace:
     a whistle in its mouth during a driver-monitoring alert, and the seatbelt buckle in its hand when the belt is off."""
     m, P = self.model, self.model.P
     ink = (6, 6, 6)
-    # headphones: a band over the top and a cup over each side, sliding down onto it
+    # headphones: round cups just outside the eyes (never over them) with a glowing pad that thumps on the beat, and a
+    # band that rises straight up from the cups and arches well above the eyes; they slide down on when the music starts
     v = clamp(P['p_phones'].v, 0, 1.1)
     if v > 0.01:
-      a, dy = clamp(v, 0, 1), (1 - min(v, 1.0)) * -60
-      cx, cy = GAP + 66, EYE_Y + dy
-      band = self._quad(-cx, cy - 22, 0, eye_top - 64 + dy, cx, cy - 22, 18)
-      self._ribbon(band, 10, glow, 0.25 * a)
-      self._stroke(band, 6, eye, a)
-      for side in (-1, 1):
-        r = rl.Rectangle(side * cx - 14, cy - 28, 28, 56)
-        rl.draw_rectangle_rounded(r, 0.6, 8, color(ink, a))
-        rl.draw_rectangle_rounded_lines_ex(r, 0.6, 8, 4, color(eye, a))
-        rl.draw_rectangle_rounded(rl.Rectangle(side * cx - side * 10 - 4, cy - 18, 8, 36), 1.0, 6, color(eye, 0.55 * a))   # the cushion
+      a, dy = clamp(v, 0, 1), (1 - min(v, 1.0)) * -70
+      thump = math.exp(-max(m.clock - m.beat_at, 0.0) * 9)
+      cw, ch = 40 * (1 + 0.06 * thump), 54 * (1 + 0.06 * thump)
+      rest = GAP + P['w'].v * EYE_SCALE[0] * 0.5
+      edge = getattr(self, '_eye_edge', {})
+      xl = -(max(edge.get(-1, rest), rest - 30) + cw * 0.5 + 8)    # beside each eye's outer edge, clear of it
+      xr = max(edge.get(1, rest), rest - 30) + cw * 0.5 + 8
+      cy = EYE_Y + 4 + dy
+      top, apex = cy - ch * 0.5 - 2, eye_top - 30 + dy
+      k = (apex - 0.25 * top) / 0.75                                # cubic control height that puts its top at apex
+      band = [(xl * ((1 - t) ** 3 + 3 * (1 - t) ** 2 * t) + xr * (3 * (1 - t) * t * t + t ** 3),
+               top * ((1 - t) ** 3 + t ** 3) + k * (3 * (1 - t) ** 2 * t + 3 * (1 - t) * t * t)) for t in (i / 24 for i in range(25))]
+      self._ribbon(band, 14, glow, 0.18 * a)
+      self._stroke(band, 6.5, eye, a)
+      self._stroke(band[4:-4], 2, ink, 0.8 * a)                     # a groove along it: a padded band, not a wire
+      for x in (xl, xr):
+        r = rl.Rectangle(x - cw / 2, cy - ch / 2, cw, ch)
+        self._blob(x, cy, cw * 2.2, ch * 1.6, glow, (0.2 + 0.25 * thump) * a)
+        rl.draw_rectangle_rounded(r, 1.0, 12, color(ink, a))
+        rl.draw_rectangle_rounded_lines_ex(r, 1.0, 12, 4, color(eye, a))
+        pad = rl.Rectangle(x - cw * 0.27, cy - ch * 0.3, cw * 0.54, ch * 0.6)
+        rl.draw_rectangle_rounded(pad, 1.0, 10, color(eye, (0.5 + 0.45 * thump) * a))   # the speaker glow
     # hazard beacon: a red dome on a little base on top of its head, flashing as it turns
     v = clamp(P['p_beacon'].v, 0, 1.15)
     if v > 0.01:
