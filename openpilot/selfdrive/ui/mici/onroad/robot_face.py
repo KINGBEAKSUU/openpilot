@@ -44,6 +44,11 @@ WHEEL_DROP = 52     # its centre is this far below the screen's bottom edge
 WHEEL_HIDE = 74     # and slides this much further down when not driving
 WHEEL_GAP = 6       # the mouth stays at least this far above the rim
 HAND_AT = 38        # degrees from the top where its hands hold the rim
+HAND_R = 13         # a hand's radius
+# small steering angles (lane keeping is a few degrees) are drawn about three times bigger, easing into the turn where
+# the outer hand reaches the bottom edge: the wheel only turns as far as its hands, still on screen, can take it
+WHEEL_TURN_GAIN = 3.0
+WHEEL_TURN_MAX = math.degrees(math.acos((WHEEL_DROP + HAND_R) / WHEEL_R)) - HAND_AT   # about 9 deg
 # the cruise set speed: big rolling digits in place of the eyes (they shut to a line first, and open after it)
 SPEED_FONT = 120
 SPEED_ROLL_S = 0.4   # one digit rolling over to its new value
@@ -518,7 +523,8 @@ class RobotFace:
     rl.draw_ring(c, inner, outer, 180, 360, 48, rl.Color(20, 20, 20, int(250 * a)))
     for r in (inner, outer):
       rl.draw_ring(c, r - 1.2, r + 1.2, 180, 360, 48, color(ink, 0.7 * a))
-    turn = clamp(P['steer'].v * 0.8, -70, 70) + (math.sin(m.clock * 43) * 1.6 * effort if effort > 0.2 else 0.0)
+    turn = WHEEL_TURN_MAX * math.tanh(WHEEL_TURN_GAIN * P['steer'].v / WHEEL_TURN_MAX)   # smooth up to the hands' reach
+    turn += math.sin(m.clock * 43) * 1.6 * effort if effort > 0.2 else 0.0
     th = math.radians(turn)
     rl.draw_rectangle_pro(rl.Rectangle(cx + math.sin(th) * WHEEL_R, cy - math.cos(th) * WHEEL_R, 9, 2 * WHEEL_RIM + 2),
                           rl.Vector2(4.5, WHEEL_RIM + 1), turn, color(ink, 0.95 * a))   # the 12 o'clock stripe
@@ -531,7 +537,7 @@ class RobotFace:
       if ha < 0.02:
         continue
       rl.draw_circle_v(rl.Vector2(hx, hy), 18, color(glow, 0.16 * ha))
-      rl.draw_circle_v(rl.Vector2(hx, hy), 13, color(body, ha))
+      rl.draw_circle_v(rl.Vector2(hx, hy), HAND_R, color(body, ha))
       rl.draw_circle_v(rl.Vector2(hx - side * 7, hy - 8), 6, color(ink, ha))   # the thumb over the rim
     return top, cy, a
 

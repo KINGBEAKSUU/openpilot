@@ -395,3 +395,29 @@ def test_worn_props_draw_and_the_buckle_takes_the_left_hand_off_the_wheel(face):
   assert n.count('draw_circle_sector') >= 1                # the beacon's dome
   wheel_hands = len([c for c in face.calls if c[0] == 'draw_circle_v' and c[2] == 13])
   assert wheel_hands == hands - 1                          # one wheel hand is now the one holding the buckle
+
+
+def test_small_steering_angles_show_bigger_and_the_hands_stay_on_screen(face):
+  m = face.f.model
+  face.ui.sm['selfdriveState'].enabled = True
+  for _ in range(40):
+    m.update(0.05, face.f._inputs())
+  g = type(face.f).__init__.__globals__
+
+  def drawn(steer):
+    m.P['steer'].v = steer
+    face.calls.clear()
+    face.f.draw(face.rect)
+    stripe = [c for c in face.calls if c[0] == 'draw_rectangle_pro' and c[1][2] == 9][0]   # the 12 o'clock stripe
+    hands = [c for c in face.calls if c[0] == 'draw_circle_v' and c[2] == g['HAND_R']]
+    return stripe[3], hands
+
+  turn, _ = drawn(1.0)
+  assert turn == pytest.approx(3.0, abs=0.15)              # lane keeping: 1 deg reads as about 3
+  turn, _ = drawn(-2.0)
+  assert -6.0 < turn < -5.0
+  for steer in (8.0, 40.0, 90.0, -90.0):                   # a bend or a turn: only as far as the hands reach
+    turn, hands = drawn(steer)
+    assert abs(turn) <= g['WHEEL_TURN_MAX'] + 1e-6
+    assert len(hands) == 2 and all(h[1][1] + g['HAND_R'] <= face.rect.height + 0.5 for h in hands)
+  assert g['WHEEL_TURN_MAX'] == pytest.approx(9.4, abs=0.1)
