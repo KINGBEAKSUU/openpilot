@@ -151,6 +151,8 @@ class Particle:
   direction: int = 1
   value: float = 0.0          # what an icon shows: the set speed, which car, ...
   text: str = ''
+  prev: float = 0.0           # the set speed: the value it rolls over from (0 = it rolls in fresh)
+  since: float = 0.0          # and the age at which that roll started
 
 
 @dataclass
@@ -237,6 +239,9 @@ class FaceModel:
   # Steering effort: from this much torque it starts to strain and at EFFORT_FULL it is all-out (eyes shut tight).
   # Replayed drives: the median is 0.1-0.45, the top tenth 0.5-0.8, the limit 1.0.
   EFFORT_FROM, EFFORT_FULL = 0.5, 0.95
+  SPEED_SHOW_S = 2.4          # the set speed stays up this long after it appears or changes
+  SPEED_AFTER_ENGAGE_S = 0.9  # on engagement it waits for the star-eyed hop
+  SPEED_CUT = ('brake', 'dm', 'bsm', 'disengage', 'seatbelt')   # these need the eyes: the number makes way at once
 
   def __init__(self, rng: random.Random | None = None):
     self.rng = rng or random.Random()
@@ -303,6 +308,7 @@ class FaceModel:
     self.gear = ''
     self.override = False
     self.set_speed = 0.0
+    self.speed_intro = True    # show the set speed when it next engages
     self.beats = 0
     self.sway = 1
     self.music_quiet = 0.0
@@ -414,17 +420,24 @@ class FaceModel:
     self.spawn(kind='sweat', x=-186 + (self.rng.random() - 0.5) * 28, y=-64 + (self.rng.random() - 0.5) * 16, vy=18, life=2.2)
 
   def _set_speed(self, speed: float) -> None:
-    """A changed cruise set speed pops up as a badge (the robot face hides the speed panel), with a nod up or down."""
+    """The cruise set speed, big in place of the eyes (the robot face hides the speed panel): on engagement its digits
+    drop in after the hop; on a change the changed digits roll over to the new value, the way it went."""
     speed = speed if 0 < speed < 250 else 0.0
-    if speed and self.set_speed and self.engaged and abs(speed - self.set_speed) >= 0.5:
+    shown = next((p for p in self.parts if p.kind == 'speed'), None)
+    if not self.engaged:
+      self.speed_intro = True
+    elif speed and self.speed_intro:
+      self.speed_intro = False
+      if shown is None:
+        self.spawn(kind='speed', x=0, y=0, life=self.SPEED_AFTER_ENGAGE_S + self.SPEED_SHOW_S + 0.4, value=speed,
+                   direction=0, delay=self.SPEED_AFTER_ENGAGE_S)
+    elif speed and self.set_speed and abs(speed - self.set_speed) >= 0.5:
       up = 1 if speed > self.set_speed else -1
-      badge = next((p for p in self.parts if p.kind == 'speed'), None)
-      if badge is None:
-        self.spawn(kind='speed', x=0, y=-100, life=1.8, value=speed, direction=up)
-      else:
-        badge.value, badge.direction, badge.age = speed, up, min(badge.age, 0.2)
-      if self.clock >= self.event_until and not self.sleep_stage:
-        self.kick('hy', -70 if up > 0 else 70)
+      if shown is None:
+        self.spawn(kind='speed', x=0, y=0, life=self.SPEED_SHOW_S, value=speed, prev=self.set_speed, direction=up)
+      else:                     # still up: roll on from what it shows now
+        shown.prev, shown.value, shown.direction = shown.value, speed, up
+        shown.since, shown.life = shown.age, max(shown.age, shown.delay) + self.SPEED_SHOW_S
     self.set_speed = speed
 
   # ---- inputs -> events --------------------------------------------------------------------
@@ -605,6 +618,10 @@ class FaceModel:
   # ---- reactions: short choreographies -----------------------------------------------------
   def react(self, name: str, arg: float = 0.0) -> None:
     self._cancel()
+    if name in self.SPEED_CUT:
+      for p in self.parts:
+        if p.kind == 'speed':
+          p.life = p.age if p.age < p.delay else min(p.life, p.age + 0.3)
     self.prio = self.PRIO.get(name, 1)
     self.last_event = name
     self.squeeze = False

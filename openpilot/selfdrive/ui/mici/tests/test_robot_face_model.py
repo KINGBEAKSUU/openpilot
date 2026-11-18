@@ -424,18 +424,60 @@ def test_hazard_lights_show_the_warning_triangle():
   assert m.last_event == 'hazard' and icons(m, 'hazard') and m.signal == 0      # not a turn signal
 
 
-def test_set_speed_change_pops_one_badge():
+def test_set_speed_rolls_in_on_engagement_and_rolls_over_on_a_change():
   m, inp = ready(engaged=True, set_speed=80.0)
-  run(m, inp, 0.5)
-  assert not icons(m, 'speed')                            # setting it on engage is not a change
+  assert [(p.value, p.prev, p.direction) for p in icons(m, 'speed')] == []          # shown on engaging, gone by now
+  m, inp = ready(set_speed=80.0)
+  inp.engaged = True
+  run(m, inp, 0.1)
+  (intro,) = icons(m, 'speed')
+  assert (intro.value, intro.prev, intro.direction) == (80.0, 0.0, 0)                 # engaging: it drops in
+  assert intro.delay == m.SPEED_AFTER_ENGAGE_S                                       # after the star-eyed hop
+  run(m, inp, 4.0)
+  assert not icons(m, 'speed')
   inp.set_speed = 85.0
   run(m, inp, 0.1)
-  assert [(p.value, p.direction) for p in icons(m, 'speed')] == [(85.0, 1)]
+  assert [(p.value, p.prev, p.direction) for p in icons(m, 'speed')] == [(85.0, 80.0, 1)]   # rolls over, up
+  age = icons(m, 'speed')[0].age
   inp.set_speed = 82.0
   run(m, inp, 0.1)
-  assert [(p.value, p.direction) for p in icons(m, 'speed')] == [(82.0, -1)]   # the same badge, updated
-  run(m, inp, 2.0)
+  (shown,) = icons(m, 'speed')                                                       # the same one, rolling on
+  assert (shown.value, shown.prev, shown.direction) == (82.0, 85.0, -1) and shown.since >= age > 0
+  assert shown.life - shown.age == pytest.approx(m.SPEED_SHOW_S - 0.05, abs=0.06)
+  run(m, inp, 2.5)
   assert not icons(m, 'speed')
+  inp.engaged = False                                                                # off and on again: shown again
+  run(m, inp, 1.0)
+  assert not icons(m, 'speed')
+  inp.engaged = True
+  run(m, inp, 0.1)
+  assert [(p.value, p.direction) for p in icons(m, 'speed')] == [(82.0, 0)]
+
+
+def test_set_speed_makes_way_for_reactions_that_need_the_eyes():
+  m, inp = ready(engaged=True, set_speed=80.0)
+  inp.set_speed = 85.0
+  run(m, inp, 0.5)
+  assert icons(m, 'speed')
+  inp.a_ego = -4.5                                                                   # hard braking
+  run(m, inp, 0.4)
+  assert not icons(m, 'speed') and m.last_event == 'brake'
+  m, inp = ready(set_speed=80.0)
+  inp.engaged = True
+  run(m, inp, 0.3)                                                                   # still waiting for the hop
+  inp.dm_alert = True
+  run(m, inp, 0.05)
+  assert not icons(m, 'speed')
+
+
+def test_set_speed_waits_for_a_valid_speed_after_engaging():
+  m, inp = ready(set_speed=255.0)                                                    # unset on this car
+  inp.engaged = True
+  run(m, inp, 1.0)
+  assert not icons(m, 'speed')
+  inp.set_speed = 70.0
+  run(m, inp, 0.1)
+  assert [(p.value, p.direction) for p in icons(m, 'speed')] == [(70.0, 0)]
 
 
 def test_wheel_rises_when_driving_and_its_hands_let_go_for_the_driver():
