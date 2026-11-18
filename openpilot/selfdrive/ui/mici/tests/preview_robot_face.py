@@ -17,12 +17,9 @@ CASES = {
 EVENTS = {
   'hello': ('hello', 0, False, 0.9), 'lane-go': ('lane_go', 1, True, 0.35), 'lane-done': ('lane_done', 0, True, 0.35),
   'blind-spot': ('bsm', 1, True, 0.4),
-  'lead-go': ('lead_go', 0, False, 0.4), 'camera': ('camera', 0, True, 0.25), 'camera-fast': ('camera_fast', 0, True, 1.2),
+  'lead-go': ('lead_go', 0, False, 0.4),
   'slow-steer': ('slow_steer', 0, True, 0.6), 'steer-back': ('steer_back', 0, True, 0.3), 'cut-in': ('cutin', 0, True, 0.25), 'gas': ('gas', 0, True, 0.8),
-  'arrive': ('arrive', 0, False, 0.9), 'curve': ('curve', 1, True, 0.4), 'brake-wheel': ('brake', 0, True, 0.3),
-  'camera-sign': ('camera', 50, True, 0.6), 'turn-left': ('turn', 1, True, 0.5), 'turn-right': ('turn', 2, True, 0.5),
-  'u-turn': ('turn', 7, True, 0.5), 'roundabout': ('turn', 5, True, 0.5), 'tollgate': ('turn', 6, True, 0.5),
-  'bump': ('bump', 0, True, 0.5), 'bump-bounce': ('bump', 0, True, 1.2), 'seatbelt': ('seatbelt', 0, True, 0.6),
+  'curve': ('curve', 1, True, 0.4), 'brake-wheel': ('brake', 0, True, 0.3), 'seatbelt': ('seatbelt', 0, True, 0.6),
   'reverse': ('reverse', 0, False, 0.6), 'park': ('park', 0, False, 0.6), 'hazard': ('hazard', 0, False, 0.6),
   'override': ('override', 0, True, 0.6), 'dm-clear': ('dm_clear', 0, True, 0.35),
 }
@@ -56,7 +53,6 @@ def main():
         while t < WARMUP:
           face.model.update(0.05, inp)
           t = round(t + 0.05, 4)
-        face.model.turn_dist = 180
         face.model.react(reaction, arg)
         t = 0.0
         while t < after:

@@ -36,7 +36,7 @@ RED_EYE, RED_GLOW = (255, 160, 150), (255, 46, 40)
 BOTTOM_MIX = 0.5   # how far the eye's lower part leans toward its glow colour
 
 # icons that say what an event means
-RED, OK_GREEN, AMBER, SIGN_BLUE, SIGN_WHITE, DARK = (255, 72, 60), (90, 235, 150), (255, 176, 40), (40, 120, 230), (245, 245, 245), (14, 14, 14)
+RED, OK_GREEN, AMBER, DARK = (255, 72, 60), (90, 235, 150), (255, 176, 40), (14, 14, 14)
 
 # the steering wheel along the bottom edge while it drives
 WHEEL_R = 96        # rim radius
@@ -46,8 +46,7 @@ WHEEL_HIDE = 74     # and slides this much further down when not driving
 WHEEL_GAP = 6       # the mouth stays at least this far above the rim
 HAND_AT = 38        # degrees from the top where its hands hold the rim
 # event icons drawn in screen space over the face, at fixed spots by the edges (so a lean never hides or clips them)
-SCREEN_ICONS = frozenset(('bang', 'wave', 'arrow', 'check', 'car', 'sign', 'turn', 'bump', 'belt', 'badge', 'hazard', 'speed',
-                          'gauge', 'flag', 'turtle', 'cam'))
+SCREEN_ICONS = frozenset(('bang', 'wave', 'arrow', 'check', 'car', 'belt', 'badge', 'hazard', 'speed', 'gauge', 'turtle'))
 
 
 def mix(a, b, t):
@@ -126,12 +125,6 @@ class RobotFace:
       inp.steer_torque = -float(out.actuatorsOutput.torque if out is not None else sm['carControl'].actuators.torque)
     if fresh('controlsState'):
       inp.lat_accel = -float(sm['controlsState'].curvature) * v_ego * v_ego   # curvature is + right here; + left wanted
-    if seen('carrotMan'):
-      cm = sm['carrotMan']
-      inp.cam_dist, inp.cam_limit, inp.route_left = float(cm.xSpdDist), float(cm.xSpdLimit), float(cm.nGoPosDist)
-      if int(cm.xSpdType) == 22:                   # a speed bump, not a camera
-        inp.bump_dist, inp.cam_dist = inp.cam_dist, 0.0
-      inp.turn_type, inp.turn_dist = int(cm.xTurnInfo), float(cm.xDistToTurn)
     # one-frame events can fall between UI frames; their alerts stay up for a second or two
     names = {str(e.name) for e in sm['onroadEvents']} if seen('onroadEvents') else set()
     inp.cutin = 'radarCutin' in names or alert == 'radarCutin'
@@ -551,33 +544,6 @@ class RobotFace:
     self._poly([(x + ca * size, y + sa * size), (x - ca * size * 0.4 - sa * size * 0.75, y - sa * size * 0.4 + ca * size * 0.75),
                 (x - ca * size * 0.4 + sa * size * 0.75, y - sa * size * 0.4 - ca * size * 0.75)], (*c, a))
 
-  def _turn_icon(self, kind, x, y, s, a, ink, label):
-    """A blue road sign with the maneuver's arrow, and the distance under it."""
-    rl.draw_rectangle_rounded(rl.Rectangle(x - 25 * s, y - 25 * s, 50 * s, 50 * s), 0.25, 6, color(SIGN_BLUE, a))
-    w = SIGN_WHITE
-    if kind in (1, 2):
-      d = -1 if kind == 1 else 1
-      pts = [(x - d * 9 * s, y + 18 * s), *self._quad(x - d * 9 * s, y + 2 * s, x - d * 9 * s, y - 9 * s, x + d * 4 * s, y - 9 * s, 6)]
-      self._stroke(pts, 6 * s, w, a, opaque=True)
-      self._arrowhead(x + d * 11 * s, y - 9 * s, 0 if d > 0 else math.pi, 10 * s, w, a)
-    elif kind == 7:   # U-turn
-      arc = [(x + 3 * s + math.cos(t) * 10 * s, y - 2 * s - math.sin(t) * 10 * s) for t in (i * math.pi / 8 for i in range(9))]
-      self._stroke([(x + 13 * s, y + 18 * s), (x + 13 * s, y - 2 * s), *arc, (x - 7 * s, y + 6 * s)], 6 * s, w, a, opaque=True)
-      self._arrowhead(x - 7 * s, y + 13 * s, math.pi / 2, 10 * s, w, a)
-    elif kind == 5:   # roundabout: going round the circle
-      rl.draw_ring(rl.Vector2(x, y), 9 * s, 14 * s, 40, 320, 28, color(w, a))      # counter-clockwise, open on the right
-      end = math.radians(40)
-      self._arrowhead(x + math.cos(end) * 11.5 * s + 2 * s, y + math.sin(end) * 11.5 * s - 4 * s, -math.pi / 2 - 0.5, 9 * s, w, a)
-      rl.draw_circle_v(rl.Vector2(x, y), 3.5 * s, color(w, a))
-    else:             # tollgate: a booth and its barrier
-      rl.draw_rectangle_rounded(rl.Rectangle(x - 17 * s, y - 10 * s, 11 * s, 26 * s), 0.25, 4, color(w, a))
-      rl.draw_rectangle_rec(rl.Rectangle(x - 20 * s, y - 14 * s, 17 * s, 5 * s), color(w, a))
-      self._stroke([(x - 4 * s, y + 2 * s), (x + 19 * s, y + 2 * s)], 4 * s, w, a, opaque=True)
-      for i in range(2):
-        rl.draw_rectangle_rec(rl.Rectangle(x + (3 + i * 9) * s, y + 0.5 * s, 4 * s, 3 * s), color(RED, a))
-    if label:
-      self._text(label, x, y + 37 * s, 17 * s, color(ink, a))
-
   def _props(self, eye, glow):
     m, P = self.model, self.model.P
     eye_top = EYE_Y - P['h'].v * EYE_SCALE[1] * 0.5
@@ -711,13 +677,6 @@ class RobotFace:
       c = RED if p.value else eye
       rl.draw_rectangle_rounded(rl.Rectangle(x - 5 * ss, y - 26 * ss, 10 * ss, 32 * ss), 1.0, 6, color(c, aa))
       rl.draw_circle_v(rl.Vector2(x, y + 16 * ss), 5.5 * ss, color(c, aa))
-    elif p.kind == 'cam':         # a speed camera with its shutter flash
-      rl.draw_rectangle_rounded(rl.Rectangle(x - 17 * s, y - 11 * s, 34 * s, 22 * s), 0.35, 6, color(eye, a))
-      rl.draw_rectangle_rec(rl.Rectangle(x - 6 * s, y - 15 * s, 12 * s, 5 * s), color(eye, a))
-      rl.draw_circle_v(rl.Vector2(x, y + s), 7.5 * s, rl.Color(10, 10, 10, int(255 * a)))
-      rl.draw_circle_v(rl.Vector2(x, y + s), 4 * s, color(eye, a))
-      if 0.15 < k < 0.35:
-        self._blob(x + 12 * s, y - 12 * s, 70, 70, (255, 255, 255), (0.35 - k) / 0.2 * 0.85)
     elif p.kind == 'wave':        # a hand waving hi / bye
       rl.rl_push_matrix()
       rl.rl_translatef(x, y + 18, 0)
@@ -760,21 +719,6 @@ class RobotFace:
       else:
         wob = math.sin(p.age * 22) * 1.5 * (1 - k) if p.value == 0 else 0.0
         self._car_icon(x + wob, y, s, a, eye)
-    elif p.kind == 'sign':        # the speed limit (pulsing red when over it)
-      r = 22 * s * (1 + (0.08 * math.sin(p.age * 14) if d else 0.0))
-      c = rl.Vector2(x, y)
-      rl.draw_circle_v(c, r, color(SIGN_WHITE, a))
-      rl.draw_ring(c, r - 5.5 * s, r, 0, 360, 36, color(RED, a))
-      if p.value > 0:
-        self._text(str(int(p.value)), x, y + 1, (19 if p.value < 100 else 16) * s, color(DARK, a))
-    elif p.kind == 'turn':
-      self._turn_icon(int(p.value), x, y, s, a, eye, p.text)
-    elif p.kind == 'bump':        # the speed-bump warning sign
-      tri = [(x, y - 23 * s), (x + 25 * s, y + 19 * s), (x - 25 * s, y + 19 * s)]
-      self._poly(tri, (*SIGN_WHITE, a))
-      self._stroke([*tri, tri[0]], 5 * s, RED, a, opaque=True)
-      self._stroke(self._quad(x - 13 * s, y + 12 * s, x, y - 7 * s, x + 13 * s, y + 12 * s, 8), 4 * s, DARK, 1.0)
-      self._stroke([(x - 16 * s, y + 12.5 * s), (x + 16 * s, y + 12.5 * s)], 3 * s, DARK, 1.0)
     elif p.kind == 'belt':        # a driver with the seatbelt across: blinking red
       s *= 1.3
       on = a * (0.4 + 0.6 * (1.0 if math.sin(p.age * 9) > 0 else 0.0))
@@ -815,14 +759,6 @@ class RobotFace:
       t = math.radians(200 + 130 * ease_out_back(min(k / 0.5, 1.0)))
       self._stroke([(x, y + 10), (x + math.cos(t) * 20 * s, y + 10 + math.sin(t) * 20 * s)], 4, RED, a, opaque=True)
       rl.draw_circle_v(c, 4.5 * s, color(eye, a))
-    elif p.kind == 'flag':        # arrived: a waving checkered flag
-      self._stroke([(x - 20, y + 28), (x - 20, y - 26)], 3.5, eye, a, opaque=True)
-      for cx_ in range(4):
-        wave = math.sin(p.age * 8 - cx_ * 0.9) * 3 * (cx_ + 1) / 4
-        for cy_ in range(3):
-          c = eye if (cx_ + cy_) % 2 == 0 else DARK
-          rl.draw_rectangle_rec(rl.Rectangle(x - 18 + cx_ * 10, y - 25 + cy_ * 9 + wave, 10, 9), color(c, a))
-      rl.draw_rectangle_lines_ex(rl.Rectangle(x - 18, y - 25, 40, 27), 1.5, color(eye, 0.5 * a))
     elif p.kind == 'turtle':      # too slow
       bob = math.sin(p.age * 6) * 1.5
       xx = x + k * 8

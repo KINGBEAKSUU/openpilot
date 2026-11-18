@@ -121,9 +121,6 @@ class FaceInputs:
   blindspot_right: bool = False
   lead_d: float = 0.0         # lead distance, m (0 = no lead)
   lead_v: float = 0.0         # lead's own speed, m/s
-  cam_dist: float = 0.0       # speed camera ahead, m (0 = none)
-  cam_limit: float = 0.0      # its limit, km/h
-  route_left: float = 0.0     # navigation distance to the goal, m (0 = no route)
   steer_torque: float = 0.0   # steering torque it is applying, 1.0 = the car's limit; + right
   cutin: bool = False         # radarCutin is up
   slow_steer: bool = False    # belowSteerSpeed: too slow for the car to steer
@@ -137,9 +134,6 @@ class FaceInputs:
   seatbelt_off: bool = False
   override: bool = False      # the driver is turning the wheel (steeringPressed)
   set_speed: float = 0.0      # cruise set speed, km/h (0 = not set)
-  turn_type: int = -1         # navigation's next maneuver (carrotMan.xTurnInfo): 1 left, 2 right, 5 roundabout, 6 tollgate, 7 U-turn
-  turn_dist: float = 0.0      # and how far it is, m
-  bump_dist: float = 0.0      # a speed bump ahead, m (0 = none)
 
 
 @dataclass
@@ -155,7 +149,7 @@ class Particle:
   phase: float = 0.0
   delay: float = 0.0
   direction: int = 1
-  value: float = 0.0          # what an icon shows: a speed limit, a turn type, ...
+  value: float = 0.0          # what an icon shows: the set speed, which car, ...
   text: str = ''
 
 
@@ -230,21 +224,14 @@ class FaceModel:
   DROWSY_AFTER_S = 45.0       # stopped this long: drowsy, then asleep
   HARD_BRAKE = -3.5           # m/s², or a forward collision warning
   BRAKE_COOLDOWN_S = 3.0
-  CAMERA_NEAR_M = 300.0       # react once per speed camera, this far out
-  CAMERA_OVER_KPH = 5.0       # this far over its limit is speeding
-  ARRIVE_M = 30.0
   CURVE_ACCEL = 2.3           # m/s² of lateral acceleration, held CURVE_HOLD_S
   CURVE_HOLD_S = 0.8
   # Who may cut in: a reaction runs only when nothing at least as important is still playing.
   PRIO = {'brake': 5, 'dm': 5, 'engage': 3, 'disengage': 3, 'dm_clear': 3, 'go': 2, 'sleepy': 0,
-          'bsm': 4, 'seatbelt': 4, 'cutin': 3, 'hazard': 3, 'camera_fast': 2, 'lead_go': 2, 'arrive': 2, 'reverse': 2, 'park': 2,
-          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'camera': 1, 'curve': 1, 'slow_steer': 1, 'steer_back': 1, 'turn': 1,
-          'bump': 1, 'gas': 0, 'override': 0}
+          'bsm': 4, 'seatbelt': 4, 'cutin': 3, 'hazard': 3, 'lead_go': 2, 'reverse': 2, 'park': 2,
+          'hello': 1, 'lane_go': 1, 'lane_done': 1, 'curve': 1, 'slow_steer': 1, 'steer_back': 1, 'gas': 0, 'override': 0}
   COOLDOWN = {'bsm': 4.0, 'cutin': 6.0, 'lead_go': 10.0, 'gas': 10.0, 'curve': 40.0, 'slow_steer': 20.0, 'seatbelt': 30.0,
-              'hazard': 10.0, 'reverse': 5.0, 'park': 10.0, 'turn': 8.0, 'bump': 6.0, 'override': 15.0}
-  TURN_NEAR_M = 250.0         # show the navigation's next turn this far out (once per maneuver)
-  BUMP_NEAR_M = 120.0
-  TURN_LOOK = {1: -1, 2: 1, 5: 1, 6: 0, 7: -1}   # where it looks for each maneuver (a Korean U-turn swings left)
+              'hazard': 10.0, 'reverse': 5.0, 'park': 10.0, 'override': 15.0}
   WAKES = ('lead_go',)  # the only event that wakes it from sleep
   SLOW_GREEN = 0.4      # the driving tint while too slow to steer (0.9 when steering)
   # Steering effort: from this much torque it starts to strain and at EFFORT_FULL it is all-out (eyes shut tight).
@@ -304,9 +291,6 @@ class FaceModel:
     self.lane_phase = 0
     self.bsm_side = 0
     self.lead_move_for = 0.0
-    self.cam_armed = True
-    self.route_armed = True
-    self.route_near_at = -1e9
     self.curve_for = 0.0
     self.effort = 0.0          # 0..1, how hard it is straining on the wheel
     self.effort_side = 0
@@ -319,10 +303,6 @@ class FaceModel:
     self.gear = ''
     self.override = False
     self.set_speed = 0.0
-    self.turn_key: int | None = None   # the maneuver already shown
-    self.turn_dist = 0.0
-    self.turn_last = 0.0
-    self.bump_armed = True
     self.beats = 0
     self.sway = 1
     self.music_quiet = 0.0
@@ -508,31 +488,6 @@ class FaceModel:
     self.lead_move_for = self.lead_move_for + dt if moving_off else 0.0
     if self.lead_move_for >= 0.4 and self.lead_move_for - dt < 0.4:
       self.want('lead_go', 0, 2.0)
-    # speed camera: one reaction per camera
-    if inp.cam_dist <= 0 or inp.cam_dist > self.CAMERA_NEAR_M + 200:
-      self.cam_armed = True
-    elif self.cam_armed and inp.cam_dist <= self.CAMERA_NEAR_M and inp.cam_limit > 0 and inp.v_ego > 5:
-      self.cam_armed = False
-      self.want('camera_fast' if inp.v_ego * 3.6 > inp.cam_limit + self.CAMERA_OVER_KPH else 'camera', inp.cam_limit, 3.0)
-    # the navigation's next turn (one reaction per maneuver; lane changes have their own reaction)
-    if inp.turn_dist > self.turn_last + 60:      # the distance jumped up: the next maneuver
-      self.turn_key = None
-    self.turn_last = inp.turn_dist
-    if inp.turn_type in self.TURN_LOOK and 0 < inp.turn_dist <= self.TURN_NEAR_M and inp.v_ego > 3:
-      if inp.turn_type != 7 or inp.route_left <= 0 or inp.route_left > self.ARRIVE_M * 10:   # 7 is also "arrived"
-        if inp.turn_type != self.turn_key:
-          self.turn_key = inp.turn_type
-          self.turn_dist = inp.turn_dist
-          self.want('turn', inp.turn_type, 3.0)
-    elif inp.turn_type not in self.TURN_LOOK or inp.turn_dist <= 0 or inp.turn_dist > self.TURN_NEAR_M + 250:
-      self.turn_key = None
-    # a speed bump ahead
-    if 0 < inp.bump_dist <= self.BUMP_NEAR_M and inp.v_ego > 2:
-      if self.bump_armed:
-        self.bump_armed = False
-        self.want('bump', 0, 2.0)
-    elif inp.bump_dist <= 0 or inp.bump_dist > self.BUMP_NEAR_M + 80:
-      self.bump_armed = True
     # the driver turning the wheel while it steers (not for a lane change)
     if inp.override and not self.override and self.engaged and inp.v_ego > 3 and not self.signal and not inp.lane_phase:
       self.want('override', 0, 1.0)
@@ -560,18 +515,6 @@ class FaceModel:
     if inp.gas and not self.gas and self.engaged and inp.v_ego > 2 and not self.signal:
       self.want('gas', 0, 1.0)
     self.gas = inp.gas
-    # arriving: the route counts down to the goal, or ends close to it
-    if inp.route_left > 0:
-      if inp.route_left > 300:
-        self.route_armed = True
-      if inp.route_left <= 150:
-        self.route_near_at = self.clock
-      if self.route_armed and inp.route_left <= self.ARRIVE_M:
-        self.route_armed = False
-        self.want('arrive', 0, 5.0)
-    elif self.route_armed and self.clock - self.route_near_at < 20:
-      self.route_armed = False
-      self.want('arrive', 0, 5.0)
     # a fast bend
     if inp.v_ego > 8 and abs(inp.lat_accel) > self.CURVE_ACCEL:
       self.curve_for += dt
@@ -835,7 +778,7 @@ class FaceModel:
   def _react_driving(self, name: str, arg: float) -> None:
     P, L = self.P, self.later
     d = int(arg) or 1
-    if name in self.WAKES or name in ('bsm', 'cutin', 'arrive'):
+    if name in self.WAKES or name in ('bsm', 'cutin'):
       self.sleep_stage = 0
       self.stopped_for = 0.0      # count the stop afresh, or it dozes straight off again
       self.wake()
@@ -897,24 +840,6 @@ class FaceModel:
       L(0.55, lambda: (setattr(P['pitch'], 't', 0.06), setattr(P['ey'], 't', -8), self.kick('hy', -120)))
       L(0.9, lambda: self.start_blink(double=True, speed=1.2))
       L(1.5, self._settle)
-    elif name in ('camera', 'camera_fast'):
-      # a speed camera: a wary glance up at it, the shutter flash; sweating if over its limit
-      fast = name == 'camera_fast'
-      self.event_until = self.clock + (2.6 if fast else 2.0)
-      self.spawn(kind='cam', x=178, y=-94, life=1.8)
-      if arg > 0:
-        self.spawn(kind='sign', x=236, y=-62, life=2.2 if fast else 1.8, value=arg, direction=1 if fast else 0)
-      self.look(0.7, -0.7, 0.45)
-      P['up'].t, P['tilt'].t = 0.2, 0.18
-      L(0.35, lambda: (setattr(P['flash'], 't', 0.9), self.start_blink(speed=1.6)))
-      L(0.5, lambda: setattr(P['flash'], 't', 0))
-      L(0.65, lambda: self.look(0.0, 0.0, 0.35))
-      L(1.0, lambda: self.look(0.7, -0.7, 0.4))
-      if fast:
-        L(0.7, lambda: (self._apply_mood('worried'), setattr(P['red'], 't', 0.45), self._sweat(), setattr(self, 'tremble', 0.5)))
-        L(2.3, self._settle)
-      else:
-        L(1.6, self._settle)
     elif name == 'cutin':
       # someone cut in: a flinch back and a quick double blink
       self.event_until = self.clock + 1.4
@@ -936,18 +861,6 @@ class FaceModel:
       self.spawn(kind='gauge', x=-232, y=40, life=1.8)              # speeding up
       L(1.1, lambda: (setattr(P['p_quest'], 't', 0), self.look(0, 0, 0.2), self.kick('hy', -90)))
       L(1.5, self._settle)
-    elif name == 'arrive':
-      # made it: star eyes, hops, sparkles and hearts
-      self.event_until = self.clock + 3.1
-      self._apply_mood('happy')
-      self.stars(1.4)
-      self.spawn(kind='flag', x=232, y=-56, life=3.0)
-      for i in range(3):
-        L(i * 0.42, lambda: (self.kick('hy', -280), self._sparkle(4)))
-      for i in range(4):
-        L(0.3 + i * 0.35, self._heart)
-      L(1.5, lambda: (self.osc('rot', 6, 2.2, 2.2), setattr(P['blush'], 't', 0.9)))
-      L(2.9, self._settle)
     elif name == 'slow_steer':
       # too slow for the car to steer: "your turn" -- a glance at the driver and a little bow
       self.event_until = self.clock + 2.2
@@ -980,36 +893,6 @@ class FaceModel:
         L(i * 0.12, lambda i=i: self.spawn(kind='wind', x=-d * (200 - i * 8), y=-40 + i * 34, vx=d * 170, life=0.7, direction=d))
       L(0.6, lambda: (self._glad(), self.kick('hy', -120)))
       L(1.5, self._settle)
-    elif name == 'turn':
-      # the navigation's next turn is close: an attentive look that way, with the turn's arrow and distance
-      kind = int(arg)
-      t = self.TURN_LOOK.get(kind, 0)
-      self.event_until = self.clock + 2.2
-      dist = int(round(self.turn_dist / 10.0)) * 10
-      self.spawn(kind='turn', x=(t or 1) * 234, y=-62, life=2.4, value=kind, text=f'{dist}m' if dist > 0 else '')
-      P['up'].t, P['tilt'].t = 0.08, 0.14
-      P['ex'].t, P['er'].t = t * 22, t * 5
-      self.look(t * 0.9, -0.25, 1.2)
-      self.kick('hx', t * 120)
-      self.kick('hy', -60)
-      L(1.3, lambda: self.start_blink(speed=1.2))
-      L(2.0, self._settle)
-    elif name == 'bump':
-      # a speed bump ahead: brace for it (squint, head down), then a bounce over it
-      self.event_until = self.clock + 2.4
-      self.spawn(kind='bump', x=234, y=-58, life=2.6)
-      P['up'].t, P['low'].t, P['pitch'].t, P['w'].t, P['h'].t = 0.3, 0.12, -0.03, 104, 96
-      self.look(0, -0.2, 1.0)
-      self.kick('hy', 90)
-
-      def bounce():
-        self.kick('hy', -380)
-        self.shake = max(self.shake, 4.0)
-        P['mO'].t, P['pitch'].t, P['up'].t, P['h'].t = 0.45, 0.05, 0.0, 124
-      L(1.1, bounce)
-      L(1.35, lambda: self.kick('hy', 260))
-      L(1.65, lambda: (setattr(P['mO'], 't', 0), self._glad(), self.kick('hy', -80)))
-      L(2.2, self._settle)
     elif name == 'seatbelt':
       # the driver's seatbelt is off: a worried "hey" their way, with the belt sign
       self.event_until = self.clock + 2.6
