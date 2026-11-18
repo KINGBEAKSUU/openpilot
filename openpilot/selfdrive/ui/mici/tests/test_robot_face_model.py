@@ -398,7 +398,7 @@ def test_seatbelt_off_reminds_every_half_minute():
   m, inp = ready(engaged=True)
   inp.seatbelt_off = True
   run(m, inp, 0.1)
-  assert m.last_event == 'seatbelt' and icons(m, 'belt') and m.mood == 'worried'
+  assert m.last_event == 'seatbelt' and m.mood == 'worried'
   m.last_event = None
   run(m, inp, 20.0)
   assert m.last_event is None
@@ -406,22 +406,22 @@ def test_seatbelt_off_reminds_every_half_minute():
   assert m.last_event == 'seatbelt'
 
 
-def test_reverse_and_park_show_the_gear():
+def test_reverse_and_park_react():
   m, inp = ready(gear='drive', v_ego=0.0, standstill=True)
   inp.gear = 'reverse'
-  run(m, inp, 0.1)
-  assert m.last_event == 'reverse' and [p.text for p in icons(m, 'badge')] == ['R']
+  run(m, inp, 0.4)
+  assert m.last_event == 'reverse' and any(p.kind == 'beep' for p in m.parts)      # looking back, beeping
   run(m, inp, 3.0)
   inp.gear = 'park'
   run(m, inp, 0.1)
-  assert m.last_event == 'park' and 'P' in [p.text for p in icons(m, 'badge')] and icons(m, 'wave')
+  assert m.last_event == 'park'
 
 
-def test_hazard_lights_show_the_warning_triangle():
+def test_hazard_lights_worry_it():
   m, inp = ready()
   inp.hazard = inp.left_blinker = inp.right_blinker = True
   run(m, inp, 0.1)
-  assert m.last_event == 'hazard' and icons(m, 'hazard') and m.signal == 0      # not a turn signal
+  assert m.last_event == 'hazard' and m.mood == 'worried' and m.signal == 0      # not a turn signal
 
 
 def test_set_speed_rolls_in_on_engagement_and_rolls_over_on_a_change():
@@ -492,9 +492,9 @@ def test_wheel_rises_when_driving_and_its_hands_let_go_for_the_driver():
   inp.override = False
   run(m, inp, 2.0)
   assert m.P['hands'].v > 0.9
-  inp.slow_steer = True                                   # too slow to steer: the turtle, hands off until it can again
+  inp.slow_steer = True                                   # too slow to steer: hands off until it can again
   run(m, inp, 1.0)
-  assert m.last_event == 'slow_steer' and icons(m, 'turtle')
+  assert m.last_event == 'slow_steer'
   run(m, inp, 1.5)
   assert m.P['hands'].v < 0.1
   inp.slow_steer = False
@@ -512,14 +512,18 @@ def test_driver_steering_during_a_lane_change_is_not_a_takeover():
   assert m.last_event == 'lane_go'
 
 
-def test_event_icons_say_what_happened():
-  cases = {'brake': 'bang', 'bsm': 'car', 'lead_go': 'car', 'cutin': 'car', 'gas': 'gauge',
-           'slow_steer': 'turtle', 'lane_go': 'arrow', 'lane_done': 'check', 'hello': 'wave'}
-  for name, kind in cases.items():
-    m, inp = ready(engaged=name in ('gas', 'slow_steer', 'lane_go', 'lane_done', 'cutin', 'bsm'))
+def test_reactions_spawn_no_icons():
+  icon_kinds = {'arrow', 'badge', 'belt', 'car', 'check', 'gauge', 'hazard', 'turtle', 'wave', 'cam', 'sign', 'flag'}
+  for name in ('brake', 'bsm', 'lead_go', 'cutin', 'gas', 'slow_steer', 'lane_go', 'lane_done', 'hello', 'seatbelt',
+               'reverse', 'park', 'hazard', 'override', 'curve', 'go', 'steer_back'):
+    m, inp = ready(engaged=name in ('gas', 'slow_steer', 'lane_go', 'lane_done', 'cutin', 'bsm', 'override', 'curve'))
     m.react(name, 1)
     run(m, inp, 1.0)
-    assert icons(m, kind), name
+    assert not {p.kind for p in m.parts} & icon_kinds, name
+  m, inp = ready(engaged=True)                                                        # the "!" is back by its head
+  m.react('brake')
+  run(m, inp, 0.1)
+  assert [(p.x, p.y) for p in m.parts if p.kind == 'bang'] == [(196, -84)]
 
 
 def test_no_navigation_reactions():

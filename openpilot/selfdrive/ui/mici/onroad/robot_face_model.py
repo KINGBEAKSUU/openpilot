@@ -149,7 +149,7 @@ class Particle:
   phase: float = 0.0
   delay: float = 0.0
   direction: int = 1
-  value: float = 0.0          # what an icon shows: the set speed, which car, ...
+  value: float = 0.0          # the set speed it shows
   text: str = ''
   prev: float = 0.0           # the set speed: the value it rolls over from (0 = it rolls in fresh)
   since: float = 0.0          # and the age at which that roll started
@@ -679,10 +679,10 @@ class FaceModel:
 
       def pop():
         self._apply_mood('surprised')
-        P['red'].t, P['flash'].t = 1.0, 0.25                  # danger: red eyes and a red "!"
+        P['red'].t, P['flash'].t = 1.0, 0.25                  # danger: red eyes
         self.kick('hy', -440)
         P['pitch'].t = 0.17
-        self.spawn(kind='bang', x=226, y=-64, life=1.4, value=1)
+        self.spawn(kind='bang', x=196, y=-84, life=1.4)
         self.spawn(kind='skid', x=0, y=96, life=0.9)
         self.shake = max(self.shake, 9.0)
         self.tremble = 0.6
@@ -807,7 +807,6 @@ class FaceModel:
       P['up'].v = P['up'].t = 1.0
       L(0.35, lambda: (setattr(P['up'], 't', 0.35), self.kick('hy', -60)))
       L(0.75, lambda: (self._glad(), self.kick('hy', -230), self._sparkle(4)))
-      L(0.8, lambda: self.spawn(kind='wave', x=232, y=-14, life=1.9))   # "hi!"
       L(1.1, lambda: self.kick('hy', 120))
       L(1.6, self._settle)
     elif name == 'lane_go':
@@ -817,7 +816,6 @@ class FaceModel:
       P['ex'].t, P['er'].t = d * 34, d * 8
       self.look(d * 0.95, -0.05, 1.1)
       self.kick('hx', d * 200)
-      self.spawn(kind='arrow', x=d * 234, y=-56, life=1.7, direction=d)
       for i in range(4):
         L(i * 0.09, lambda i=i: self.spawn(kind='streak', x=-d * (150 + i * 14), y=-42 + i * 26, vx=-d * 240, life=0.5,
                                             size=1 + (i % 2) * 0.5, direction=-d))
@@ -829,7 +827,6 @@ class FaceModel:
       self._glad()
       P['blush'].t = 0.4
       self.kick('hy', -150)
-      self.spawn(kind='check', x=234, y=-62, life=1.4)       # done
       L(0.2, lambda: self._sparkle(2))
       L(0.3, lambda: self.kick('hy', 110))
       L(0.48, lambda: self.kick('hy', -90))
@@ -843,8 +840,7 @@ class FaceModel:
       self.kick('hx', -d * 260)
       self.kick('hy', 120)
       P['red'].t = 0.7
-      self.spawn(kind='car', x=d * 234, y=-30, life=2.0, direction=d)            # the car in the blind spot
-      self.spawn(kind='bang', x=d * 234, y=-82, life=1.3, value=1)
+      self.spawn(kind='bang', x=d * 206, y=-70, life=1.3)
       L(0.45, lambda: (self.osc('hx', 12, 5.5, 3.5), self.osc('rot', 4, 5.5, 3.5)))
       L(1.6, lambda: (setattr(P['amber'], 't', 0), self._settle()))
     elif name == 'lead_go':
@@ -853,7 +849,7 @@ class FaceModel:
       P['w'].t, P['h'].t, P['up'].t = 110, 136, 0.0
       self.look(0.0, -0.3, 0.9)
       self.kick('hy', -260)
-      self.spawn(kind='car', x=234, y=-36, life=1.8, value=1)    # the car ahead pulling away (rises and shrinks)
+      self.spawn(kind='bang', x=196, y=-84, life=1.2)
       L(0.55, lambda: (setattr(P['pitch'], 't', 0.06), setattr(P['ey'], 't', -8), self.kick('hy', -120)))
       L(0.9, lambda: self.start_blink(double=True, speed=1.2))
       L(1.5, self._settle)
@@ -864,8 +860,6 @@ class FaceModel:
       self.kick('hy', 220)
       self.look(0.3, -0.25, 0.8)
       self.start_blink(speed=1.8, double=True)
-      self.spawn(kind='car', x=262, y=-96, vx=-80, vy=30, life=1.4, value=2)    # someone sliding in ahead
-      self.spawn(kind='bang', x=120, y=-88, life=1.0)
       L(0.5, lambda: (setattr(P['pitch'], 't', 0), self.kick('hy', -90)))
       L(1.1, self._settle)
     elif name == 'gas':
@@ -875,7 +869,6 @@ class FaceModel:
       P['green'].t = 0.9 if self.engaged else 0
       P['er'].t, P['ex'].t, P['p_quest'].t = -8, -14, 1
       self.look(-0.65, 0.22, 1.0)
-      self.spawn(kind='gauge', x=-232, y=40, life=1.8)              # speeding up
       L(1.1, lambda: (setattr(P['p_quest'], 't', 0), self.look(0, 0, 0.2), self.kick('hy', -90)))
       L(1.5, self._settle)
     elif name == 'slow_steer':
@@ -886,7 +879,6 @@ class FaceModel:
       P['green'].t, P['blush'].t = self.SLOW_GREEN, 0.2
       P['er'].t, P['ex'].t = -6, -16
       self.look(-0.62, 0.2, 1.4)
-      self.spawn(kind='turtle', x=226, y=44, life=2.4)             # too slow to steer: its hands come off the wheel
       L(0.25, lambda: (setattr(P['pitch'], 't', 0.07), self.kick('hy', 140)))
       L(0.7, lambda: (setattr(P['pitch'], 't', 0), self.start_blink(speed=0.5)))
       L(1.5, lambda: self.look(0, 0.05, 0.4))
@@ -911,10 +903,9 @@ class FaceModel:
       L(0.6, lambda: (self._glad(), self.kick('hy', -120)))
       L(1.5, self._settle)
     elif name == 'seatbelt':
-      # the driver's seatbelt is off: a worried "hey" their way, with the belt sign
+      # the driver's seatbelt is off: a worried "hey" their way
       self.event_until = self.clock + 2.6
       self._apply_mood('worried')
-      self.spawn(kind='belt', x=-234, y=-48, life=2.8)
       P['ex'].t, P['er'].t = -20, -6
       self.look(-0.8, 0.1, 1.6)
       self.kick('hx', -150)
@@ -922,29 +913,25 @@ class FaceModel:
       L(1.0, lambda: self.kick('hy', -90))
       L(2.4, self._settle)
     elif name == 'reverse':
-      # reverse gear: an R badge and a look down and back, beeping
+      # reverse gear: a look down and back, beeping
       self.event_until = self.clock + 2.4
-      self.spawn(kind='badge', x=234, y=-62, life=2.6, text='R')
       P['up'].t, P['h'].t, P['pitch'].t = 0.12, 102, -0.04
       self.look(0.0, 0.8, 1.6)
       for i in range(4):
         L(0.25 + i * 0.45, lambda: self.spawn(kind='beep', x=0, y=104, life=0.7))
       L(2.2, self._settle)
     elif name == 'park':
-      # into Park: a P badge, a wave goodbye and a relaxed sigh
+      # into Park: a happy goodbye and a relaxed sigh
       self.event_until = self.clock + 2.6
-      self.spawn(kind='badge', x=-234, y=-62, life=2.8, text='P')
-      self.spawn(kind='wave', x=232, y=-14, life=2.2)
       self._glad()
       self.kick('hy', -120)
       L(1.6, lambda: (self._apply_mood('sigh'), self.kick('hy', 80)))
       L(2.4, self._settle)
     elif name == 'hazard':
-      # hazard lights: the warning triangle and a nervous look ahead
+      # hazard lights: a nervous look ahead
       self.event_until = self.clock + 2.4
       self._apply_mood('worried')
       P['red'].t = 0.35
-      self.spawn(kind='hazard', x=234, y=-60, life=2.6)
       self.tremble = 0.3
       self.look(0, -0.15, 1.2)
       L(2.2, self._settle)

@@ -35,8 +35,7 @@ AMBER_EYE, AMBER_GLOW = (255, 210, 120), (255, 150, 0)
 RED_EYE, RED_GLOW = (255, 160, 150), (255, 46, 40)
 BOTTOM_MIX = 0.5   # how far the eye's lower part leans toward its glow colour
 
-# icons that say what an event means
-RED, OK_GREEN, AMBER, DARK = (255, 72, 60), (90, 235, 150), (255, 176, 40), (14, 14, 14)
+OK_GREEN, AMBER = (90, 235, 150), (255, 176, 40)   # the set speed rolling up / down
 
 # the steering wheel along the bottom edge while it drives
 WHEEL_R = 96        # rim radius
@@ -52,8 +51,6 @@ SPEED_SHUT_S = 0.18  # the eyes shutting before it shows, and opening after it
 SPEED_OUT_S = 0.3    # the number shrinking away before they open
 DIGIT_DROP = 0.077   # a digit's glyph sits this far (x font size) below the centre of the box _text centres
 DIGIT_HALF = 0.39    # and half its height (0.35) plus a margin: the odometer window
-# event icons drawn in screen space over the face, at fixed spots by the edges (so a lean never hides or clips them)
-SCREEN_ICONS = frozenset(('bang', 'wave', 'arrow', 'check', 'car', 'belt', 'badge', 'hazard', 'gauge', 'turtle'))
 
 
 def mix(a, b, t):
@@ -494,10 +491,6 @@ class RobotFace:
     self._props(eye_d, glow_d)
     self._particles(eye_d, glow_d)
     rl.rl_pop_matrix()
-    rl.rl_push_matrix()
-    rl.rl_translatef(rect.x + rect.width / 2, rect.y + rect.height / 2, 0)
-    self._screen_icons(eye_d)
-    rl.rl_pop_matrix()
     if speed is not None:
       self._speed(speed, eye_d, rect)
     # raylib batches shapes and sends them to the GPU later (when the batch fills, or at the end of the frame): send
@@ -615,23 +608,6 @@ class RobotFace:
                      sy + math.sin(j * math.pi / 4 + k * 2) * (r if j % 2 == 0 else r * 0.3)) for j in range(8)],
                    (*eye, fade_all))
 
-  def _car_icon(self, x, y, s, a, ink):
-    """A car seen from behind: tyres, body, roof with its rear window, tail lights."""
-    for side in (-1, 1):
-      rl.draw_rectangle_rounded(rl.Rectangle(x + side * 15 * s - 5 * s, y + 6 * s, 10 * s, 9 * s), 0.3, 4, color(mix((0, 0, 0), ink, 0.5), a))
-    rl.draw_rectangle_rounded(rl.Rectangle(x - 16 * s, y - 20 * s, 32 * s, 16 * s), 0.45, 6, color(ink, a))
-    rl.draw_rectangle_rounded(rl.Rectangle(x - 23 * s, y - 8 * s, 46 * s, 17 * s), 0.35, 6, color(ink, a))
-    rl.draw_rectangle_rounded(rl.Rectangle(x - 12 * s, y - 17 * s, 24 * s, 8 * s), 0.4, 4, color(DARK, a))
-    for side in (-1, 1):
-      rl.draw_rectangle_rounded(rl.Rectangle(x + side * 16 * s - 4 * s, y - 4 * s, 8 * s, 5 * s), 0.4, 4, color(RED, a))
-    rl.draw_rectangle_rec(rl.Rectangle(x - 6 * s, y + 2 * s, 12 * s, 4 * s), color(DARK, a))
-
-  def _arrowhead(self, x, y, ang, size, c, a):
-    """A filled triangle pointing along ang (radians, screen axes)."""
-    ca, sa = math.cos(ang), math.sin(ang)
-    self._poly([(x + ca * size, y + sa * size), (x - ca * size * 0.4 - sa * size * 0.75, y - sa * size * 0.4 + ca * size * 0.75),
-                (x - ca * size * 0.4 + sa * size * 0.75, y - sa * size * 0.4 - ca * size * 0.75)], (*c, a))
-
   def _props(self, eye, glow):
     m, P = self.model, self.model.P
     eye_top = EYE_Y - P['h'].v * EYE_SCALE[1] * 0.5
@@ -685,27 +661,10 @@ class RobotFace:
       px, py = tp(74, -12)
       rl.draw_circle_v(rl.Vector2(px, py), 7 * s, color(eye, clamp(v, 0, 1)))
 
-  def _screen_icons(self, eye):
-    m = self.model
-    # a driver-monitoring alert: a blinking amber eye on the driver's side, "eyes on the road"
-    if m.dm:
-      on = 0.45 + 0.55 * (1.0 if math.sin(m.clock * 10) > 0 else 0.0)
-      x, y = -234, -36
-      self._stroke(self._quad(x - 24, y, x, y - 20, x + 24, y, 8), 4.5, AMBER, on, opaque=True)
-      self._stroke(self._quad(x - 24, y, x, y + 20, x + 24, y, 8), 4.5, AMBER, on, opaque=True)
-      rl.draw_circle_v(rl.Vector2(x + 3, y - 2), 8, fade(AMBER, on))
-      for i in (-1, 0, 1):
-        self._stroke([(x + i * 15, y - 26 + abs(i) * 4), (x + i * 19, y - 34 + abs(i) * 4)], 4, AMBER, on, opaque=True)
-    for p in m.parts:
-      if p.kind in SCREEN_ICONS:
-        self._icon(p, p.age / p.life, eye, None)
-
   def _particles(self, eye, glow):
     m = self.model
     for p in m.parts:
       k = p.age / p.life
-      if p.kind in SCREEN_ICONS:
-        continue
       if p.kind == 'spark':
         tw = 0.75 + 0.25 * math.sin(p.age * 26 + p.phase)
         r = p.size * (0.5 + math.sin(min(k * 3, 1) * math.pi / 2) * 0.6) * tw
@@ -749,108 +708,28 @@ class RobotFace:
         # speed lines trailing a lane change
         a = (1 - k) * 0.7
         rl.draw_line_ex(rl.Vector2(p.x, p.y), rl.Vector2(p.x + p.direction * 30 * p.size, p.y), 4, color(eye, a))
-      else:                 # face-attached icons: puffs, wind, skid marks, beeps
-        self._icon(p, k, eye, glow)
+      else:                 # "!", puffs, wind, skid marks, beeps
+        self._effect(p, k, eye)
     _ = ease_out_cubic
 
-  def _icon(self, p, k, eye, glow):
-    """Event icons (see robot_face_model reactions): each one says what the reaction is about."""
-    s = ease_out_back(min(k / 0.15, 1.0))
-    a = 1.0 if k < 0.8 else (1 - k) / 0.2
+  def _effect(self, p, k, eye):
+    """Small effects that go with the robot's own motion, in face space: a startled "!", a "phew" puff, wind past
+    it in a bend, tyre marks under hard braking, reversing beeps."""
     x, y, d = p.x, p.y, p.direction
-    if p.kind == 'bang':          # "!" (red for danger: hard braking, a car in the blind spot)
+    if p.kind == 'bang':          # "!" by its head: startled
       pop = ease_out_back(k / 0.14) if k < 0.14 else 1.0
       aa = (1 - k) / 0.25 if k > 0.75 else 1.0
       ss = pop * 1.15
-      c = RED if p.value else eye
-      rl.draw_rectangle_rounded(rl.Rectangle(x - 5 * ss, y - 26 * ss, 10 * ss, 32 * ss), 1.0, 6, color(c, aa))
-      rl.draw_circle_v(rl.Vector2(x, y + 16 * ss), 5.5 * ss, color(c, aa))
-    elif p.kind == 'wave':        # a hand waving hi / bye
-      rl.rl_push_matrix()
-      rl.rl_translatef(x, y + 18, 0)
-      rl.rl_rotatef(math.sin(p.age * 13) * 24, 0, 0, 1)
-      c = color(eye, a)
-      rl.draw_rectangle_rounded(rl.Rectangle(-12 * s, -28 * s, 24 * s, 24 * s), 0.5, 6, c)
-      for i, fx in enumerate((-9, -3, 3, 9)):
-        rl.draw_rectangle_rounded(rl.Rectangle((fx - 2.7) * s, (-43 + abs(i - 1.5) * 2.5) * s, 5.4 * s, 18 * s), 1.0, 4, c)
-      rl.draw_rectangle_pro(rl.Rectangle(-11 * s, -12 * s, 5.4 * s, 15 * s), rl.Vector2(2.7 * s, 13 * s), -48, c)
-      rl.rl_pop_matrix()
-      for lo, hi in ((205, 235), (305, 335)):
-        rl.draw_ring(rl.Vector2(x, y - 8), 33, 36, lo, hi, 8, color(eye, 0.6 * a))
+      rl.draw_rectangle_rounded(rl.Rectangle(x - 5 * ss, y - 26 * ss, 10 * ss, 32 * ss), 1.0, 6, color(eye, aa))
+      rl.draw_circle_v(rl.Vector2(x, y + 16 * ss), 5.5 * ss, color(eye, aa))
     elif p.kind == 'puff':        # "phew"
       r = (5 + k * 7) * p.size
       for ox, oy, rr in ((0, 0, 1.0), (-r * 0.9, r * 0.3, 0.7), (r * 0.8, r * 0.4, 0.75)):
         rl.draw_circle_v(rl.Vector2(x + ox, y + oy), r * rr, color(eye, (1 - k) * 0.8))
-    elif p.kind == 'arrow':       # a lane change: lane dashes and the arrow across them
-      for j in range(3):
-        rl.draw_rectangle_rec(rl.Rectangle(x - 2, y - 26 + j * 19, 4, 10), color(eye, 0.45 * a))
-      f = min(k / 0.2, 1.0)
-      pts = self._quad(x - d * 18, y + 22, x - d * 18, y - 6, x + d * 14, y - 14, 10)
-      n = max(2, int(round(len(pts) * f)))
-      self._stroke(pts[:n], 6, eye, a, opaque=True)
-      if f >= 1:
-        self._arrowhead(x + d * 20, y - 15, -0.25 if d > 0 else math.pi + 0.25, 11, eye, a)
-    elif p.kind == 'check':       # done
-      f = min(k / 0.3, 1.0)
-      pts = [(x - 17, y), (x - 5, y + 13), (x + 19, y - 15)]
-      seg = pts[:2] if f < 0.4 else pts
-      if f < 0.4:
-        seg = [pts[0], (pts[0][0] + (pts[1][0] - pts[0][0]) * f / 0.4, pts[0][1] + (pts[1][1] - pts[0][1]) * f / 0.4)]
-      elif f < 1:
-        g = (f - 0.4) / 0.6
-        seg = [pts[0], pts[1], (pts[1][0] + (pts[2][0] - pts[1][0]) * g, pts[1][1] + (pts[2][1] - pts[1][1]) * g)]
-      self._stroke(seg, 8, OK_GREEN, a, opaque=True)
-    elif p.kind == 'car':         # 0 in the blind spot, 1 the car ahead pulling away, 2 cutting in
-      if p.value == 1:
-        e = ease_in_out(k)
-        self._car_icon(x, y - 34 * e, s * (1 - 0.45 * e), a, eye)
-      else:
-        wob = math.sin(p.age * 22) * 1.5 * (1 - k) if p.value == 0 else 0.0
-        self._car_icon(x + wob, y, s, a, eye)
-    elif p.kind == 'belt':        # a driver with the seatbelt across: blinking red
-      s *= 1.3
-      on = a * (0.4 + 0.6 * (1.0 if math.sin(p.age * 9) > 0 else 0.0))
-      rl.draw_circle_v(rl.Vector2(x, y - 18 * s), 8 * s, color(eye, a))
-      rl.draw_rectangle_rounded(rl.Rectangle(x - 14 * s, y - 7 * s, 28 * s, 26 * s), 0.5, 6, color(eye, a))
-      self._stroke([(x - 13 * s, y - 8 * s), (x + 11 * s, y + 16 * s)], 6 * s, RED, on, opaque=True)
-      rl.draw_rectangle_rounded(rl.Rectangle(x + 6 * s, y + 11 * s, 11 * s, 8 * s), 0.3, 4, color(RED, on))
-    elif p.kind == 'badge':       # a gear letter: R reverse, P park
-      r = rl.Rectangle(x - 21 * s, y - 21 * s, 42 * s, 42 * s)
-      rl.draw_rectangle_rounded(r, 0.3, 6, color(DARK, a))
-      c = AMBER if p.text == 'R' else eye
-      rl.draw_rectangle_rounded_lines_ex(r, 0.3, 6, 3.5, color(c, a))
-      self._text(p.text, x, y + 1, 30 * s, color(c, a))
     elif p.kind == 'beep':        # reversing beeps
       for j in range(3):
         r = 12 + j * 10 + k * 14
         rl.draw_ring(rl.Vector2(x, y), r - 1.5, r + 1.5, 205, 335, 16, color(eye, (1 - k) * (0.9 - j * 0.25)))
-    elif p.kind == 'hazard':      # hazard lights: a blinking red warning triangle
-      on = a * (0.35 + 0.65 * (1.0 if math.sin(p.age * 9.4) > 0 else 0.0))
-      outer = [(x, y - 24 * s), (x + 27 * s, y + 20 * s), (x - 27 * s, y + 20 * s)]
-      inner = [(x, y - 9 * s), (x + 12 * s, y + 12 * s), (x - 12 * s, y + 12 * s)]
-      self._stroke([*outer, outer[0]], 6 * s, RED, on, opaque=True)
-      self._stroke([*inner, inner[0]], 4 * s, RED, on, opaque=True)
-    elif p.kind == 'gauge':       # speeding up: a speedometer whose needle swings up
-      c = rl.Vector2(x, y + 10)
-      rl.draw_ring(c, 21 * s, 26 * s, 180, 360, 24, color(eye, a))
-      for j in range(5):
-        t = math.radians(180 + j * 45)
-        self._stroke([(x + math.cos(t) * 15 * s, y + 10 + math.sin(t) * 15 * s),
-                      (x + math.cos(t) * 19 * s, y + 10 + math.sin(t) * 19 * s)], 3, eye, a, opaque=True)
-      t = math.radians(200 + 130 * ease_out_back(min(k / 0.5, 1.0)))
-      self._stroke([(x, y + 10), (x + math.cos(t) * 20 * s, y + 10 + math.sin(t) * 20 * s)], 4, RED, a, opaque=True)
-      rl.draw_circle_v(c, 4.5 * s, color(eye, a))
-    elif p.kind == 'turtle':      # too slow
-      bob = math.sin(p.age * 6) * 1.5
-      xx = x + k * 8
-      shell = mix(OK_GREEN, eye, 0.35)
-      for lx in (-10, 8):
-        rl.draw_rectangle_rounded(rl.Rectangle(xx + lx - 3, y + 4 + (bob if lx < 0 else -bob), 7, 9), 0.5, 4, color(eye, 0.8 * a))
-      rl.draw_circle_sector(rl.Vector2(xx, y + 6), 19 * s, 180, 360, 20, color(shell, a))
-      rl.draw_rectangle_rec(rl.Rectangle(xx - 19 * s, y + 4, 38 * s, 4), color(eye, a))
-      self._stroke([(xx - 8, y + 4), (xx - 4, y - 7), (xx + 5, y - 7), (xx + 9, y + 4)], 2.5, DARK, 1.0)
-      rl.draw_circle_v(rl.Vector2(xx + 23, y - 1 + bob), 7 * s, color(eye, a))
-      rl.draw_circle_v(rl.Vector2(xx + 25, y - 3 + bob), 1.8, color(DARK, a))
     elif p.kind == 'wind':        # blown toward the outside of the bend
       rl.draw_line_ex(rl.Vector2(x, y), rl.Vector2(x - d * 30, y + 3), 3.5, color(eye, (1 - k) * 0.7))
       rl.draw_line_ex(rl.Vector2(x - d * 30, y + 3), rl.Vector2(x - d * 38, y - 4), 3.5, color(eye, (1 - k) * 0.5))
