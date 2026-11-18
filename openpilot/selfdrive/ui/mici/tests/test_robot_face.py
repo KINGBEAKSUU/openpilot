@@ -215,10 +215,11 @@ def test_phone_playing_dances_without_the_microphone_hearing_a_beat(face, tmp_pa
 def test_event_props_draw(face):
   m = face.f.model
   m.spawn(kind='streak', x=-150, y=0, life=0.5, direction=-1)
-  m.spawn(kind='belt', x=-234, y=-48, life=2.8, age=0.4)
+  m.spawn(kind='bang', x=196, y=-84, life=1.4, age=0.4)
+  m.spawn(kind='wind', x=-150, y=-40, life=0.7, direction=1)
   face.f.draw(face.rect)
   n = names(face.calls)
-  assert n.count('draw_circle_v') >= 1                    # the driver's head on the belt sign
+  assert n.count('draw_circle_v') >= 1                    # the dot of the "!"
   assert 'draw_line_ex' in n and 'draw_rectangle_rounded' in n
 
 
@@ -230,7 +231,7 @@ def test_render_draws_both_eyes_and_keeps_the_matrix_balanced(face):
   face.f.render(face.rect)
   n = names(face.calls)
   assert n[0] == 'draw_rectangle_rec'
-  assert n.count('rl_push_matrix') == n.count('rl_pop_matrix') == 2   # the face, then the screen-fixed icons
+  assert n.count('rl_push_matrix') == n.count('rl_pop_matrix') == 1   # the face
   strips = [c for c in face.calls if c[0] == 'draw_triangle_strip']
   assert len(strips) >= 8                                 # both eye bodies, filled in gradient bands
   assert len({c[3] for c in strips}) >= 4                 # the bands step through colours
@@ -296,15 +297,33 @@ def test_wheel_shows_while_driving_and_the_mouth_stays_above_it(face):
   _ = math, hx
 
 
-def test_icons_draw_in_screen_space(face):
+def test_set_speed_is_drawn_digit_by_digit(face):
   m = face.f.model
-  m.spawn(kind='badge', x=234, y=-58, life=2.0, text='R')
   m.spawn(kind='speed', x=0, y=0, life=2.0, value=85, direction=0, age=1.0)
-  m.dm = True
   face.calls.clear()
   face.f.draw(face.rect)
   texts = [c[2] for c in face.calls if c[0] == 'draw_text_ex']
-  assert 'R' in texts and '8' in texts and '5' in texts      # the set speed is drawn digit by digit
+  assert texts.count('8') == 1 and texts.count('5') == 1
+
+
+def test_no_event_icons_and_no_driver_monitoring_eye(face):
+  # the robot shows events with its own face and motion (and the wheel it holds): no icons by the screen edges, and no
+  # blinking eye for driver monitoring
+  m = face.f.model
+  for name in ('brake', 'bsm', 'lead_go', 'cutin', 'gas', 'slow_steer', 'lane_go', 'lane_done', 'hello', 'seatbelt',
+               'reverse', 'park', 'hazard', 'dm'):
+    m.react(name, 1)
+  for _ in range(10):
+    m.update(0.05, face.f._inputs())
+  assert {p.kind for p in m.parts} <= {'bang', 'spark', 'heart', 'sweat', 'puff', 'skid', 'beep', 'wind', 'streak', 'note', 'z', 'chev'}
+  counts = []
+  for dm in (False, True):                                # a driver-monitoring alert draws nothing extra
+    m.dm = dm
+    face.calls.clear()
+    face.f.draw(face.rect)
+    n = names(face.calls)
+    counts.append((n.count('draw_line_ex'), n.count('draw_circle_v'), n.count('draw_rectangle_rounded')))
+  assert counts[0] == counts[1]
 
 
 def test_set_speed_digits_roll_the_way_it_went(face):
