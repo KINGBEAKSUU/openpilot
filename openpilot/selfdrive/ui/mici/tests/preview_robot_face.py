@@ -11,7 +11,7 @@ import pyray as rl
 CASES = {
   'idle': 3.0, 'engage-star': 0.35, 'engage-happy': 0.9, 'driving': 4.0, 'signal-right': 4.6, 'brake': 0.3,
   'driver-monitoring': 1.2, 'yawn': 50.2, 'asleep': 55.0, 'love': 1.0, 'cool': 1.2, 'think': 1.6, 'curious': 1.0,
-  'straining': 2.2, 'set-speed': 1.0,
+  'straining': 2.2, 'set-speed': 2.6, 'set-speed-roll': 2.15, 'set-speed-down': 2.15, 'set-speed-engage': 1.4,
 }
 # driving-event reactions: case: (reaction, arg, engaged, seconds after it starts)
 EVENTS = {
@@ -71,8 +71,12 @@ def main():
           inp.engaged, inp.right_blinker, inp.steer_deg = True, t > 3.5, 12.0
         elif case == 'straining':
           inp.engaged, inp.steer_torque = True, min(1.0, 0.4 + t * 0.4)
-        elif case == 'set-speed':
-          inp.engaged, inp.set_speed = True, 80.0 if t < 0.5 else 85.0
+        elif case == 'set-speed':                              # engaged at 80 (the eyes shut for it), then up to 85
+          inp.engaged, inp.set_speed = True, 80.0 if t < 2.0 else 85.0
+        elif case in ('set-speed-roll', 'set-speed-down'):     # caught mid-roll
+          inp.engaged, inp.set_speed = True, 95.0 if t < 2.0 else 100.0 if case == 'set-speed-roll' else 90.0
+        elif case == 'set-speed-engage':                       # caught while its digits drop in, after the hop
+          inp.engaged, inp.set_speed = t > 0.05, 85.0
         elif case == 'brake':
           inp.a_ego = -4.5
         elif case == 'driver-monitoring':

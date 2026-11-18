@@ -45,8 +45,15 @@ WHEEL_DROP = 52     # its centre is this far below the screen's bottom edge
 WHEEL_HIDE = 74     # and slides this much further down when not driving
 WHEEL_GAP = 6       # the mouth stays at least this far above the rim
 HAND_AT = 38        # degrees from the top where its hands hold the rim
+# the cruise set speed: big rolling digits in place of the eyes (they shut to a line first, and open after it)
+SPEED_FONT = 120
+SPEED_ROLL_S = 0.4   # one digit rolling over to its new value
+SPEED_SHUT_S = 0.18  # the eyes shutting before it shows, and opening after it
+SPEED_OUT_S = 0.3    # the number shrinking away before they open
+DIGIT_DROP = 0.077   # a digit's glyph sits this far (x font size) below the centre of the box _text centres
+DIGIT_HALF = 0.39    # and half its height (0.35) plus a margin: the odometer window
 # event icons drawn in screen space over the face, at fixed spots by the edges (so a lean never hides or clips them)
-SCREEN_ICONS = frozenset(('bang', 'wave', 'arrow', 'check', 'car', 'belt', 'badge', 'hazard', 'speed', 'gauge', 'turtle'))
+SCREEN_ICONS = frozenset(('bang', 'wave', 'arrow', 'check', 'car', 'belt', 'badge', 'hazard', 'gauge', 'turtle'))
 
 
 def mix(a, b, t):
@@ -394,10 +401,18 @@ class RobotFace:
         return my
       return min(my, (wheel_top - WHEEL_GAP - ty - sin_r * sx * mx) / max(cos_r * sy, 0.3) - half)
 
+    # the set speed takes the eyes' place: the face shuts to a line first and opens again after it
+    speed = next((p for p in m.parts if p.kind == 'speed' and p.age >= p.delay), None)
+    shut_for_speed = 0.0
+    if speed is not None:
+      shut_for_speed = ease_in_out(clamp(min((speed.age - speed.delay) / SPEED_SHUT_S, (speed.life - speed.age) / SPEED_SHUT_S), 0, 1))
     rl.rl_push_matrix()
     rl.rl_translatef(tx, ty, 0)
     rl.rl_rotatef(rot, 0, 0, 1)
-    rl.rl_scalef(sx, sy, 1)
+    if shut_for_speed >= 1.0:     # fully shut: nothing of the face is drawn (not even a line), so it never meets the number
+      rl.rl_scalef(0.0, 0.0, 1)
+    else:
+      rl.rl_scalef(sx * (1 - 0.5 * shut_for_speed), sy * (1 - shut_for_speed), 1)
 
     # blush
     if P['blush'].v > 0.01:
@@ -483,6 +498,8 @@ class RobotFace:
     rl.rl_translatef(rect.x + rect.width / 2, rect.y + rect.height / 2, 0)
     self._screen_icons(eye_d)
     rl.rl_pop_matrix()
+    if speed is not None:
+      self._speed(speed, eye_d, rect)
     # raylib batches shapes and sends them to the GPU later (when the batch fills, or at the end of the frame): send
     # them now, while culling is still off, so no strip or fan is dropped for its winding
     rl.rl_draw_render_batch_active()
@@ -526,6 +543,77 @@ class RobotFace:
   def _text(self, txt, x, y, size, col):
     tw = rl.measure_text_ex(self._font, txt, size, 0)
     rl.draw_text_ex(self._font, txt, rl.Vector2(x - tw.x / 2, y - tw.y / 2), size, 0, col)
+
+  def _digit(self, ch, x, y, size, ink, a):
+    if ch and a > 0.01:
+      self._text(ch, x, y, size, color(ink, min(a, 1.0)))
+
+  def _speed(self, p, eye, rect):
+    """The cruise set speed, big in the middle of the screen while the eyes are shut (screen coordinates).
+
+    On engagement its digits drop in one by one, left to right, with a sparkle at each top corner. On a change each
+    changed digit rolls over like an odometer, the way the speed went (up: the old digit rises out and the new one
+    comes up from below; down: the reverse); the number pops, the new digits come in green (up) or amber (down) and
+    settle into the eye colour, the glow flares and chevrons stream above it (up: rising away; down: sinking into it).
+    At the end it shrinks away, and then the eyes open."""
+    t0 = p.delay + SPEED_SHUT_S                                  # the eyes are shut from here
+    if p.age < t0:
+      return
+    d = p.direction
+    t = p.age - max(p.since, t0)                                 # into the current roll (or the drop-in)
+    accent = eye if d == 0 else OK_GREEN if d > 0 else AMBER
+    new = str(int(round(p.value)))
+    old = str(int(round(p.prev))) if p.prev > 0 else ''
+    n = len(new)
+    out = clamp(1 - (p.life - p.age - SPEED_SHUT_S) / SPEED_OUT_S, 0, 1)
+    if out >= 1:
+      return
+    grow = ease_out_back(clamp((p.age - t0) / 0.3, 0, 1))        # pops in as the eyes finish shutting
+    pop = 1 + 0.08 * max(0.0, 1 - t / 0.35) ** 2 if d else 1.0
+    size = SPEED_FONT * pop * (0.7 + 0.3 * grow) * (1 - 0.35 * ease_in_out(out))
+    fade_all = clamp((p.age - t0) / 0.12, 0, 1) * (1 - out)
+    cell = rl.measure_text_ex(self._font, '0', size, 0).x
+    x, yc = rect.x + rect.width / 2 + p.x, rect.y + rect.height / 2 + EYE_Y + p.y   # where the digits' middle sits
+    y = yc - DIGIT_DROP * size                                   # the text box centre that puts them there
+    half = n * cell / 2
+    flare = max(0.0, 1 - t / 0.6)
+    self._blob(x, yc, half * 2 + 110, size * 1.4, accent, (0.18 + 0.32 * flare) * fade_all)
+    ink = mix(accent, eye, ease_in_out(clamp(t / 0.9, 0, 1))) if d else eye
+    win = DIGIT_HALF * size
+    shift = 2 * win + 2                                          # neighbours on the strip: one is always out of the window
+    # the digits roll inside a window the digits' own height, like an odometer: the old and the new digit sit one
+    # above the other on one strip that moves as a whole, so they never overlap
+    rl.begin_scissor_mode(int(x - half - 8), int(yc - win), int(half * 2 + 16), int(2 * win))
+    for i in range(max(n, len(old))):
+      nd = new[-1 - i] if i < n else ''
+      od = old[-1 - i] if i < len(old) else ''
+      cx = x + half - (i + 0.5) * cell
+      if d == 0:                  # engagement: dropping in one by one from the left
+        e = ease_out_back(clamp((t - (n - 1 - i) * 0.09) / 0.45, 0, 1))
+        self._digit(nd, cx, y - shift * (1 - e), size, eye, fade_all)
+      elif nd == od:
+        self._digit(nd, cx, y, size, eye, fade_all)
+      else:                       # rolling over (the ones first, then each place a beat later)
+        e = ease_out_back(clamp((t - i * 0.07) / SPEED_ROLL_S, 0, 1))
+        self._digit(od, cx, y - d * shift * e, size, eye, fade_all)
+        self._digit(nd, cx, y + d * shift * (1 - e), size, ink, fade_all)
+    rl.end_scissor_mode()
+    top = yc - win - 4            # just above the digits
+    if d and t < 1.3:             # chevrons above it: rising away (up, green) or sinking into it (down, amber)
+      env = min(t / 0.15, 1.0) * clamp((1.3 - t) / 0.35, 0, 1) * fade_all
+      for j in range(3):
+        ph = fract(t * 1.6 + j / 3)
+        cy = top - 8 - (ph if d > 0 else 1 - ph) * 30
+        self._ribbon([(x - 14, cy + d * 6), (x, cy - d * 6), (x + 14, cy + d * 6)], 5, accent,   # translucent over the glow
+                     env * math.sin(ph * math.pi))
+    elif d == 0 and 0.2 < t < 1.1:  # engagement: a sparkle at each top corner
+      k = (t - 0.2) / 0.9
+      r = 14 * math.sin(k * math.pi)
+      for side in (-1, 1):
+        sx, sy = x + side * (half + 6), top + 6
+        self._poly([(sx + math.cos(j * math.pi / 4 + k * 2) * (r if j % 2 == 0 else r * 0.3),
+                     sy + math.sin(j * math.pi / 4 + k * 2) * (r if j % 2 == 0 else r * 0.3)) for j in range(8)],
+                   (*eye, fade_all))
 
   def _car_icon(self, x, y, s, a, ink):
     """A car seen from behind: tyres, body, roof with its rear window, tail lights."""
@@ -742,13 +830,6 @@ class RobotFace:
       inner = [(x, y - 9 * s), (x + 12 * s, y + 12 * s), (x - 12 * s, y + 12 * s)]
       self._stroke([*outer, outer[0]], 6 * s, RED, on, opaque=True)
       self._stroke([*inner, inner[0]], 4 * s, RED, on, opaque=True)
-    elif p.kind == 'speed':       # the new cruise set speed, with an up or down arrow
-      r = rl.Rectangle(x - 48, y - 15, 96, 30)
-      rl.draw_rectangle_rounded(r, 0.5, 8, color(DARK, a))
-      c = OK_GREEN if d > 0 else AMBER
-      rl.draw_rectangle_rounded_lines_ex(r, 0.5, 8, 2.5, color(c, a))
-      self._arrowhead(x - 27, y + (3 if d > 0 else -3), -math.pi / 2 if d > 0 else math.pi / 2, 10, c, a)
-      self._text(str(int(round(p.value))), x + 10, y + 1, 22, color(eye, a))
     elif p.kind == 'gauge':       # speeding up: a speedometer whose needle swings up
       c = rl.Vector2(x, y + 10)
       rl.draw_ring(c, 21 * s, 26 * s, 180, 360, 24, color(eye, a))

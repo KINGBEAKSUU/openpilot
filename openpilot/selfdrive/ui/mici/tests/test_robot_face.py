@@ -42,7 +42,8 @@ def face(monkeypatch):
                'rl_disable_backface_culling', 'rl_enable_backface_culling', 'rl_push_matrix', 'rl_pop_matrix',
                'rl_translatef', 'rl_rotatef', 'rl_scalef', 'draw_rectangle_rounded', 'draw_rectangle_rounded_lines_ex',
                'draw_text_ex', 'draw_triangle_strip', 'draw_ring', 'draw_rectangle_pro', 'draw_circle_sector',
-               'draw_rectangle_lines_ex', 'draw_triangle_fan', 'rl_draw_render_batch_active'):
+               'draw_rectangle_lines_ex', 'draw_triangle_fan', 'rl_draw_render_batch_active', 'begin_scissor_mode',
+               'end_scissor_mode'):
     setattr(rl, name, lambda *a, name=name: calls.append((name, *a)))
   ui = NS(started_frame=10, sm=SM())
   monkeypatch.setitem(sys.modules, 'pyray', rl)
@@ -298,12 +299,29 @@ def test_wheel_shows_while_driving_and_the_mouth_stays_above_it(face):
 def test_icons_draw_in_screen_space(face):
   m = face.f.model
   m.spawn(kind='badge', x=234, y=-58, life=2.0, text='R')
-  m.spawn(kind='speed', x=0, y=-100, life=2.0, value=85, direction=1)
+  m.spawn(kind='speed', x=0, y=0, life=2.0, value=85, direction=0, age=1.0)
   m.dm = True
   face.calls.clear()
   face.f.draw(face.rect)
   texts = [c[2] for c in face.calls if c[0] == 'draw_text_ex']
-  assert 'R' in texts and '85' in texts
+  assert 'R' in texts and '8' in texts and '5' in texts      # the set speed is drawn digit by digit
+
+
+def test_set_speed_digits_roll_the_way_it_went(face):
+  m = face.f.model
+  m.spawn(kind='speed', x=0, y=0, life=2.4, value=85, prev=80, direction=1, age=0.23)
+  face.calls.clear()
+  face.f.draw(face.rect)
+  at = {c[2]: c[3][1] for c in face.calls if c[0] == 'draw_text_ex'}     # digit: its top on screen
+  assert at['0'] < at['8'] < at['5']                      # going up: the old 0 rises out, the new 5 comes up from below
+  assert any(c[0] == 'draw_triangle_strip' for c in face.calls)          # the chevrons
+  assert any(c[0] == 'begin_scissor_mode' for c in face.calls)           # rolling inside the number's own window
+  m.parts.clear()
+  m.spawn(kind='speed', x=0, y=0, life=2.4, value=80, prev=85, direction=-1, age=0.23)
+  face.calls.clear()
+  face.f.draw(face.rect)
+  at = {c[2]: c[3][1] for c in face.calls if c[0] == 'draw_text_ex'}
+  assert at['5'] > at['8'] > at['0']                      # going down: the reverse
 
 
 def test_fans_wind_counter_clockwise_and_the_batch_flushes_before_culling(face):
@@ -318,3 +336,23 @@ def test_fans_wind_counter_clockwise_and_the_batch_flushes_before_culling(face):
   n = names(face.calls)
   assert n.index('rl_draw_render_batch_active') < n.index('rl_enable_backface_culling')
   assert n[-2:] == ['rl_draw_render_batch_active', 'rl_enable_backface_culling']
+
+
+def test_the_eyes_shut_before_the_set_speed_shows_and_open_after_it(face):
+  m = face.f.model
+
+  def frame(age):
+    m.parts[:] = [p for p in m.parts if p.kind != 'speed']
+    m.spawn(kind='speed', x=0, y=0, life=2.4, value=85, direction=0, age=age)
+    face.calls.clear()
+    face.f.draw(face.rect)
+    texts = [c[2] for c in face.calls if c[0] == 'draw_text_ex']
+    hidden = ('rl_scalef', 0.0, 0.0, 1) in face.calls
+    return texts, hidden
+
+  texts, hidden = frame(0.1)                              # shutting: no number yet, the face still drawn
+  assert not texts and not hidden
+  texts, hidden = frame(1.0)                              # shut: the number, and nothing of the face at all
+  assert '8' in texts and hidden
+  texts, hidden = frame(2.3)                              # the number gone: the eyes open again
+  assert not texts and not hidden
