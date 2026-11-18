@@ -311,6 +311,7 @@ class FaceModel:
     self.override = False
     self.set_speed = 0.0
     self.music_on = False
+    self.beat_at = -1e9
     self.speed_intro = True    # show the set speed when it next engages
     self.beats = 0
     self.sway = 1
@@ -574,6 +575,7 @@ class FaceModel:
   def _on_beat(self, strength: float, period: float) -> None:
     P = self.P
     self.beats += 1
+    self.beat_at = self.clock                             # the headphones thump with it
     down = self.beats % 4 == 1                            # the first beat of a bar: bigger, with a note
     self.kick('hy', 100 + 90 * strength + (80 if down else 0))
     if self.beats % 2 == 0:
