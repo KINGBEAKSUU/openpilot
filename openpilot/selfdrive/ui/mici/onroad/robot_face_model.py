@@ -259,7 +259,8 @@ class FaceModel:
                           ('hx', 0, 52, 0.62), ('hy', 0, 72, 0.4), ('rot', 0, 56, 0.55), ('pitch', 0, 90, 0.45),
                           ('ex', 0, 58, 0.55), ('ey', 0, 66, 0.5), ('er', 0, 56, 0.5), ('steer', 0, 9, 1),
                           ('p_shades', 0, 140, 0.55), ('p_quest', 0, 140, 0.55), ('p_bulb', 0, 140, 0.55),
-                          ('p_nightcap', 0, 140, 0.55)):
+                          ('p_nightcap', 0, 140, 0.55), ('p_phones', 0, 120, 0.6), ('p_beacon', 0, 140, 0.55),
+                          ('p_whistle', 0, 160, 0.55), ('p_buckle', 0, 120, 0.6)):
       d(name, float(v), k, z)
     self.clock = 0.0
     self.session: int | None = None
@@ -272,7 +273,8 @@ class FaceModel:
   # ---- state ------------------------------------------------------------------------
   def reset(self) -> None:
     for name in ('up', 'tilt', 'low', 'smile', 'sag', 'asym', 'blush', 'mO', 'green', 'amber', 'red', 'flash', 'drive', 'hands',
-                 'ex', 'ey', 'er', 'pitch', 'wL', 'wR', 'p_shades', 'p_quest', 'p_bulb', 'p_nightcap'):
+                 'ex', 'ey', 'er', 'pitch', 'wL', 'wR', 'p_shades', 'p_quest', 'p_bulb', 'p_nightcap', 'p_phones', 'p_beacon',
+                 'p_whistle', 'p_buckle'):
       self.P[name].t = 0.0
     self.mood = 'idle'
     self._apply_mood('idle')
@@ -308,6 +310,7 @@ class FaceModel:
     self.gear = ''
     self.override = False
     self.set_speed = 0.0
+    self.music_on = False
     self.speed_intro = True    # show the set speed when it next engages
     self.beats = 0
     self.sway = 1
@@ -554,6 +557,7 @@ class FaceModel:
       self._apply_mood(self.rest_mood())
       self.start_blink(double=True)
       free = self.clock >= self.event_until and not self.behavior and not self.signal and not self.dm
+    self.music_on = inp.music_on
     if inp.music_on:
       self.music_quiet = 0.0
       if free:
@@ -629,7 +633,7 @@ class FaceModel:
     self.path = None
     self.hold = None
     self.eye_shape = None
-    for k in ('ey', 'wL', 'wR', 'pitch', 'p_shades', 'p_quest', 'p_bulb'):
+    for k in ('ey', 'wL', 'wR', 'pitch', 'p_shades', 'p_quest', 'p_bulb', 'p_buckle'):
       self.P[k].t = 0
     if not self.signal:
       self.P['ex'].t = 0
@@ -903,9 +907,12 @@ class FaceModel:
       L(0.6, lambda: (self._glad(), self.kick('hy', -120)))
       L(1.5, self._settle)
     elif name == 'seatbelt':
-      # the driver's seatbelt is off: a worried "hey" their way
+      # the driver's seatbelt is off: a worried "hey" their way, holding up the buckle in its hand (its left hand leaves
+      # the wheel for it) and shaking it
       self.event_until = self.clock + 2.6
       self._apply_mood('worried')
+      P['p_buckle'].t = 1
+      L(2.3, lambda: setattr(P['p_buckle'], 't', 0))
       P['ex'].t, P['er'].t = -20, -6
       self.look(-0.8, 0.1, 1.6)
       self.kick('hx', -150)
@@ -1367,6 +1374,11 @@ class FaceModel:
       P['green'].t = self.SLOW_GREEN                       # not steering right now: a paler driving tint
     P['steer'].t = self.steer
     P['p_nightcap'].t = 1.0 if self.sleep_stage == 2 else 0.0
+    # props it wears while something lasts: headphones while music plays, a beacon on its head while the hazard lights
+    # are on, a whistle in its mouth while a driver-monitoring alert is up
+    P['p_phones'].t = 1.0 if self.music_on and not self.sleep_stage else 0.0
+    P['p_beacon'].t = 1.0 if self.hazard else 0.0
+    P['p_whistle'].t = 1.0 if self.dm else 0.0
     # driving: the wheel rises from the bottom edge and its hands hold it, except while the driver has it
     P['drive'].t = 1.0 if self.engaged else 0.0
     P['hands'].t = 1.0 if self.engaged and not self.handed_over and self.clock >= self.hands_off_until else 0.0

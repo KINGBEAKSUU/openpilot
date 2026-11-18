@@ -375,3 +375,23 @@ def test_the_eyes_shut_before_the_set_speed_shows_and_open_after_it(face):
   assert '8' in texts and hidden
   texts, hidden = frame(2.3)                              # the number gone: the eyes open again
   assert not texts and not hidden
+
+
+def test_worn_props_draw_and_the_buckle_takes_the_left_hand_off_the_wheel(face):
+  m = face.f.model
+  face.ui.sm['selfdriveState'].enabled = True
+  for _ in range(40):                                     # driving: the wheel is up with both hands on it
+    m.update(0.05, face.f._inputs())
+  face.calls.clear()
+  face.f.draw(face.rect)
+  hands = len([c for c in face.calls if c[0] == 'draw_circle_v' and c[2] == 13])
+  for k in ('p_phones', 'p_beacon', 'p_whistle'):
+    m.P[k].v = 1.0
+  m.P['p_buckle'].v = 1.0
+  face.calls.clear()
+  face.f.draw(face.rect)
+  n = names(face.calls)
+  assert n.count('draw_rectangle_rounded_lines_ex') >= 3   # the two headphone cups and the beacon's base
+  assert n.count('draw_circle_sector') >= 1                # the beacon's dome
+  wheel_hands = len([c for c in face.calls if c[0] == 'draw_circle_v' and c[2] == 13])
+  assert wheel_hands == hands - 1                          # one wheel hand is now the one holding the buckle

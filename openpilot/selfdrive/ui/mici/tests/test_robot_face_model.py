@@ -532,3 +532,34 @@ def test_no_navigation_reactions():
   nav = {'camera', 'camera_fast', 'arrive', 'turn', 'bump'}
   assert not nav & set(m.PRIO) and not nav & set(m.COOLDOWN)
   assert not any(hasattr(FaceInputs(), k) for k in ('cam_dist', 'cam_limit', 'route_left', 'turn_type', 'turn_dist', 'bump_dist'))
+
+
+def test_props_it_wears_while_things_last():
+  m, inp = ready(engaged=True)
+  inp.music_on = True                                     # the phone plays: headphones on
+  run(m, inp, 1.0)
+  assert m.P['p_phones'].v > 0.9
+  inp.music_on = False
+  run(m, inp, 1.0)
+  assert m.P['p_phones'].v < 0.1
+  inp.hazard = inp.left_blinker = inp.right_blinker = True   # hazard lights: the beacon on its head, as long as they are on
+  run(m, inp, 4.0)
+  assert m.P['p_beacon'].v > 0.9
+  inp.hazard = inp.left_blinker = inp.right_blinker = False
+  run(m, inp, 1.0)
+  assert m.P['p_beacon'].v < 0.1
+  inp.dm_alert = True                                     # a driver-monitoring alert: the whistle
+  run(m, inp, 1.0)
+  assert m.P['p_whistle'].v > 0.9
+  inp.dm_alert = False
+  run(m, inp, 1.0)
+  assert m.P['p_whistle'].v < 0.1
+
+
+def test_seatbelt_holds_up_the_buckle_then_puts_it_away():
+  m, inp = ready(engaged=True)
+  inp.seatbelt_off = True
+  run(m, inp, 1.0)
+  assert m.last_event == 'seatbelt' and m.P['p_buckle'].v > 0.9
+  run(m, inp, 3.0)
+  assert m.P['p_buckle'].v < 0.1
