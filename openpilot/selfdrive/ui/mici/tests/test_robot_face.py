@@ -20,10 +20,10 @@ class SM(dict):
       carOutput=NS(actuatorsOutput=NS(torque=0.0)),
       modelV2=NS(meta=NS(laneChangeState='off', laneChangeDirection='none')),
       radarState=NS(leadOne=NS(status=False, dRel=0.0, vLead=0.0)),
-      controlsState=NS(curvature=0.0), carrotMan=NS(xSpdDist=0, xSpdLimit=0, nGoPosDist=0, xSpdType=-1, xTurnInfo=-1, xDistToTurn=0),
+      controlsState=NS(curvature=0.0),
       onroadEvents=[])
     names = ('carState', 'selfdriveState', 'carControl', 'carOutput', 'modelV2', 'radarState', 'controlsState',
-             'carrotMan', 'onroadEvents')
+             'onroadEvents')
     self.alive = dict.fromkeys(names, True)
     self.valid = dict.fromkeys(names, True)
     self.recv_frame = dict.fromkeys(names, 11)
@@ -83,30 +83,26 @@ def test_inputs_read_engagement_alerts_and_motion(face):
 def test_inputs_read_driving_events(face):
   sm = face.ui.sm
   inp = face.f._inputs()
-  assert (inp.lane_phase, inp.lead_d, inp.cam_dist, inp.route_left) == (0, 0.0, 0.0, 0.0)
+  assert (inp.lane_phase, inp.lead_d) == (0, 0.0)
   assert not (inp.cutin or inp.gas or inp.blindspot_left) and inp.steer_torque == 0
   sm['modelV2'].meta = NS(laneChangeState='laneChangeStarting', laneChangeDirection='right')
   sm['radarState'].leadOne = NS(status=True, dRel=9.5, vLead=1.2)
   sm['controlsState'].curvature = 0.02
-  sm['carrotMan'] = NS(xSpdDist=280, xSpdLimit=80, nGoPosDist=1500, xSpdType=1, xTurnInfo=2, xDistToTurn=180)
   sm['onroadEvents'] = [NS(name='steerSaturated')]
   sm['carState'].rightBlindspot = sm['carState'].gasPressed = True
   inp = face.f._inputs()
   assert (inp.lane_phase, inp.lane_dir) == (1, 1)
-  assert (inp.lead_d, inp.lead_v, inp.cam_dist, inp.cam_limit, inp.route_left) == (9.5, 1.2, 280.0, 80.0, 1500.0)
+  assert (inp.lead_d, inp.lead_v) == (9.5, 1.2)
   assert inp.lat_accel == pytest.approx(-0.02 * 10 * 10)        # curvature + is a right bend: lateral + is left
   assert not inp.cutin and inp.blindspot_right and inp.gas
-  assert (inp.turn_type, inp.turn_dist, inp.bump_dist) == (2, 180.0, 0.0)
-  sm['carrotMan'].xSpdType = 22                                   # a speed bump comes in the camera fields
   sm['carState'].leftBlinker = sm['carState'].rightBlinker = True
   sm['carState'].gearShifter, sm['carState'].seatbeltUnlatched, sm['carState'].steeringPressed = 'reverse', True, True
   sm['carState'].vCruiseCluster = 82.0
   inp = face.f._inputs()
-  assert (inp.bump_dist, inp.cam_dist) == (280.0, 0.0) and inp.hazard and inp.gear == 'reverse'
+  assert inp.hazard and inp.gear == 'reverse'
   assert inp.seatbelt_off and inp.override and inp.set_speed == 82.0
   sm['carState'].leftBlinker = sm['carState'].rightBlinker = False
   sm['carState'].gearShifter, sm['carState'].seatbeltUnlatched, sm['carState'].steeringPressed = 'drive', False, False
-  sm['carrotMan'].xSpdType = 1
   sm['modelV2'].meta = NS(laneChangeState='laneChangeFinishing', laneChangeDirection='left')
   sm['onroadEvents'] = []
   sm['selfdriveState'].alertType = 'radarCutin/warning'   # the one-frame event is gone; its alert is still up
@@ -114,9 +110,18 @@ def test_inputs_read_driving_events(face):
   assert (inp.lane_phase, inp.lane_dir) == (2, -1) and inp.cutin
   sm['selfdriveState'].alertType = 'belowSteerSpeed/warning'
   assert face.f._inputs().slow_steer
-  sm.recv_frame['carrotMan'] = sm.recv_frame['radarState'] = 9   # left over from a previous drive
+  sm.recv_frame['radarState'] = 9                                 # left over from a previous drive
+  assert face.f._inputs().lead_d == 0
+
+
+def test_navigation_data_does_not_reach_the_face(face):
+  # the face reacts to the car and the driver, never to the navigation (cameras, turns, bumps, arrival)
+  sm = face.ui.sm
+  sm['carrotMan'] = NS(xSpdDist=280, xSpdLimit=80, nGoPosDist=20, xSpdType=22, xTurnInfo=2, xDistToTurn=180)
+  sm.alive['carrotMan'] = sm.valid['carrotMan'] = True
+  sm.recv_frame['carrotMan'] = 11
   inp = face.f._inputs()
-  assert inp.cam_dist == 0 and inp.lead_d == 0
+  assert not any(hasattr(inp, k) for k in ('cam_dist', 'cam_limit', 'route_left', 'turn_type', 'turn_dist', 'bump_dist'))
 
 
 def test_steering_torque_reads_the_sent_torque_as_plus_right(face):
@@ -209,10 +214,10 @@ def test_phone_playing_dances_without_the_microphone_hearing_a_beat(face, tmp_pa
 def test_event_props_draw(face):
   m = face.f.model
   m.spawn(kind='streak', x=-150, y=0, life=0.5, direction=-1)
-  m.spawn(kind='cam', x=178, y=-86, life=1.8, age=0.4)
+  m.spawn(kind='belt', x=-234, y=-48, life=2.8, age=0.4)
   face.f.draw(face.rect)
   n = names(face.calls)
-  assert n.count('draw_circle_v') >= 2                    # the camera lens
+  assert n.count('draw_circle_v') >= 1                    # the driver's head on the belt sign
   assert 'draw_line_ex' in n and 'draw_rectangle_rounded' in n
 
 
@@ -292,14 +297,13 @@ def test_wheel_shows_while_driving_and_the_mouth_stays_above_it(face):
 
 def test_icons_draw_in_screen_space(face):
   m = face.f.model
-  m.spawn(kind='sign', x=236, y=-62, life=2.0, value=80)
-  m.spawn(kind='turn', x=234, y=-62, life=2.0, value=5, text='120m')
+  m.spawn(kind='badge', x=234, y=-58, life=2.0, text='R')
   m.spawn(kind='speed', x=0, y=-100, life=2.0, value=85, direction=1)
   m.dm = True
   face.calls.clear()
   face.f.draw(face.rect)
   texts = [c[2] for c in face.calls if c[0] == 'draw_text_ex']
-  assert '80' in texts and '120m' in texts and '85' in texts
+  assert 'R' in texts and '85' in texts
 
 
 def test_fans_wind_counter_clockwise_and_the_batch_flushes_before_culling(face):

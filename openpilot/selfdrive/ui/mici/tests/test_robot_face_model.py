@@ -217,26 +217,6 @@ def test_car_ahead_pulling_away_while_stopped_even_from_sleep():
   assert m.sleep_stage == 0                               # still stopped, but it does not doze straight off again
 
 
-def test_speed_camera_reacts_once_and_sweats_when_speeding():
-  m, inp = ready(engaged=True, v_ego=20.0, cam_limit=80.0)
-  inp.cam_dist = 600.0
-  run(m, inp, 0.2)
-  assert m.last_event is None
-  inp.cam_dist = 280.0
-  run(m, inp, 0.1)
-  assert m.last_event == 'camera' and any(p.kind == 'cam' for p in m.parts)
-  m.last_event = None
-  for d in (200.0, 100.0, 20.0):
-    inp.cam_dist = d
-    run(m, inp, 0.5)
-  assert m.last_event is None
-  inp.cam_dist = 0.0                                      # passed it
-  run(m, inp, 3.0)
-  inp.cam_dist, inp.v_ego = 250.0, 25.0                   # 90 km/h at an 80 camera
-  run(m, inp, 1.0)
-  assert m.last_event == 'camera_fast' and m.mood == 'worried' and any(p.kind == 'sweat' for p in m.parts)
-
-
 def test_straining_grows_with_steering_torque():
   m, inp = ready(engaged=True)
   efforts = []
@@ -385,28 +365,6 @@ def test_driver_alert_and_hard_braking_outrank_driving_events():
   assert m.last_event == 'brake'
 
 
-def test_arrival_at_the_goal():
-  m, inp = ready()
-  for d in (1200.0, 500.0, 120.0):
-    inp.route_left = d
-    run(m, inp, 0.5)
-  assert m.last_event is None
-  inp.route_left = 25.0
-  run(m, inp, 0.1)
-  assert m.last_event == 'arrive' and m.star_from < m.clock < m.star_until
-  assert m.star_from > m.clock - 0.2                      # the stars pop in now, not 0.7 s before they end
-  m, inp = ready()                                        # the route ends close to the goal
-  for d in (900.0, 140.0, 0.0):
-    inp.route_left = d
-    run(m, inp, 0.5)
-  assert m.last_event == 'arrive'
-  m, inp = ready()                                        # cancelled far from it
-  for d in (900.0, 0.0):
-    inp.route_left = d
-    run(m, inp, 0.5)
-  assert m.last_event is None
-
-
 def test_fast_bend_has_to_last():
   m, inp = ready(engaged=True)
   inp.lat_accel = 3.0
@@ -434,43 +392,6 @@ def test_every_driving_reaction_settles_back(engaged):
 
 def icons(m, kind):
   return [p for p in m.parts if p.kind == kind]
-
-
-def test_navigation_turn_shows_its_sign_once_per_maneuver():
-  m, inp = ready(engaged=True, turn_type=2, turn_dist=600.0)
-  run(m, inp, 0.3)
-  assert m.last_event is None
-  inp.turn_dist = 238.0
-  run(m, inp, 0.1)
-  assert m.last_event == 'turn' and [(p.value, p.text) for p in icons(m, 'turn')] == [(2, '240m')]
-  m.last_event = None
-  for d in (180.0, 90.0, 10.0):
-    inp.turn_dist = d
-    run(m, inp, 3.0)
-  assert m.last_event is None                             # one reaction per maneuver
-  inp.turn_type, inp.turn_dist = 1, 400.0                 # the next one: a left turn
-  run(m, inp, 1.0)
-  inp.turn_dist = 200.0
-  run(m, inp, 0.1)
-  assert m.last_event == 'turn' and icons(m, 'turn')[-1].value == 1 and m.P['ex'].t < 0   # looks left
-  m.last_event = None
-  inp.turn_type, inp.turn_dist = 3, 150.0                 # a lane change by the navigation: the lane change reacts instead
-  run(m, inp, 9.0)
-  assert m.last_event is None
-
-
-def test_speed_bump_braces_then_bounces():
-  m, inp = ready(engaged=True, bump_dist=300.0)
-  run(m, inp, 0.2)
-  assert m.last_event is None
-  inp.bump_dist = 110.0
-  run(m, inp, 0.1)
-  assert m.last_event == 'bump' and icons(m, 'bump') and m.P['up'].t > 0.2            # bracing: a squint
-  run(m, inp, 1.1)
-  assert m.P['mO'].t > 0.3                                 # the bounce
-  m.last_event = None
-  run(m, inp, 8.0)
-  assert m.last_event is None                             # the same bump only once
 
 
 def test_seatbelt_off_reminds_every_half_minute():
@@ -550,14 +471,18 @@ def test_driver_steering_during_a_lane_change_is_not_a_takeover():
 
 
 def test_event_icons_say_what_happened():
-  cases = {'brake': 'bang', 'bsm': 'car', 'lead_go': 'car', 'cutin': 'car', 'gas': 'gauge', 'arrive': 'flag',
+  cases = {'brake': 'bang', 'bsm': 'car', 'lead_go': 'car', 'cutin': 'car', 'gas': 'gauge',
            'slow_steer': 'turtle', 'lane_go': 'arrow', 'lane_done': 'check', 'hello': 'wave'}
   for name, kind in cases.items():
     m, inp = ready(engaged=name in ('gas', 'slow_steer', 'lane_go', 'lane_done', 'cutin', 'bsm'))
     m.react(name, 1)
     run(m, inp, 1.0)
     assert icons(m, kind), name
-  m, inp = ready(engaged=True)
-  m.react('camera', 60)
-  run(m, inp, 0.3)
-  assert [p.value for p in icons(m, 'sign')] == [60]
+
+
+def test_no_navigation_reactions():
+  # emotions come from the car and the driver only: no speed cameras, turns, speed bumps or arrival
+  m, _ = ready()
+  nav = {'camera', 'camera_fast', 'arrive', 'turn', 'bump'}
+  assert not nav & set(m.PRIO) and not nav & set(m.COOLDOWN)
+  assert not any(hasattr(FaceInputs(), k) for k in ('cam_dist', 'cam_limit', 'route_left', 'turn_type', 'turn_dist', 'bump_dist'))
