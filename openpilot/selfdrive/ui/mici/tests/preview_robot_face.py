@@ -12,6 +12,7 @@ CASES = {
   'idle': 3.0, 'engage-star': 0.35, 'engage-happy': 0.9, 'driving': 4.0, 'signal-right': 4.6, 'brake': 0.3,
   'driver-monitoring': 1.2, 'yawn': 50.2, 'asleep': 55.0, 'love': 1.0, 'cool': 1.2, 'think': 1.6, 'curious': 1.0,
   'straining': 2.2, 'set-speed': 2.6, 'set-speed-roll': 2.15, 'set-speed-down': 2.15, 'set-speed-engage': 1.4,
+  'music': 3.2, 'hazard-lights': 3.4, 'whistle': 3.2,
 }
 # driving-event reactions: case: (reaction, arg, engaged, seconds after it starts)
 EVENTS = {
@@ -79,6 +80,13 @@ def main():
           inp.engaged, inp.set_speed = t > 0.05, 85.0
         elif case == 'brake':
           inp.a_ego = -4.5
+        elif case == 'music':                                  # headphones on while the phone plays
+          inp.engaged, inp.music_on = True, True
+          inp.music_beats = (1.0,) if abs(t % 0.5) < 1e-6 else ()
+        elif case == 'hazard-lights':                          # the beacon on its head
+          inp.hazard = inp.left_blinker = inp.right_blinker = True
+        elif case == 'whistle':                                # driving, a driver-monitoring alert: the whistle
+          inp.engaged, inp.dm_alert = True, True
         elif case == 'driver-monitoring':
           inp.dm_alert = True
         elif case in ('yawn', 'asleep'):

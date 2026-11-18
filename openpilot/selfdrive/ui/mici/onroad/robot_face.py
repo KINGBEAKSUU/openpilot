@@ -488,6 +488,7 @@ class RobotFace:
       rl.draw_ellipse(int(mx), int(my + 2), 6 + o * 6, 3 + o * 10, color(eye_d, o))
       rl.draw_ellipse(int(mx), int(my + 3), 3 + o * 3.6, 1.5 + o * 6.5, rl.Color(24, 10, 4, int(255 * o * 0.85)))
 
+    self._above_wheel = above_wheel     # the whistle sits where the mouth would, above the wheel too
     self._props(eye_d, glow_d)
     self._particles(eye_d, glow_d)
     rl.rl_pop_matrix()
@@ -526,7 +527,9 @@ class RobotFace:
       ang = math.radians(turn + side * HAND_AT)
       hx = cx + math.sin(ang) * WHEEL_R + side * lift * 14 + math.sin(m.clock * 37 + side) * 1.2 * effort
       hy = cy - math.cos(ang) * WHEEL_R - lift * 34 + math.sin(m.clock * 9 + side) * 3 * lift   # raised hands: "all yours"
-      ha = a * (1 - 0.25 * lift)
+      ha = a * (1 - 0.25 * lift) * (1 - clamp(P['p_buckle'].v, 0, 1) if side < 0 else 1.0)   # holding the buckle
+      if ha < 0.02:
+        continue
       rl.draw_circle_v(rl.Vector2(hx, hy), 18, color(glow, 0.16 * ha))
       rl.draw_circle_v(rl.Vector2(hx, hy), 13, color(body, ha))
       rl.draw_circle_v(rl.Vector2(hx - side * 7, hy - 8), 6, color(ink, ha))   # the thumb over the rim
@@ -660,6 +663,92 @@ class RobotFace:
       self._stroke(outline + [outline[0]], 4.5, eye, clamp(v, 0, 1))
       px, py = tp(74, -12)
       rl.draw_circle_v(rl.Vector2(px, py), 7 * s, color(eye, clamp(v, 0, 1)))
+    self._worn_props(eye, glow, eye_top)
+
+  _above_wheel = None
+
+  def _worn_props(self, eye, glow, eye_top):
+    """Props the robot wears or holds, drawn like its sunglasses and nightcap (black, outlined in the eye colour), in
+    face space so they move with it: headphones while music plays, a beacon on its head while the hazard lights are on,
+    a whistle in its mouth during a driver-monitoring alert, and the seatbelt buckle in its hand when the belt is off."""
+    m, P = self.model, self.model.P
+    ink = (6, 6, 6)
+    # headphones: a band over the top and a cup over each side, sliding down onto it
+    v = clamp(P['p_phones'].v, 0, 1.1)
+    if v > 0.01:
+      a, dy = clamp(v, 0, 1), (1 - min(v, 1.0)) * -60
+      cx, cy = GAP + 66, EYE_Y + dy
+      band = self._quad(-cx, cy - 22, 0, eye_top - 64 + dy, cx, cy - 22, 18)
+      self._ribbon(band, 10, glow, 0.25 * a)
+      self._stroke(band, 6, eye, a)
+      for side in (-1, 1):
+        r = rl.Rectangle(side * cx - 14, cy - 28, 28, 56)
+        rl.draw_rectangle_rounded(r, 0.6, 8, color(ink, a))
+        rl.draw_rectangle_rounded_lines_ex(r, 0.6, 8, 4, color(eye, a))
+        rl.draw_rectangle_rounded(rl.Rectangle(side * cx - side * 10 - 4, cy - 18, 8, 36), 1.0, 6, color(eye, 0.55 * a))   # the cushion
+    # hazard beacon: a red dome on a little base on top of its head, flashing as it turns
+    v = clamp(P['p_beacon'].v, 0, 1.15)
+    if v > 0.01:
+      a, s = clamp(v, 0, 1), max(v, 0.01)
+      x, y = 0.0, eye_top - 22
+      turn = m.clock * 7.5
+      on = 0.5 + 0.5 * math.cos(turn)
+      self._blob(x, y - 10 * s, 120 * s, 70 * s, RED_GLOW, 0.45 * on * a)
+      for side in (-1, 1):                  # its light sweeping round: a beam to one side, then the other
+        k = clamp(math.cos(turn - (0 if side > 0 else math.pi)), 0, 1)
+        if k > 0.02:
+          self._poly([(x + side * 10 * s, y - 12 * s), (x + side * 86 * s, y - 40 * s), (x + side * 86 * s, y + 10 * s)],
+                     (*RED_GLOW, 0.12 * k * a))
+          self._poly([(x + side * 10 * s, y - 12 * s), (x + side * 70 * s, y - 24 * s), (x + side * 70 * s, y - 2 * s)],
+                     (*RED_GLOW, 0.22 * k * a))
+      rl.draw_circle_sector(rl.Vector2(x, y - 4 * s), 15 * s, 180, 360, 20, color(mix(RED_GLOW, (255, 220, 210), 0.4 * on), a))
+      rl.draw_circle_v(rl.Vector2(x - 5 * s, y - 11 * s), 3.5 * s, color((255, 240, 235), 0.8 * a))      # its shine
+      r = rl.Rectangle(x - 19 * s, y - 5 * s, 38 * s, 10 * s)
+      rl.draw_rectangle_rounded(r, 0.4, 6, color(ink, a))
+      rl.draw_rectangle_rounded_lines_ex(r, 0.4, 6, 3, color(eye, a))
+    # whistle in its mouth, blown in short bursts
+    v = clamp(P['p_whistle'].v, 0, 1.15)
+    if v > 0.01:
+      a, s = clamp(v, 0, 1), 1.2 * max(v, 0.01)
+      x = 0.0
+      y = self._above_wheel(x, 58.0, 17 * s) if self._above_wheel else 58.0
+      blow = 1.0 if math.sin(m.clock * 9) > 0 else 0.0
+      mouth = rl.Rectangle(x - 22 * s, y - 5 * s, 22 * s, 10 * s)
+      rl.draw_rectangle_rounded(mouth, 0.5, 6, color(ink, a))
+      rl.draw_rectangle_rounded_lines_ex(mouth, 0.5, 6, 3, color(eye, a))
+      body = rl.Vector2(x + 8 * s, y + 2 * s)
+      rl.draw_circle_v(body, 14 * s, color(eye, a))
+      rl.draw_circle_v(body, 10.5 * s, color(ink, a))
+      rl.draw_circle_v(rl.Vector2(x + 6 * s, y - 6 * s), 3 * s, color(eye, a))                       # the hole on top
+      self._stroke(self._quad(x + 21 * s, y + 4 * s, x + 38 * s, y + 4 * s, x + 44 * s, y + 18 * s, 8), 2.5, eye, 0.6 * a)   # cord
+      if blow:                              # the sound coming out
+        for i, ang in enumerate((-0.5, 0.0, 0.5)):
+          r0, r1 = 26 * s, (36 + 4 * (i == 1)) * s
+          self._stroke([(body.x + math.cos(ang) * r0, body.y - 4 * s + math.sin(ang) * r0),
+                        (body.x + math.cos(ang) * r1, body.y - 4 * s + math.sin(ang) * r1)], 4, eye, a)
+    # the seatbelt buckle held up on the driver's side and shaken: "put it on"
+    v = clamp(P['p_buckle'].v, 0, 1.15)
+    if v > 0.01:
+      a, z = clamp(v, 0, 1), 1.35
+      hx, hy = -GAP - 78, 30 + (1 - min(v, 1.0)) * 100
+      wob = math.sin(m.clock * 15) * 0.22
+      strap = [(hx + 2 * z, hy + 8 * z), (hx - 12 * z, hy + 46 * z), (hx - 26 * z, hy + 100 * z)]
+      self._ribbon(strap, 13 * z, (96, 98, 110), a)                        # the belt webbing
+      self._stroke(strap, 2.5, eye, 0.5 * a)
+      dx, dy = math.sin(wob), -math.cos(wob)                               # up from the hand, shaking
+      tip = (hx + dx * 26 * z, hy + dy * 26 * z)                           # the metal tongue's middle
+
+      def at(u, w):                                                        # along it u, across it w
+        return (tip[0] + dx * u * z - dy * w * z, tip[1] + dy * u * z + dx * w * z)
+      plate = [at(-14, -9), at(12, -7), at(14, 0), at(12, 7), at(-14, 9)]
+      self._poly(plate, (210, 214, 224, a))
+      self._stroke([*plate, plate[0]], 2.5, eye, a)
+      slot = [at(2, -4), at(8, -4), at(8, 4), at(2, 4)]
+      self._poly(slot, (*ink, a))                                          # its latch hole
+      body = mix(eye, glow, BOTTOM_MIX)
+      rl.draw_circle_v(rl.Vector2(hx, hy), 18 * z, color(glow, 0.16 * a))
+      rl.draw_circle_v(rl.Vector2(hx, hy), 13 * z, color(body, a))
+      rl.draw_circle_v(rl.Vector2(hx + 7 * z, hy - 8 * z), 6 * z, color(eye, a))   # the thumb over it
 
   def _particles(self, eye, glow):
     m = self.model
