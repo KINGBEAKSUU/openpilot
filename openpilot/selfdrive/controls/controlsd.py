@@ -19,7 +19,7 @@ from opendbc.car.hyundai.stop_object import signal_stop_object_requested
 from opendbc.car.volkswagen.values import MEB_CURVATURE_PID_KP, MEB_CURVATURE_PID_KI, MEB_CURVATURE_PID_KF, MEB_CURVATURE_MAX
 
 from openpilot.selfdrive.car.voice_indicator import set_lane_change_blinkers
-from openpilot.selfdrive.controls.lib.drive_helpers import ClampSteerCorrector, clip_curvature, get_lag_adjusted_curvature, is_volkswagen_meb, read_lat_accel_limits
+from openpilot.selfdrive.controls.lib.drive_helpers import ClampSteerCorrector, LaneCenterCorrector, clip_curvature, get_lag_adjusted_curvature, is_volkswagen_meb, read_lat_accel_limits
 from openpilot.selfdrive.controls.lib.latcontrol import LatControl, MIN_LATERAL_CONTROL_SPEED
 from openpilot.selfdrive.controls.lib.latcontrol_pid import LatControlPID
 from openpilot.selfdrive.controls.lib.latcontrol_angle import LatControlAngle, STEER_ANGLE_SATURATION_THRESHOLD
@@ -109,6 +109,10 @@ class Controls:
     # 레인리스 조향용 최소거리 클램프 보정기. 레인리스에서는 lateral planner의
     # 경로 클램프가 조향에 닿지 않으므로, 여기서 모델 곡률에 직접 보정한다.
     self.clamp_steer_corrector = ClampSteerCorrector(self.params)
+    # 레인리스 조향용 차선 중앙 유지 보정기. 클램프가 선에 가까워졌을 때만
+    # 밀어내는 안전장치라면, 중앙 유지는 평소에 차를 차선 가운데로 이끈다.
+    # 클램프와 같은 방식으로 계산하고 같은 자리에 더해진다.
+    self.lane_center_corrector = LaneCenterCorrector(self.params)
 
   def update(self):
     self.sm.update(15)
@@ -243,8 +247,9 @@ class Controls:
                        or CS.leftBlinker or CS.rightBlinker
                        or getattr(self.sm['carrotMan'], 'atc_active', False))
       clamp_kappa = self.clamp_steer_corrector.update(model_v2, CS.vEgo, lane_changing)
+      center_kappa = self.lane_center_corrector.update(model_v2, CS.vEgo, lane_changing)
       new_desired_curvature = smooth_value(
-        model_v2.action.desiredCurvature + clamp_kappa, self.desired_curvature, 0.1)
+        model_v2.action.desiredCurvature + clamp_kappa + center_kappa, self.desired_curvature, 0.1)
 
     # 횡가속/저크 한도는 ej 탭 파라미터에서 매 사이클 읽는다 (실시간 조절 가능).
     # 파일이 없으면 등록 기본값, 구 빌드에서는 상수 기본값으로 동작한다.

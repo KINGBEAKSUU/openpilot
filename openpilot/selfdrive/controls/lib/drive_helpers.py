@@ -184,6 +184,29 @@ CLAMP_STEER_DEADBAND_ON = 0.20  # m
 CLAMP_STEER_DEADBAND_OFF = 0.10  # m
 
 
+# 차선 중앙 유지 보정 (LaneCenterCorrector)
+# 클램프가 "선을 넘지 말라"는 안전장치라면, 중앙 유지는 "차선 가운데에
+# 있으라"는 지속 보정이다. 양쪽 차선 위치로 차선 중앙을 계산하고, 모델
+# 경로가 중앙에서 벗어난 만큼 곡률 보정을 넣어 차를 가운데로 이끈다.
+# 클램프와 같은 계산 방식(pure pursuit)과 같은 가드(확률 히스테리시스,
+# 차선변경 홀드오프, 저속 페이드인, 슬루 제한)를 쓰지만, 양쪽 차선이
+# 모두 보여야 동작한다 (중앙 계산에 양쪽이 필요). 클램프와 함께 동작한다:
+# 중앙 유지가 평소에 차를 가운데 잡아주고, 클램프는 선에 가까워졌을 때
+# 안전장치로 작동한다.
+LANE_CENTER_PROB_ON = 0.5
+LANE_CENTER_PROB_OFF = 0.3
+LANE_CENTER_LOOKAHEAD_TIME = 1.0  # s, 룩어헤드 거리 = 속도 x 1초
+LANE_CENTER_LOOKAHEAD_MIN = 5.0  # m
+LANE_CENTER_LOOKAHEAD_MAX = 30.0  # m
+LANE_CENTER_MAX_LAT_ACCEL = 1.5  # m/s^2, 보정이 만드는 횡가속 상한
+LANE_CENTER_MAX_CURVATURE = 0.02  # 1/m, 보정 곡률 절대 상한 (저속 과조향 방지)
+LANE_CENTER_GAIN_DEFAULT = 1.0
+LANE_CENTER_GAIN_MAX = 2.0
+LANE_CENTER_THRESHOLD_DEFAULT = 0.20  # m, 중앙에서 이만큼 벗어나면 보정 시작
+LANE_CENTER_LANE_CHANGE_HOLDOFF_SEC = 2.0  # s
+LANE_CENTER_SLEW_RATE = 0.01  # 1/m/s, 클램프와 동일
+
+
 class ClampSteerCorrector:
   """레인리스 조향용 최소거리 클램프 보정기.
 
@@ -450,6 +473,176 @@ class ClampSteerCorrector:
     kappa = 2.0 * y_corr / (lookahead ** 2) * gain
     max_kappa = min(CLAMP_STEER_MAX_LAT_ACCEL / max(v_ego, MIN_SPEED) ** 2,
                     CLAMP_STEER_MAX_CURVATURE)
+    kappa = float(np.clip(kappa, -max_kappa, max_kappa))
+    self.last_correction = kappa
+    return kappa
+
+
+class LaneCenterCorrector:
+  """레인리스 조향용 차선 중앙 유지 보정기.
+
+  update()는 모델 곡률에 더할 곡률 보정(1/m)을 반환한다.
+  부호 규약 (controlsd와 동일): 양의 곡률 = 우회전(+y 방향). y는 +가 우측.
+  모델 경로가 차선 중앙보다 왼쪽에 있으면 양의 보정(우측으로 이끔),
+  오른쪽에 있으면 음의 보정을 낸다. 벗어남이 임계값 이하면 0.0 (모델
+  조향을 그대로 둔다).
+
+  클램프와 같은 계산 방식(pure pursuit)과 같은 가드(확률 히스테리시스,
+  차선변경 홀드오프, 저속 페이드인, 슬루 제한)를 쓰지만, 양쪽 차선이
+  모두 보여야 동작한다. 모델 데이터가 불완전하거나 파라미터 읽기에
+  실패하면 0.0을 반환해 controlsd가 죽지 않는다.
+  """
+
+  def __init__(self, params):
+    self.params = params
+    self.left_active = False
+    self.right_active = False
+    self.last_correction = 0.0
+    self._lane_change_holdoff_until = 0.0
+    self._prev_kappa = 0.0
+    self._prev_time = None
+    # 불감대 게이트 상태: 벗어남이 임계값을 넘으면 True, 절반 아래로
+    # 떨어지면 False.
+    self._correction_active = False
+
+  def _read_settings(self):
+    """(enabled, threshold_m, gain)을 읽는다.
+
+    get(..., return_default=True)을 쓴다. get_int/get_bool은 파일이 없으면
+    0/False를 반환해서 fresh install에서 보정이 꺼지거나 임계값이 0이 되기
+    때문이다. 키 미등록(구 빌드) 등 오류 시 상수 기본값으로 폴백한다.
+    """
+    try:
+      enabled = self.params.get("LaneCenterEnable", return_default=True)
+      threshold_cm = self.params.get("LaneCenterThreshold", return_default=True)
+      gain_raw = self.params.get("LaneCenterGain", return_default=True)
+    except Exception:
+      return True, LANE_CENTER_THRESHOLD_DEFAULT, LANE_CENTER_GAIN_DEFAULT
+    if enabled is None:
+      enabled = True
+    elif isinstance(enabled, str):
+      enabled = enabled.strip().lower() in ("1", "true", "on", "yes")
+    try:
+      threshold = (LANE_CENTER_THRESHOLD_DEFAULT if threshold_cm is None else float(
+        np.clip(float(threshold_cm) * 0.01, 0.0, 1.0)))
+      gain = (LANE_CENTER_GAIN_DEFAULT if gain_raw is None else float(
+        np.clip(float(gain_raw) * 0.1, 0.0, LANE_CENTER_GAIN_MAX)))
+    except (TypeError, ValueError):
+      return bool(enabled), LANE_CENTER_THRESHOLD_DEFAULT, LANE_CENTER_GAIN_DEFAULT
+    if not math.isfinite(threshold):
+      threshold = LANE_CENTER_THRESHOLD_DEFAULT
+    if not math.isfinite(gain):
+      gain = LANE_CENTER_GAIN_DEFAULT
+    return bool(enabled), threshold, gain
+
+  def update(self, md, v_ego, lane_changing):
+    """모델 곡률에 더할 곡률 보정(1/m)을 계산한다. 양수 = 우회전."""
+    kappa = self._update_impl(md, v_ego, lane_changing)
+    kappa = self._slew_limit(kappa)
+    self.last_correction = kappa
+    return kappa
+
+  def _slew_limit(self, kappa):
+    """보정 곡률의 변화율을 제한한다 (급조향 방지). 클램프와 동일."""
+    now = time.monotonic()
+    if self._prev_time is None or (now - self._prev_time) > 0.5:
+      self._prev_time = now
+      self._prev_kappa = 0.0
+      return 0.0
+    dt = min(max(now - self._prev_time, 0.0), 0.1)
+    self._prev_time = now
+    max_delta = LANE_CENTER_SLEW_RATE * dt
+    self._prev_kappa += float(np.clip(kappa - self._prev_kappa, -max_delta, max_delta))
+    return self._prev_kappa
+
+  def _update_impl(self, md, v_ego, lane_changing):
+    """update()의 본체. 보정 곡률만 계산한다."""
+    self.last_correction = 0.0
+    enabled, threshold, gain = self._read_settings()
+    if not enabled or gain <= 0.0:
+      self.left_active = False
+      self.right_active = False
+      self._correction_active = False
+      return 0.0
+    # 차선변경 중에는 선을 넘는 것이 의도된 동작이므로 보정하지 않는다.
+    # 종료 후 홀드오프(2초) 동안도 보정하지 않는다 (클램프와 동일 이유).
+    now = time.monotonic()
+    if lane_changing:
+      self.left_active = False
+      self.right_active = False
+      self._correction_active = False
+      self._lane_change_holdoff_until = now + LANE_CENTER_LANE_CHANGE_HOLDOFF_SEC
+      return 0.0
+    if now < self._lane_change_holdoff_until:
+      self._correction_active = False
+      return 0.0
+    # 저속 페이드인: 5km/h 이하 0, 10km/h 이상 100% (클램프와 동일 구간)
+    strength = float(np.interp(v_ego * 3.6, [5.0, 10.0], [0.0, 1.0]))
+    if strength <= 0.0:
+      self._correction_active = False
+      return 0.0
+    try:
+      return self._compute(md, v_ego, threshold, gain, strength)
+    except Exception:
+      self._correction_active = False
+      return 0.0
+
+  def _compute(self, md, v_ego, threshold, gain, strength):
+    lane_lines = md.laneLines
+    lines_ok = (len(lane_lines) >= 4 and len(lane_lines[1].y) >= 2
+                and len(lane_lines[2].y) >= 2 and len(md.laneLineProbs) >= 3)
+    pos_ok = (len(md.position.x) >= 2 and len(md.position.y) >= 2)
+    if not pos_ok or not lines_ok:
+      return 0.0
+
+    # 확률 히스테리시스: 0.5를 넘으면 켜고 0.3 아래로 떨어져야 끈다
+    # (클램프와 동일). 양쪽 모두 켜져 있어야 중앙을 계산할 수 있다.
+    l_prob = float(md.laneLineProbs[1])
+    r_prob = float(md.laneLineProbs[2])
+    if l_prob > LANE_CENTER_PROB_ON:
+      self.left_active = True
+    elif l_prob < LANE_CENTER_PROB_OFF:
+      self.left_active = False
+    if r_prob > LANE_CENTER_PROB_ON:
+      self.right_active = True
+    elif r_prob < LANE_CENTER_PROB_OFF:
+      self.right_active = False
+    if not (self.left_active and self.right_active):
+      return 0.0
+
+    # 룩어헤드 거리: 1초 앞 지점 (5~30m). 클램프와 동일.
+    lookahead = float(np.clip(v_ego * LANE_CENTER_LOOKAHEAD_TIME,
+                              LANE_CENTER_LOOKAHEAD_MIN, LANE_CENTER_LOOKAHEAD_MAX))
+    path_y = float(np.interp(lookahead, md.position.x, md.position.y))
+    left_y = float(np.interp(lookahead, lane_lines[1].x, lane_lines[1].y))
+    right_y = float(np.interp(lookahead, lane_lines[2].x, lane_lines[2].y))
+    if not (math.isfinite(path_y) and math.isfinite(left_y) and math.isfinite(right_y)):
+      return 0.0
+
+    # 차선 중앙: 양쪽 차선의 중간. 경로가 중앙에서 벗어난 만큼 보정한다.
+    center_y = (left_y + right_y) / 2.0
+    offset = path_y - center_y  # 양수면 경로가 중앙보다 우측
+    # 불감대 (히스테리시스): 벗어남이 임계값을 넘으면 켜지고, 절반 아래로
+    # 떨어져야 꺼진다. 작은 벗어남은 무시해 정상 주행에서 보정이 자꾸
+    # 켜지는 것을 막는다. 보정 크기 자체는 줄이지 않는다(게이트만 건다).
+    if self._correction_active:
+      if abs(offset) < threshold / 2.0:
+        self._correction_active = False
+    elif abs(offset) > threshold:
+      self._correction_active = True
+    if not self._correction_active:
+      return 0.0
+    y_corr = (center_y - path_y) * strength
+    if y_corr == 0.0:
+      return 0.0
+
+    # 곡률 변환 (pure pursuit): κ = 2·y / L². 양의 y_corr(우측 이동)는
+    # 양의 곡률(우회전)이다. 게인을 곱하고, 보정이 만드는 횡가속이
+    # 1.5 m/s²를 넘지 않도록, 그리고 곡률 자체가 0.02를 넘지 않도록
+    # 자른다 (클램프와 동일 상한).
+    kappa = 2.0 * y_corr / (lookahead ** 2) * gain
+    max_kappa = min(LANE_CENTER_MAX_LAT_ACCEL / max(v_ego, MIN_SPEED) ** 2,
+                    LANE_CENTER_MAX_CURVATURE)
     kappa = float(np.clip(kappa, -max_kappa, max_kappa))
     self.last_correction = kappa
     return kappa

@@ -862,6 +862,17 @@
           ]
         },
         {
+          "id": "EJ_CENTER",
+          "ko": "차선 중앙 유지",
+          "en": "Lane centering",
+          "zh": "车道居中",
+          "params": [
+            "LaneCenterEnable",
+            "LaneCenterThreshold",
+            "LaneCenterGain"
+          ]
+        },
+        {
           "id": "EJ_LATACCEL",
           "ko": "횡가속 한도",
           "en": "Lateral accel limits",
@@ -5500,6 +5511,55 @@
       "default": 1,
       "unit": 1,
       "control": "toggle"
+    },
+    {
+      "group": "ej",
+      "name": "LaneCenterEnable",
+      "title": "차선 중앙 유지 사용",
+      "descr": "레인리스에서 차가 차선 중앙에서 벗어나면 중앙으로 이끌어줍니다. 클램프가 선에 가까워졌을 때만 밀어내는 안전장치라면, 중앙 유지는 평소에 차를 가운데 잡아줍니다. 끄면 중앙 유지가 동작하지 않습니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Lane centering",
+      "edescr": "Keeps the car centered in the lane in laneless mode. While the clamp only pushes away when close to a line, centering continuously guides the car to the lane center. Off disables centering. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "车道居中",
+      "cdescr": "在无车道线模式下使车辆保持在车道中央。钳制仅在靠近车道线时推开，而居中会持续引导车辆回到中央。关闭则停用居中。保存后立即生效，无需重启。",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "unit": 1,
+      "control": "toggle"
+    },
+    {
+      "group": "ej",
+      "name": "LaneCenterThreshold",
+      "title": "중앙 유지 시작 거리(cm, 20)",
+      "descr": "차가 차선 중앙에서 이만큼 벗어나면 중앙 유지 보정이 시작됩니다. 작게 하면 더 일찍 잡아주지만 작은 출렁임에도 자주 동작할 수 있고, 크게 하면 벗어남이 커져야 동작합니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Centering start distance (cm, 20)",
+      "edescr": "Centering correction starts when the car drifts this far from the lane center. Smaller values correct earlier but may react to small wobbles; larger values wait for bigger drift. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "居中启动距离(cm, 20)",
+      "cdescr": "车辆偏离车道中央达到该距离时开始居中修正。数值越小修正越早，但可能对小幅摆动也作出反应；数值越大则等偏离变大后才修正。保存后立即生效，无需重启。",
+      "min": 5,
+      "max": 50,
+      "default": 20,
+      "unit": 1
+    },
+    {
+      "group": "ej",
+      "name": "LaneCenterGain",
+      "title": "중앙 유지 보정 게인(10)",
+      "descr": "차선 중앙으로 이끄는 보정의 강도를 정합니다. 10 = 1.0배, 0이면 보정을 끕니다. 높이면 중앙으로 더 강하게 이끌지만 과하면 출렁일 수 있습니다. 저장하면 재시작 없이 바로 적용됩니다.",
+      "egroup": "EJ",
+      "etitle": "Centering correction gain(10)",
+      "edescr": "How strongly steering guides the car back to the lane center. 10 = 1.0x, 0 disables the correction. Higher values pull to center harder but may oscillate if too high. Applies immediately without restarting.",
+      "cgroup": "ej",
+      "ctitle": "居中修正增益(10)",
+      "cdescr": "引导车辆回到车道中央的修正强度。10 = 1.0倍，0 关闭修正。数值越大回正越强，但过高可能摆动。保存后立即生效，无需重启。",
+      "min": 0,
+      "max": 20,
+      "default": 10,
+      "unit": 1
     },
     {
       "group": "ej",
