@@ -1385,16 +1385,6 @@ class CarState(CarStateBase):
 
   def _add_vehicle_navi_event(self, event_type, speed, kind, offset):
     target = self.totalDistance + offset
-    if self._is_alt_legacy_navi_arch() and event_type == "bump" and offset > VEHICLE_NAVI_GV80_BUMP_MAX_OFFSET:
-      # 0x4B5/0x4B8/0x4DE 계열: 700m 초과 원거리 방지턱은 큐에 바로 등록하지 않되,
-      # 추후 근거리(<=250m)에서 같은 지점이 재수신됐는지 판별할 수 있게 목표 거리만 기록한다.
-      far_targets = getattr(self, "vehicleNaviGv80FarBumpTargets", None)
-      if far_targets is None:
-        far_targets = deque(maxlen=32)
-        self.vehicleNaviGv80FarBumpTargets = far_targets
-      if not any(abs(far_t - target) < 25.0 for far_t in far_targets):
-        far_targets.append(target)
-      return
     for event in self.vehicleNaviEvents:
       if event["type"] == event_type and event["speed"] == speed and event["kind"] == kind and abs(event["target"] - target) < 20:
         event["target"] = target
@@ -1408,9 +1398,6 @@ class CarState(CarStateBase):
     new_event = {"type": event_type, "speed": speed, "kind": kind, "target": target}
     if event_type == "bump":
       new_event["min_offset"] = offset
-      far_targets = getattr(self, "vehicleNaviGv80FarBumpTargets", None)
-      if far_targets and any(abs(far_t - target) < 25.0 for far_t in far_targets):
-        new_event["reconfirmed"] = True
     self.vehicleNaviEvents.append(new_event)
     self.vehicleNaviEvents.sort(key=lambda event: event["target"])
     self.vehicleNaviEvents = self.vehicleNaviEvents[:VEHICLE_NAVI_MAX_EVENTS]
