@@ -170,6 +170,8 @@ class AugmentedRoadView(CameraView):
     self._hud_renderer._overlay_state = self._overlay_state
     self._vision_renderer = VisionRenderer()
     self._alert_renderer = AlertRenderer()
+    self._clock_face = None  # NewUi 2, created on first use
+    self._robot_face = None  # NewUi 3, created on first use
     self._driver_state_renderer = DriverPreview(compact=True)
     self._confidence_ball = ConfidenceBall()
     self._traffic_light = TrafficLight()
@@ -234,6 +236,9 @@ class AugmentedRoadView(CameraView):
       self._update_calibration()
 
     # Create inner content area with border padding
+    # NewUi 2/3: a clock or a robot face replaces the camera, model and HUD while onroad; alerts still draw on top.
+    robot_ui = ui_state.started and getattr(ui_state, "robot_ui", False)
+    clock_ui = ui_state.started and getattr(ui_state, "clock_ui", False) or robot_ui
     self._content_rect = rl.Rectangle(
       self.rect.x,
       self.rect.y,
@@ -252,7 +257,11 @@ class AugmentedRoadView(CameraView):
 
     road_view_mode = self._road_view_mode()
     _t = time.monotonic()
-    if self._suppress_camera_for_cluster or road_view_mode in (2, 3):
+    if robot_ui:
+      self._robot().render(self._content_rect)
+    elif clock_ui:
+      self._clock().render(self._content_rect)
+    elif self._suppress_camera_for_cluster or road_view_mode in (2, 3):
       rl.draw_rectangle_rec(self._content_rect, rl.BLACK)
     else:
       # Render the base camera view
@@ -261,13 +270,13 @@ class AugmentedRoadView(CameraView):
 
     self._overlay_state.update(ui_state, self.client, self.stream_type, (self._suppress_camera_for_cluster, road_view_mode))
 
-    if not self._suppress_camera_for_cluster and road_view_mode in (0, 2):
+    if not clock_ui and not self._suppress_camera_for_cluster and road_view_mode in (0, 2):
       # Draw all UI overlays
       _t = time.monotonic()
       timing.call('model', self._model_renderer.render, self._content_rect)
       model_ms = (time.monotonic() - _t) * 1000.0
 
-    if not self._suppress_camera_for_cluster:
+    if not clock_ui and not self._suppress_camera_for_cluster:
       # Fade out bottom of overlays for looks
       _t = time.monotonic()
       rl.draw_texture_ex(self._fade_texture, rl.Vector2(self._content_rect.x, self._content_rect.y), 0.0, 1.0, rl.WHITE)
@@ -282,8 +291,9 @@ class AugmentedRoadView(CameraView):
                                                alert_to_render.visual_alert == car.CarControl.HUDControl.VisualAlert.steerRequired)
     # TODO: have alert renderer draw offroad mici label below
     _t = time.monotonic()
-    self._hud_renderer.render(self._content_rect)
-    self._vision_renderer.render(self._content_rect)
+    if not clock_ui:
+      self._hud_renderer.render(self._content_rect)
+      self._vision_renderer.render(self._content_rect)
     hud_ms = (time.monotonic() - _t) * 1000.0
     if ui_state.started:
       _t = time.monotonic()
@@ -345,6 +355,18 @@ class AugmentedRoadView(CameraView):
     if preview := getattr(self, '_driver_state_renderer', None):
       preview.close()
     super().close()
+
+  def _robot(self):
+    if self._robot_face is None:
+      from openpilot.selfdrive.ui.mici.onroad.robot_face import RobotFace
+      self._robot_face = RobotFace()
+    return self._robot_face
+
+  def _clock(self):
+    if self._clock_face is None:
+      from openpilot.selfdrive.ui.mici.onroad.clock_face import ClockFace
+      self._clock_face = ClockFace()
+    return self._clock_face
 
   def _road_view_mode(self):
     if not ui_state.started:
