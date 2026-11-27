@@ -359,19 +359,13 @@ static bool canfd_should_block_fwd(int tx_bus, int addr, uint32_t now) {
 #define CANFD_BFWD_MAX_QUEUE 6
 #define CANFD_BFWD_START_COUNT 2
 #define CANFD_BFWD_REUSE_MAX 2
-// LFA steering backlog trim. A host that runs slightly faster than the stock stream (clock
-// drift) adds one queued command every few tens of seconds and nothing drains it, so the
-// queue settles 5-6 deep and every torque command reaches the EPS 5-6 stock frames late
-// (GV80 HDA2 camera-SCC logs: 54-64 ms instead of ~24 ms; the hands-off 2.4 Hz wheel
-// oscillation was worse in those stretches). For entries with .trim set, once the queue has
-// held more than CANFD_BFWD_TARGET_COUNT commands at CANFD_BFWD_TRIM_POPS pops in a row,
-// drop the oldest command, but only when it and the next one both request steering and
-// the torque step from the last output to the next command stays within
-// CANFD_BFWD_TRIM_MAX_STEP (the per-frame rate limit below). Otherwise wait for the next pop.
-// An overflow restarts the count, so a trim never adds to an overflow drop. The 6-entry
-// headroom, the 2-command prefill and every other id keep the original behaviour.
+// Drain a persistent LFA backlog caused by producer/stock clock drift, one command
+// at a time. Require 100 consecutive deep, request-ON pops so fault-avoidance OFF
+// pulses and their minimum ON run are not shortened by trimming. Only skip when
+// the step from the last output is no larger than the ordinary next output's step,
+// and at most 10. Keep the six-entry burst reserve, prefill and other IDs unchanged.
 #define CANFD_BFWD_TARGET_COUNT 2U
-#define CANFD_BFWD_TRIM_POPS 100U  // must stay <= 255 (uint8_t deep_pops)
+#define CANFD_BFWD_TRIM_POPS 100U  // > 89 valid request frames; <= 255 (uint8_t deep_pops)
 #define CANFD_BFWD_TRIM_MAX_STEP 10
 #define CANFD_BFWD_DIAG_INTERVAL_US 5000000U
 
@@ -503,18 +497,24 @@ static void canfd_bfwd_push(CanfdBufferedFwd* st, const CANPacket_t* pkt) {
 
 // LFA layout as in hyundai_canfd_tx_hook: torque in bytes 5-6, steer request bit 52.
 static int canfd_bfwd_lfa_torque(const CANPacket_t* pkt) {
-  return (int)((((GET_BYTE(pkt, 6) & 0xFU) << 7U) | (GET_BYTE(pkt, 5) >> 1U)) - 1024U);
+  return (int)(((GET_BYTE(pkt, 6) & 0xFU) << 7U) | (GET_BYTE(pkt, 5) >> 1U)) - 1024;
+}
+
+static bool canfd_bfwd_trim_active(const CanfdBufferedFwd* st) {
+  const CANPacket_t* drop = &st->q[st->head];
+  const CANPacket_t* next = &st->q[(st->head + 1U) % CANFD_BFWD_MAX_QUEUE];
+  return GET_BIT(drop, 52U) && GET_BIT(next, 52U) &&
+         (!st->has_last_pkt || GET_BIT(&st->last_pkt, 52U));
 }
 
 static bool canfd_bfwd_trim_ok(const CanfdBufferedFwd* st) {
   const CANPacket_t* drop = &st->q[st->head];
   const CANPacket_t* next = &st->q[(st->head + 1U) % CANFD_BFWD_MAX_QUEUE];
-  bool ok = st->has_last_pkt && GET_BIT(drop, 52U) && GET_BIT(next, 52U);
-  if (ok) {
-    int step = canfd_bfwd_lfa_torque(next) - canfd_bfwd_lfa_torque(&st->last_pkt);
-    ok = (step <= CANFD_BFWD_TRIM_MAX_STEP) && (step >= -CANFD_BFWD_TRIM_MAX_STEP);
-  }
-  return ok;
+  int last = canfd_bfwd_lfa_torque(&st->last_pkt);
+  int step = canfd_bfwd_lfa_torque(next) - last;
+  int normal_step = canfd_bfwd_lfa_torque(drop) - last;
+  // Merely bounding the skipped step by 10 would turn 0 -> 5 -> 10 into 0 -> 10.
+  return st->has_last_pkt && (ABS(step) <= CANFD_BFWD_TRIM_MAX_STEP) && (ABS(step) <= ABS(normal_step));
 }
 
 static bool canfd_bfwd_pop(CanfdBufferedFwd* st, CANPacket_t* pkt) {
@@ -527,7 +527,7 @@ static bool canfd_bfwd_pop(CanfdBufferedFwd* st, CANPacket_t* pkt) {
   }
 
   // Backlog trim, see CANFD_BFWD_TRIM_POPS.
-  if (st->trim && (st->count > CANFD_BFWD_TARGET_COUNT)) {
+  if (st->trim && (st->count > CANFD_BFWD_TARGET_COUNT) && canfd_bfwd_trim_active(st)) {
     if (st->deep_pops < CANFD_BFWD_TRIM_POPS) {
       st->deep_pops++;
     }
@@ -803,7 +803,11 @@ static bool hyundai_canfd_tx_hook(const CANPacket_t *to_send_const) {
   if (violation) {
     tx = false;
   }
-  else if (hyundai_canfd_buffered_fwd) {
+  // The outer hook still calls us for a rejected DLC/relay state. Such a packet
+  // must not enter a FIFO and be emitted later through stock forwarding.
+  const bool accepted = tx && !relay_malfunction &&
+                        tx_msg_safety_check(to_send, current_safety_config.tx_msgs, current_safety_config.tx_msgs_len);
+  if (accepted && hyundai_canfd_buffered_fwd) {
     CanfdBufferedFwd* bfwd = canfd_bfwd_find(addr, GET_BUS(to_send));
     if (bfwd != NULL) {
       canfd_bfwd_push(bfwd, to_send);
@@ -816,8 +820,6 @@ static bool hyundai_canfd_tx_hook(const CANPacket_t *to_send_const) {
 
   // Only an accepted replacement may suppress stock forwarding. The outer
   // hook's allowlist/relay rejection happens after this hook returns.
-  const bool accepted = tx && !relay_malfunction &&
-                        tx_msg_safety_check(to_send, current_safety_config.tx_msgs, current_safety_config.tx_msgs_len);
   canfd_record_tx_time(GET_BUS(to_send), addr, accepted);
 
   // Held only once accepted: the rx_tx hook sends a held frame without passing the tx hook or the allowlist again.
